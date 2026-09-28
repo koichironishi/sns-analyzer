@@ -1,0 +1,6 @@
+# DOMAIN（例: sns.example.jp）の証明書を自動で取得し、HTTPS でダッシュボードへ転送
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+	header -Server
+}

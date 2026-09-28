@@ -1,0 +1,8 @@
+.git
+.venv
+data
+clients
+reports
+__pycache__
+*.pyc
+config.json

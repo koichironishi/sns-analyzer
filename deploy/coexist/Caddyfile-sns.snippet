@@ -1,0 +1,7 @@
+# 既存の Caddyfile に追記する例（sns.example.jp を実際のサブドメインに置き換える）
+# 追記後: sudo systemctl reload caddy（Docker の場合は caddy コンテナを reload）
+sns.example.jp {
+	encode gzip
+	reverse_proxy 127.0.0.1:8010
+	header -Server
+}

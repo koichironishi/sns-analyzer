@@ -1,0 +1,49 @@
+# 本番構成：Caddy（HTTPS 自動取得）→ ダッシュボード ／ 毎日の自動収集
+# 使い方は README の「Webで公開する」を参照
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./data:/data
+    expose:
+      - "8000"
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - COLLECT_AT=${COLLECT_AT:-09:00}
+      - SYNC_X_DELETIONS=${SYNC_X_DELETIONS:-1}
+    volumes:
+      - ./data:/data
+    # 毎日 COLLECT_AT（既定 09:00 JST）に全クライアントを収集してレポート更新
+    command: >
+      sh -c 'while true; do
+        now=$$(date +%s); at=$$(date -d "$${COLLECT_AT:-09:00}" +%s);
+        [ $$at -le $$now ] && at=$$((at + 86400));
+        sleep $$((at - now));
+        python -m snsanalyzer --config /data/config.json collect --all-clients;
+        python -m snsanalyzer --config /data/config.json report --all-clients;
+        [ "$${SYNC_X_DELETIONS:-1}" = "1" ] && python -m snsanalyzer --config /data/config.json sync-deletions --all-clients;
+      done'
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:?DOMAIN を .env に設定してください}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:

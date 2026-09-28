@@ -1,0 +1,10 @@
+/config.json
+/clients/
+/data/
+/reports/
+.venv/
+__pycache__/
+*.pyc
+*.tmp
+.DS_Store
+.env
