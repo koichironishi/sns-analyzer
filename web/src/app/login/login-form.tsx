@@ -9,7 +9,7 @@ export function LoginForm({ next }: { next: string }) {
       {state.error && <div className="msg error" role="alert" id="login-error">{state.error}</div>}
       <input type="hidden" name="next" value={next} />
       <label htmlFor="email">メールアドレス</label>
-      <input id="email" name="email" type="email" autoComplete="username" required aria-required="true"
+      <input id="email" name="email" type="email" autoComplete="username" required aria-required="true" defaultValue={state.email} key={state.email}
         aria-invalid={Boolean(state.error)} aria-describedby={state.error ? "login-error" : undefined} />
       <label htmlFor="password">パスワード</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required aria-required="true"
