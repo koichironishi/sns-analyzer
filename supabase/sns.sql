@@ -3,16 +3,55 @@
 --
 --  方針:
 --   - MEO の表（clients / staff / client_users など）は変更しない。追加は sns_ で始まる表だけ
---   - ログインとクライアントは MEO と共通。権限も MEO と同じ考え方にそろえる
---       スタッフ（staff）   : 全クライアントを閲覧
---       クライアント閲覧者 : 自社（current_client_id()）の分析結果だけ閲覧
+--   - ログイン（Supabase Auth）とスタッフは MEO と共通
+--       スタッフ（MEO の staff） : 全クライアントを運用・閲覧（admin は操作ログも閲覧）
+--   - クライアントは SNS分析 専用（sns_clients）。MEO のクライアントとは別に管理する
+--       閲覧ユーザー（sns_client_users） : 自社の分析結果だけ閲覧
 --   - 書き込みはすべてサーバー側（service_role）で行う。画面のセッションからは読むだけ
 --   - アクセストークンを持つ表（sns_connections）はポリシーを作らない＝service_role 専用
 --
---  前提: MEO の schema.sql / client-users.sql / client-admin.sql が適用済み
---        （is_staff() / is_admin() / current_client_id() / set_updated_at() を使う）
+--  前提: MEO の schema.sql が適用済み（staff / is_staff() / is_admin() / set_updated_at() を使う）
 --  何度実行しても安全。
 -- =============================================================
+
+-- ---------- クライアント（SNS分析 専用） ----------
+create table if not exists sns_clients (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (length(name) between 1 and 100),
+  note       text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_sns_clients_updated on sns_clients;
+create trigger trg_sns_clients_updated before update on sns_clients
+  for each row execute function set_updated_at();
+
+-- ---------- クライアントの閲覧ユーザー ----------
+create table if not exists sns_client_users (
+  user_id              uuid primary key references auth.users(id) on delete cascade,
+  client_id            uuid not null references sns_clients(id) on delete cascade,
+  name                 text not null,
+  email                text not null,
+  is_active            boolean not null default true,
+  -- 初回ログイン時にパスワードの変更を求める
+  must_change_password boolean not null default true,
+  -- SNS分析 で作成したアカウントか（true なら、閲覧ユーザーの削除時にログインアカウントも削除する）
+  created_by_sns       boolean not null default true,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+create index if not exists idx_sns_client_users_client on sns_client_users(client_id);
+
+drop trigger if exists trg_sns_client_users_updated on sns_client_users;
+create trigger trg_sns_client_users_updated before update on sns_client_users
+  for each row execute function set_updated_at();
+
+-- ログイン中の閲覧ユーザーのクライアント
+create or replace function sns_current_client_id()
+returns uuid language sql stable security definer set search_path = public as $$
+  select client_id from sns_client_users where user_id = auth.uid() and is_active;
+$$;
 
 -- ---------- アプリ全体の設定（1行だけ） ----------
 create table if not exists sns_app_settings (
@@ -37,7 +76,7 @@ create trigger trg_sns_app_settings_updated before update on sns_app_settings
 
 -- ---------- クライアントごとの設定 ----------
 create table if not exists sns_client_settings (
-  client_id     uuid primary key references clients(id) on delete cascade,
+  client_id     uuid primary key references sns_clients(id) on delete cascade,
   -- AI分析の前提として渡す事業内容・SNSの目的
   brand_context text not null default '',
   updated_at    timestamptz not null default now()
@@ -49,7 +88,7 @@ create trigger trg_sns_client_settings_updated before update on sns_client_setti
 
 -- ---------- SNSとの接続（トークンを持つので service_role 専用） ----------
 create table if not exists sns_connections (
-  client_id         uuid not null references clients(id) on delete cascade,
+  client_id         uuid not null references sns_clients(id) on delete cascade,
   platform          text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
   external_id       text not null,          -- ページID / IGビジネスアカウントID / ThreadsユーザーID / XユーザーID
   username          text,
@@ -70,7 +109,7 @@ create trigger trg_sns_connections_updated before update on sns_connections
 -- ---------- 競合 ----------
 create table if not exists sns_competitors (
   id         uuid primary key default gen_random_uuid(),
-  client_id  uuid not null references clients(id) on delete cascade,
+  client_id  uuid not null references sns_clients(id) on delete cascade,
   name       text not null check (length(name) between 1 and 80),
   -- {"instagram": "user", "facebook": "page", "threads": "user", "x": "user"}
   handles    jsonb not null default '{}',
@@ -82,7 +121,7 @@ create index if not exists idx_sns_competitors_client on sns_competitors(client_
 -- ---------- 収集したアカウント（自社・競合） ----------
 create table if not exists sns_accounts (
   id            uuid primary key default gen_random_uuid(),
-  client_id     uuid not null references clients(id) on delete cascade,
+  client_id     uuid not null references sns_clients(id) on delete cascade,
   platform      text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
   external_id   text not null,
   username      text,
@@ -102,7 +141,7 @@ create trigger trg_sns_accounts_updated before update on sns_accounts
 -- ---------- フォロワー数などの日次記録 ----------
 create table if not exists sns_snapshots (
   account_id  uuid not null references sns_accounts(id) on delete cascade,
-  client_id   uuid not null references clients(id) on delete cascade,
+  client_id   uuid not null references sns_clients(id) on delete cascade,
   date        date not null,
   followers   integer,
   following   integer,
@@ -115,7 +154,7 @@ create index if not exists idx_sns_snapshots_client_date on sns_snapshots(client
 create table if not exists sns_posts (
   id          uuid primary key default gen_random_uuid(),
   account_id  uuid not null references sns_accounts(id) on delete cascade,
-  client_id   uuid not null references clients(id) on delete cascade,
+  client_id   uuid not null references sns_clients(id) on delete cascade,
   platform    text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
   external_id text not null,
   posted_at   timestamptz not null,
@@ -130,7 +169,7 @@ create index if not exists idx_sns_posts_client_posted on sns_posts(client_id, p
 -- ---------- 投稿ごとの指標（取得日ごとの履歴） ----------
 create table if not exists sns_post_metrics (
   post_id      uuid not null references sns_posts(id) on delete cascade,
-  client_id    uuid not null references clients(id) on delete cascade,
+  client_id    uuid not null references sns_clients(id) on delete cascade,
   fetched_date date not null,
   views        integer,
   reach        integer,
@@ -159,7 +198,7 @@ create or replace view sns_posts_latest with (security_invoker = true) as
 
 -- ---------- AI分析の同意（クライアント単位） ----------
 create table if not exists sns_ai_consents (
-  client_id         uuid primary key references clients(id) on delete cascade,
+  client_id         uuid primary key references sns_clients(id) on delete cascade,
   status            text not null check (status in ('granted', 'revoked')),
   version           text not null,           -- 同意した説明文の版。版が変わると再同意が必要
   granted_by        text,                    -- 同意した方の氏名・所属
@@ -178,7 +217,7 @@ create trigger trg_sns_ai_consents_updated before update on sns_ai_consents
 -- ---------- AI分析の結果 ----------
 create table if not exists sns_ai_results (
   id         uuid primary key default gen_random_uuid(),
-  client_id  uuid not null references clients(id) on delete cascade,
+  client_id  uuid not null references sns_clients(id) on delete cascade,
   period_end date not null,
   days       integer not null,
   result     jsonb not null,
@@ -190,7 +229,7 @@ create table if not exists sns_ai_results (
 
 -- ---------- 収集の実行状況（1回の cron で処理しきれない分を次回へ回すために使う） ----------
 create table if not exists sns_collect_state (
-  client_id       uuid not null references clients(id) on delete cascade,
+  client_id       uuid not null references sns_clients(id) on delete cascade,
   platform        text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
   last_run_at     timestamptz,
   last_success_at timestamptz,
@@ -227,6 +266,8 @@ create table if not exists sns_deletion_requests (
 --   読み取り: スタッフは全件、クライアント閲覧者は自社分のみ
 --   書き込み: ポリシーを作らない（サーバー側の service_role だけが書ける）
 -- =============================================================
+alter table sns_clients           enable row level security;
+alter table sns_client_users      enable row level security;
 alter table sns_app_settings      enable row level security;
 alter table sns_client_settings   enable row level security;
 alter table sns_connections       enable row level security;
@@ -251,6 +292,16 @@ create policy sns_client_settings_staff on sns_client_settings for select using 
 create policy sns_collect_state_staff   on sns_collect_state   for select using (is_staff());
 create policy sns_audit_admin           on sns_audit           for select using (is_admin());
 
+-- クライアントと閲覧ユーザー：スタッフは全件、閲覧ユーザーは自社・自分の行だけ
+drop policy if exists sns_clients_staff       on sns_clients;
+drop policy if exists sns_clients_own         on sns_clients;
+drop policy if exists sns_client_users_staff  on sns_client_users;
+drop policy if exists sns_client_users_self   on sns_client_users;
+create policy sns_clients_staff      on sns_clients      for select using (is_staff());
+create policy sns_clients_own        on sns_clients      for select using (id = sns_current_client_id());
+create policy sns_client_users_staff on sns_client_users for select using (is_staff());
+create policy sns_client_users_self  on sns_client_users for select using (user_id = auth.uid());
+
 -- 分析データ：スタッフは全件、クライアント閲覧者は自社分
 do $$
 declare t text;
@@ -263,7 +314,7 @@ begin
     execute format('drop policy if exists %I_client_select on %I;', t, t);
     execute format('create policy %I_staff_select on %I for select using (is_staff());', t, t);
     execute format(
-      'create policy %I_client_select on %I for select using (client_id = current_client_id());', t, t);
+      'create policy %I_client_select on %I for select using (client_id = sns_current_client_id());', t, t);
   end loop;
 end $$;
 

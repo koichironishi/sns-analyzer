@@ -17,8 +17,8 @@ import { ImportError, readCsv } from "@/lib/sns/importers";
 import { PLATFORMS, PLATFORM_LABELS, isPlatform, todayIn, type Platform } from "@/lib/sns/models";
 import { CONSENT_VERSION } from "@/lib/sns/privacy";
 import {
-  audit, deleteAllClientData, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
-  getClient, getConnectionSecrets, grantConsent, listCompetitors, recordFollowers, revokeConsent, saveCollected,
+  audit, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
+  getConnectionSecrets, grantConsent, listCompetitors, recordFollowers, revokeConsent, saveCollected,
   saveCompetitor, saveConnection, setBrandContext,
 } from "@/lib/sns/store";
 
@@ -271,20 +271,6 @@ export async function deleteData(_: ActionState, form: FormData): Promise<Action
     if (form.get("confirm") !== "on") return { error: "確認のチェックを入れてください" };
     const msg = await deletePlatformData(admin, clientId, platform, scope as "own" | "competitor" | "all", form.get("disconnect") === "on");
     await audit(admin, v, "data.delete", clientId, msg, await clientIp());
-    return done(clientId, msg);
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function deleteEverything(_: ActionState, form: FormData): Promise<ActionState> {
-  try {
-    const { v, clientId, admin } = await staff(form);
-    const client = await getClient(admin, clientId);
-    if (!client) return { error: "クライアントが見つかりません" };
-    if (String(form.get("confirm_name") ?? "").trim() !== client.name) return { error: "確認のため、クライアント名を正確に入力してください" };
-    const msg = await deleteAllClientData(admin, clientId);
-    await audit(admin, v, "data.delete_all", clientId, msg, await clientIp());
     return done(clientId, msg);
   } catch (e) {
     return fail(e);

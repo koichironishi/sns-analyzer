@@ -51,8 +51,12 @@ before(async () => {
   await db.exec(`
     insert into auth.users values ('${IDS.admin}'), ('${IDS.member}'), ('${IDS.viewerA}'), ('${IDS.stranger}');
     insert into staff (id, name, email, role) values ('${IDS.admin}', 'A', 'a@x', 'admin'), ('${IDS.member}', 'M', 'm@x', 'member');
-    insert into clients (id, name) values ('${IDS.clientA}', 'A社'), ('${IDS.clientB}', 'B社');
-    insert into client_users (id, client_id, name, email) values ('${IDS.viewerA}', '${IDS.clientA}', 'V', 'v@x');
+    -- MEO のクライアント（SNS分析とは無関係。stranger は MEO 側の閲覧ユーザー）
+    insert into clients (id, name) values ('${IDS.clientA}', 'MEOのA社');
+    insert into client_users (id, client_id, name, email) values ('${IDS.stranger}', '${IDS.clientA}', 'S', 's@x');
+    -- SNS分析のクライアントと閲覧ユーザー
+    insert into sns_clients (id, name) values ('${IDS.clientA}', 'A社'), ('${IDS.clientB}', 'B社');
+    insert into sns_client_users (user_id, client_id, name, email) values ('${IDS.viewerA}', '${IDS.clientA}', 'V', 'v@x');
     grant usage on schema public to authenticated;
     grant select on all tables in schema public to authenticated;
   `);
@@ -94,9 +98,16 @@ test("クライアント閲覧者は自社分だけ読める", async () => {
   }
 });
 
-test("どこにも属さないユーザーは何も読めない", async () => {
-  const rows = await as(IDS.stranger, "select * from sns_posts");
-  assert.equal(rows.length, 0);
+test("SNS分析の閲覧ユーザーでない人（MEO だけの閲覧ユーザーなど）は何も読めない", async () => {
+  for (const t of ["sns_posts", "sns_clients", "sns_client_users", "sns_accounts"]) {
+    assert.equal((await as(IDS.stranger, `select * from ${t}`)).length, 0, t);
+  }
+});
+
+test("閲覧ユーザーはクライアント一覧でも自社と自分の行だけ見える", async () => {
+  assert.deepEqual((await as<{ name: string }>(IDS.viewerA, "select name from sns_clients")).map((r) => r.name), ["A社"]);
+  assert.equal((await as(IDS.viewerA, "select * from sns_client_users")).length, 1);
+  assert.equal((await as(IDS.member, "select * from sns_clients")).length, 2);
 });
 
 test("トークンを持つ sns_connections は誰のセッションからも読めない", async () => {
@@ -123,8 +134,8 @@ test("画面のセッションからは書き込めない（ポリシーなし�
   await db.exec("reset role;");
 });
 
-test("クライアント削除で SNS のデータも消える（MEO の clients に追従）", async () => {
-  await db.exec(`delete from clients where id = '${IDS.clientB}'`);
+test("SNS分析のクライアントを削除すると、関連データもすべて消える", async () => {
+  await db.exec(`delete from sns_clients where id = '${IDS.clientB}'`);
   const left = await db.query<{ n: number }>(
     `select (select count(*) from sns_posts where client_id = '${IDS.clientB}')::int +
             (select count(*) from sns_connections where client_id = '${IDS.clientB}')::int as n`);

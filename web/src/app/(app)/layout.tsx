@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { logout } from "../login/actions";
 import { AppNav } from "@/components/app-nav";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const v = await requireViewer();
+  // 初期パスワードのままの閲覧ユーザーには、先にパスワードを変更してもらう
+  if (v.kind === "client" && v.mustChangePassword) redirect("/account");
   const items = v.kind === "staff"
     ? [{ href: "/", label: "クライアント" }, ...(v.isAdmin ? [{ href: "/admin", label: "全体設定" }, { href: "/admin/audit", label: "操作ログ" }] : [])]
     : [{ href: `/clients/${v.clientId}`, label: "レポート" }];
@@ -16,6 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <AppNav items={items} />
           <div className="app-right">
             <span className="who"><span className="acct-name">{v.name || v.email}</span>{v.kind === "staff" && v.isAdmin && <span className="badge" style={{ marginLeft: 6 }}>管理者</span>}</span>
+            <Link className="btn ghost sm" href="/account">アカウント</Link>
             <form action={logout}><button type="submit" className="btn ghost sm">ログアウト</button></form>
           </div>
         </div>

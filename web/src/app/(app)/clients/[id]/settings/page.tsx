@@ -7,14 +7,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORMS, PLATFORM_LABELS, todayIn, type Platform } from "@/lib/sns/models";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
-import { getAppSettings, getBrandContext, getClient, getConsentRow, listCollectState, listCompetitors, listConnections } from "@/lib/sns/store";
+import { getAppSettings, getBrandContext, getClient, getConsentRow, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
+import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, updateClientAction } from "../../../client-actions";
 import { ActionForm } from "@/components/action-form";
 import { Flash } from "@/components/flash";
 import { CollectButton } from "@/components/collect-button";
 import { Chip, PageHead } from "@/components/report-ui";
 import { SubmitButton } from "@/components/submit-button";
 import {
-  connectX, deleteData, deleteEverything, disconnect, grantAiConsent, importCsv, recordFollowerCount, removeCompetitor,
+  connectX, deleteData, disconnect, grantAiConsent, importCsv, recordFollowerCount, removeCompetitor,
   revokeAiConsent, saveBrand, testConnection, upsertCompetitor,
 } from "./actions";
 
@@ -36,20 +37,23 @@ const OKS: Record<string, [section: string, text: string]> = {
   competitor_deleted: ["competitors", "競合とそのデータを削除しました。"],
   consent_granted: ["consent", "AI分析の同意を記録しました。"],
   consent_revoked: ["consent", "AI分析の同意を撤回し、保存済みのAI分析結果を削除しました。"],
+  client_created: ["connections", "クライアントを登録しました。続けて SNS を連携してください。"],
+  viewer_removed: ["viewers", "閲覧ユーザーを削除しました（ログインアカウントも削除しました）。"],
+  viewer_removed_kept: ["viewers", "閲覧ユーザーを削除しました（MEO と共通のアカウントのため、ログインアカウントは残しています）。"],
 };
 
 const Hidden = ({ id }: { id: string }) => <input type="hidden" name="client_id" value={id} />;
 
 export default async function SettingsPage({ params, searchParams }: PageProps<"/clients/[id]/settings">) {
-  await requireStaff();
+  const v = await requireStaff();
   const { id } = await params;
   const sp = await searchParams;
   const admin = createAdminClient();
   const client = await getClient(admin, id);
   if (!client) notFound();
-  const [conns, states, competitors, consentRow, brand, settings] = await Promise.all([
+  const [conns, states, competitors, consentRow, brand, settings, viewers] = await Promise.all([
     listConnections(admin, id), listCollectState(admin, id), listCompetitors(admin, id), getConsentRow(admin, id),
-    getBrandContext(admin, id), getAppSettings(admin),
+    getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id),
   ]);
   const consent = consentState(consentRow);
   const connOf = (p: Platform) => conns.find((c) => c.platform === p);
@@ -68,7 +72,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
 
   return (
     <>
-      <PageHead eyebrow={client.name} title="設定・連携" lead="SNSの連携、競合の登録、AI分析の同意、データの取り込みと削除を行います（スタッフのみ）。" />
+      <PageHead eyebrow={client.name} title="設定・連携" lead="SNSの連携、競合の登録、AI分析の同意、クライアント情報と閲覧ユーザー、データの取り込みと削除を管理します（スタッフのみ）。" />
 
       <section id="connections" aria-labelledby="h-conn">
         <h2 id="h-conn">SNS連携</h2>
@@ -279,6 +283,71 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
         </div>
       </section>
 
+      <section id="client" aria-labelledby="h-client">
+        <h2 id="h-client">クライアント情報</h2>
+        <div className="card">
+          <ActionForm action={updateClientAction}>
+            <Hidden id={id} />
+            <label htmlFor="cl-name">クライアント名<span className="req">必須</span></label>
+            <input id="cl-name" name="name" type="text" required aria-required="true" maxLength={100} defaultValue={client.name} />
+            <label htmlFor="cl-note">メモ（任意）</label>
+            <input id="cl-note" name="note" type="text" maxLength={500} defaultValue={client.note ?? ""} />
+            <div className="form-actions"><SubmitButton pendingText="保存しています…">保存</SubmitButton></div>
+          </ActionForm>
+        </div>
+      </section>
+
+      <section id="viewers" aria-labelledby="h-viewers">
+        <h2 id="h-viewers">閲覧ユーザー</h2>
+        {notice("viewers")}
+        <p className="sub">このクライアントのレポートだけを閲覧・ダウンロードできるアカウントです。設定の変更やAI分析の実行はできません。</p>
+        {viewers.length > 0 && (
+          <div className="card flush scroll">
+            <table>
+              <caption className="sr-only">閲覧ユーザーの一覧</caption>
+              <thead><tr><th scope="col">氏名</th><th scope="col">メールアドレス</th><th scope="col">状態</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead>
+              <tbody>
+                {viewers.map((u) => (
+                  <tr key={u.user_id}>
+                    <th scope="row">{u.name}</th>
+                    <td className="small">{u.email}</td>
+                    <td>{u.must_change_password ? <span className="badge">初回ログイン前</span> : <span className="badge good">利用中</span>}{!u.created_by_sns && <span className="badge" style={{ marginLeft: 6 }}>MEOと共通</span>}</td>
+                    <td>
+                      <details className="more">
+                        <summary>操作<span className="sr-only">：{u.name}</span></summary>
+                        {u.created_by_sns && (
+                          <ActionForm action={resetViewerPasswordAction}>
+                            <Hidden id={id} /><input type="hidden" name="user_id" value={u.user_id} />
+                            <div className="form-actions"><SubmitButton className="btn" pendingText="再発行しています…">初期パスワードを再発行</SubmitButton></div>
+                          </ActionForm>
+                        )}
+                        <ActionForm action={removeViewerAction}>
+                          <Hidden id={id} /><input type="hidden" name="user_id" value={u.user_id} />
+                          <label className="check"><input type="checkbox" name="confirm" required />「{u.name}」を閲覧ユーザーから削除します</label>
+                          <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">削除</SubmitButton></div>
+                        </ActionForm>
+                      </details>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>閲覧ユーザーを追加</h3>
+          <ActionForm action={addViewerAction} resetOnSuccess>
+            <Hidden id={id} />
+            <label htmlFor="vw-name">氏名<span className="req">必須</span></label>
+            <input id="vw-name" name="name" type="text" required aria-required="true" maxLength={100} autoComplete="off" />
+            <label htmlFor="vw-email">メールアドレス<span className="req">必須</span></label>
+            <input id="vw-email" name="email" type="email" required aria-required="true" maxLength={254} autoComplete="off" aria-describedby="vw-hint" />
+            <p className="hint" id="vw-hint">初期パスワードを作成して画面に表示します（メールは送信しません）。ご本人に安全な方法で伝えてください。すでに MEO のアカウントがある方は、そのアカウントのまま追加します。</p>
+            <div className="form-actions"><SubmitButton pendingText="追加しています…">追加</SubmitButton></div>
+          </ActionForm>
+        </div>
+      </section>
+
       <section id="delete" aria-labelledby="h-delete">
         <h2 id="h-delete">データの削除</h2>
         <p className="sub">削除したデータは元に戻せません。削除すると、このクライアントのAI分析結果もあわせて削除します。保存期間（{settings.retention_days ? `${settings.retention_days}日` : "無期限"}）を過ぎたデータは自動で削除されます。</p>
@@ -294,16 +363,18 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
             <label className="check"><input type="checkbox" name="confirm" required />選んだデータを削除します（元に戻せません）</label>
             <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">削除</SubmitButton></div>
           </ActionForm>
-          <details className="more">
-            <summary>このクライアントのSNSデータをすべて削除する（契約終了時など）</summary>
-            <ActionForm action={deleteEverything}>
-              <Hidden id={id} />
-              <p className="small">連携・競合・収集データ・AI分析結果・同意の記録をすべて削除します。MEO のクライアント情報は削除しません。</p>
-              <label htmlFor="d-name">確認のため、クライアント名「{client.name}」を入力してください</label>
-              <input id="d-name" name="confirm_name" type="text" required autoComplete="off" />
-              <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">すべて削除</SubmitButton></div>
-            </ActionForm>
-          </details>
+          {v.isAdmin && (
+            <details className="more">
+              <summary>このクライアントを削除する（契約終了時など）</summary>
+              <ActionForm action={deleteClientAction}>
+                <Hidden id={id} />
+                <p className="small">クライアントと、その連携・競合・収集データ・AI分析結果・同意の記録・閲覧ユーザーをすべて削除します（管理者のみ）。MEO のデータには影響しません。</p>
+                <label htmlFor="d-name">確認のため、クライアント名「{client.name}」を入力してください</label>
+                <input id="d-name" name="confirm_name" type="text" required autoComplete="off" />
+                <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">クライアントを削除</SubmitButton></div>
+              </ActionForm>
+            </details>
+          )}
         </div>
       </section>
     </>

@@ -56,7 +56,9 @@ export const USERS = [
   { id: "00000000-0000-0000-0000-00000000000a", email: "admin@example.test", password: "test-admin-pass", name: "管理 太郎", kind: "admin" },
   { id: "00000000-0000-0000-0000-00000000000b", email: "staff@example.test", password: "test-staff-pass", name: "運用 花子", kind: "member" },
   { id: "00000000-0000-0000-0000-00000000000c", email: "viewer@example.test", password: "test-viewer-pass", name: "閲覧 次郎", kind: "viewer" },
-];
+  // MEO だけの閲覧ユーザー（SNS分析では権限なし）
+  { id: "00000000-0000-0000-0000-00000000000d", email: "meo-only@example.test", password: "test-meo-only-pass", name: "MEO 三郎", kind: "meo" },
+] as { id: string; email: string; password: string; name: string; kind: string }[];
 export const CLIENT_A = "10000000-0000-0000-0000-00000000000a";
 export const CLIENT_B = "10000000-0000-0000-0000-00000000000b";
 
@@ -65,10 +67,14 @@ async function seed() {
   await db.exec(readFileSync(new URL("../../../supabase/sns.sql", import.meta.url), "utf8"));
   await db.exec(`grant usage on schema public to authenticated; grant select on all tables in schema public to authenticated;`);
   for (const u of USERS) await db.query("insert into auth.users (id, email) values ($1, $2)", [u.id, u.email]);
-  await db.query("insert into clients (id, name) values ($1, 'デモ株式会社'), ($2, 'サンプル商店')", [CLIENT_A, CLIENT_B]);
+  // MEO のクライアント（SNS分析とは別）
+  await db.query("insert into clients (id, name) values ($1, 'MEO だけのクライアント')", [CLIENT_A]);
+  await db.query("insert into client_users (id, client_id, name, email) values ($1, $2, $3, $4)", [USERS[3].id, CLIENT_A, USERS[3].name, USERS[3].email]);
+  // SNS分析のクライアント
+  await db.query("insert into sns_clients (id, name) values ($1, 'デモ株式会社'), ($2, 'サンプル商店')", [CLIENT_A, CLIENT_B]);
   await db.query("insert into staff (id, name, email, role) values ($1, $2, $3, 'admin'), ($4, $5, $6, 'member')",
     [USERS[0].id, USERS[0].name, USERS[0].email, USERS[1].id, USERS[1].name, USERS[1].email]);
-  await db.query("insert into client_users (id, client_id, name, email) values ($1, $2, $3, $4)", [USERS[2].id, CLIENT_A, USERS[2].name, USERS[2].email]);
+  await db.query("insert into sns_client_users (user_id, client_id, name, email, must_change_password, created_by_sns) values ($1, $2, $3, $4, false, true)", [USERS[2].id, CLIENT_A, USERS[2].name, USERS[2].email]);
 
   // デモデータ（Python 版の sample_data と同じもの）をクライアントAに入れる
   type P = { externalId: string; platform: string; postedAt: string; text: string; mediaType: string; permalink: string | null; metrics: Record<string, number | null> };
@@ -339,6 +345,41 @@ export async function start(port = PORT) {
         return res.end(JSON.stringify(userJson(u)));
       }
       if (url.pathname === "/auth/v1/logout") { res.writeHead(204).end(); return; }
+      const json = (status: number, body: unknown) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
+      if (url.pathname === "/auth/v1/user" && req.method === "PUT") {
+        const u = userFromToken((req.headers.authorization ?? "").replace(/^Bearer /, ""));
+        if (!u) return json(401, { code: 401, msg: "invalid JWT" });
+        const pw = (body as { password?: string })?.password;
+        if (pw) {
+          if (pw === u.password) return json(422, { code: "same_password", msg: "New password should be different from the old password." });
+          u.password = pw;
+        }
+        return json(200, userJson(u));
+      }
+      if (url.pathname.startsWith("/auth/v1/admin/users")) {
+        if (req.headers["apikey"] !== SERVICE_KEY) return json(401, { msg: "service role required" });
+        const id = url.pathname.split("/")[5];
+        const b = (body ?? {}) as { email?: string; password?: string };
+        if (req.method === "GET" && !id) {
+          const page = Number(url.searchParams.get("page") ?? 1), per = Number(url.searchParams.get("per_page") ?? 50);
+          return json(200, { users: USERS.slice((page - 1) * per, page * per).map(userJson), aud: "authenticated" });
+        }
+        if (req.method === "POST") {
+          if (USERS.some((u) => u.email === b.email)) return json(422, { code: "email_exists", msg: "A user with this email address has already been registered" });
+          const u = { id: crypto.randomUUID(), email: String(b.email), password: String(b.password), name: "", kind: "new" };
+          USERS.push(u);
+          await serial(() => db.query("insert into auth.users (id, email) values ($1, $2)", [u.id, u.email]));
+          return json(200, userJson(u));
+        }
+        const u = USERS.find((x) => x.id === id);
+        if (!u) return json(404, { msg: "User not found" });
+        if (req.method === "PUT") { if (b.password) u.password = b.password; return json(200, userJson(u)); }
+        if (req.method === "DELETE") {
+          USERS.splice(USERS.indexOf(u), 1);
+          await serial(() => db.query("delete from auth.users where id = $1", [u.id]));
+          return json(200, {});
+        }
+      }
       const m = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/);
       if (m) return await rest(req, res, m[1], url, body);
       res.writeHead(404).end();

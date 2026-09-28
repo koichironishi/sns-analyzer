@@ -13,6 +13,9 @@ const ACTIONS: Record<string, string> = {
   "consent.grant": "AI分析の同意を記録", "consent.revoke": "AI分析の同意を撤回", "brand.update": "事業内容を更新", "import.csv": "CSV取り込み",
   "followers.manual": "フォロワー数を記録", "data.delete": "データ削除", "data.delete_all": "全データ削除", "settings.update": "全体設定を更新",
   "deletion.request": "削除リクエスト（Meta・Threads）", "cron.collect": "自動収集",
+  "client.create": "クライアントを登録", "client.update": "クライアント情報を更新", "client.delete": "クライアントを削除",
+  "viewer.add": "閲覧ユーザーを追加", "viewer.reset_password": "初期パスワードを再発行", "viewer.remove": "閲覧ユーザーを削除",
+  "account.password": "パスワードを変更",
 };
 
 export default async function AuditPage() {
