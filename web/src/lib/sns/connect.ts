@@ -11,7 +11,7 @@ import { ApiError, HttpClient, num, str, type HttpOptions } from "./collectors/h
 import type { Platform } from "./models.ts";
 
 export const META_SCOPES = [
-  "pages_show_list", "pages_read_engagement", "read_insights",
+  "pages_show_list", "pages_read_engagement", "pages_read_user_content", "read_insights",
   "instagram_basic", "instagram_manage_insights", "business_management",
   // 投稿用
   "pages_manage_posts", "instagram_content_publish",

@@ -1,15 +1,22 @@
 /**
  * Facebook ページ（Graph API）。
  * 必要な権限：pages_read_engagement, read_insights（ページアクセストークンを使用）
+ * 反応数・コメント数の取得には pages_read_user_content も必要。ない場合は、反応数をインサイトで補い、コメント数は 0 とする。
  */
 import type { MediaType } from "../models.ts";
 import { ApiError, HttpClient, InsightsFetcher, graphPaginate, metrics, num, parseTime, str, type CollectedPost, type CollectResult } from "./http.ts";
 import { DEADLINE_WARNING, cleanHandle, overDeadline, type CollectOptions, type Collector, type CollectorDeps, type ConnectionConfig } from "./types.ts";
 
-const POST_FIELDS = "id,message,created_time,permalink_url,shares,"
-  + "reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),attachments{media_type}";
+const BASIC_FIELDS = "id,message,created_time,permalink_url,shares,attachments{media_type}";
+const POST_FIELDS = `${BASIC_FIELDS},reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)`;
 // post_impressions / post_impressions_unique は Graph API v25 以降で提供終了
-export const DEFAULT_METRICS = ["post_media_view", "post_total_media_view_unique", "post_clicks"];
+export const DEFAULT_METRICS = ["post_media_view", "post_total_media_view_unique", "post_clicks", "post_reactions_by_type_total"];
+
+export const USER_CONTENT_WARNING = "コメント数を取得する権限（pages_read_user_content）がないため、コメント数は 0 として記録しました。"
+  + "反応数はインサイトから取得しています。Meta アプリの構成に権限を追加し、もう一度連携すると取得できます";
+
+/** reactions / comments の取得に pages_read_user_content が必要というエラーか */
+const isUserContentError = (e: unknown) => e instanceof ApiError && /pages_read_user_content/.test(e.message);
 
 export function mediaType(p: Record<string, unknown>): MediaType {
   const att = ((p.attachments ?? {}) as { data?: Record<string, unknown>[] }).data ?? [];
@@ -42,7 +49,21 @@ export class FacebookCollector implements Collector {
     const posts: CollectedPost[] = [];
     const warnings: string[] = [];
     const since = Math.floor(new Date(opts.since).getTime() / 1000);
-    for await (const p of graphPaginate(this.http, `${pid}/posts`, { fields: POST_FIELDS, limit: 50, since })) {
+    let limited = false;
+    const http = this.http;
+    // 権限がなければ、反応数・コメント数を除いた項目で取り直す（最初のページで失敗するため、取りこぼしはない）
+    async function* listPosts() {
+      let yielded = false;
+      try {
+        for await (const p of graphPaginate(http, `${pid}/posts`, { fields: POST_FIELDS, limit: 50, since })) { yielded = true; yield p; }
+      } catch (e) {
+        if (yielded || !isUserContentError(e)) throw e;
+        limited = true;
+        warnings.push(USER_CONTENT_WARNING);
+        yield* graphPaginate(http, `${pid}/posts`, { fields: BASIC_FIELDS, limit: 50, since });
+      }
+    }
+    for await (const p of listPosts()) {
       const postedAt = parseTime(str(p.created_time));
       if (postedAt < opts.since) break;
       if (overDeadline(opts)) { warnings.push(DEADLINE_WARNING); break; }
@@ -52,7 +73,7 @@ export class FacebookCollector implements Collector {
         externalId: str(p.id), postedAt, text: str(p.message), mediaType: kind, permalink: str(p.permalink_url) || null,
         metrics: metrics({
           views: ins.post_media_view ?? null, reach: ins.post_total_media_view_unique ?? null, clicks: ins.post_clicks ?? null,
-          likes: summaryCount(p.reactions), comments: summaryCount(p.comments),
+          likes: limited ? (ins.post_reactions_by_type_total ?? 0) : summaryCount(p.reactions), comments: summaryCount(p.comments),
           shares: num(((p.shares ?? {}) as { count?: unknown }).count) ?? 0,
         }),
       });

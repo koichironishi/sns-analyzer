@@ -179,10 +179,14 @@ export async function* graphPaginate(http: HttpClient, path: string, params: Par
 
 export function parseInsights(resp: unknown): Record<string, number> {
   const out: Record<string, number> = {};
+  const lifetime = new Set<string>();
   const data = (resp as { data?: unknown[] })?.data;
   if (!Array.isArray(data)) return out;
   for (const item of data as Record<string, unknown>[]) {
     const name = item.name;
+    // 同じ指標が「lifetime」と「day」の両方で返ることがある。投稿の累計（lifetime）を優先する
+    if (typeof name === "string" && lifetime.has(name)) continue;
+    if (typeof name === "string" && item.period === "lifetime") lifetime.add(name);
     let val: unknown = null;
     const tv = item.total_value;
     const values = item.values;

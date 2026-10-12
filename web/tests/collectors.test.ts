@@ -97,6 +97,24 @@ test("Facebook: 反応数とインサイト", async () => {
   assert.equal(r.posts[0].mediaType, "image");
 });
 
+test("Facebook: pages_read_user_content がなければ反応数をインサイトで補う", async () => {
+  const { fn } = fakeFetch([
+    (u) => u.pathname.endsWith("/p1") ? { body: { id: "p1", name: "店", fan_count: 50 } } : undefined,
+    (u) => u.pathname.endsWith("/p1/posts") && (u.searchParams.get("fields") ?? "").includes("reactions")
+      ? { status: 400, body: { error: { message: "(#10) This endpoint requires the 'pages_read_user_content' permission", code: 10 } } } : undefined,
+    (u) => u.pathname.endsWith("/p1/posts") ? { body: { data: [{ id: "p1_1", message: "告知", created_time: "2026-09-05T00:00:00+0000",
+      shares: { count: 2 }, attachments: { data: [{ media_type: "album" }] } }] } } : undefined,
+    (u) => u.pathname.endsWith("/insights") ? { body: { data: [
+      { name: "post_media_view", values: [{ value: 19 }] }, { name: "post_reactions_by_type_total", values: [{ value: { like: 3, love: 1 } }] },
+      { name: "post_total_media_view_unique", period: "lifetime", values: [{ value: 12 }] },
+      { name: "post_total_media_view_unique", period: "day", values: [{ value: 0 }] }] } } : undefined,
+  ]);
+  const r = await createCollector({ platform: "facebook", externalId: "p1", username: "", accessToken: "t" }, deps(fn)).collect(opts);
+  assert.equal(r.posts.length, 1);
+  assert.deepEqual(r.posts[0].metrics, { views: 19, reach: 12, likes: 4, comments: 0, shares: 2, saves: 0, quotes: 0, clicks: null });
+  assert.ok(r.warnings.some((w) => w.includes("pages_read_user_content")));
+});
+
 test("Threads: リポストを除外、フォロワー取得失敗は警告", async () => {
   const { fn } = fakeFetch([
     (u) => u.pathname.endsWith("/me") ? { body: { id: "t1", username: "me" } } : undefined,
