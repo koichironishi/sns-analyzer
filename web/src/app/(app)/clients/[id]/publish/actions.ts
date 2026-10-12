@@ -12,9 +12,12 @@ import { zonedToUtc } from "@/lib/sns/importers";
 import { DEFAULT_TZ, isPlatform, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { validatePost } from "@/lib/sns/publish/rules";
 import {
-  audit, deleteScheduledPost, getClient, getScheduledPost, insertScheduledPost, listConnections, MEDIA_BUCKET, removeMedia,
-  updateScheduledPost, type MediaItem, type PostStatus,
+  audit, deleteScheduledPost, getClient, getRequireApproval, getScheduledPost, insertScheduledPost, listConnections, MEDIA_BUCKET,
+  removeMedia, updateScheduledPost, type MediaItem, type PostStatus,
 } from "@/lib/sns/store";
+
+/** 編集できる状態（下書き・承認待ち・差し戻し・予約中・取り消し） */
+const EDITABLE: PostStatus[] = ["draft", "pending", "rejected", "scheduled", "canceled"];
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; errors: string[] };
 
@@ -55,8 +58,9 @@ export type SavePostInput = {
   scheduledLocal?: string; // "YYYY-MM-DDTHH:mm"（日本時間）
 };
 
-/** 下書き保存・予約・今すぐ投稿（今すぐの場合は、保存後に画面から公開の処理を呼ぶ） */
-export async function savePost(input: SavePostInput): Promise<Result<{ id: string; publishNow: boolean }>> {
+/** 下書き保存・予約・今すぐ投稿（今すぐの場合は、保存後に画面から公開の処理を呼ぶ）。
+ *  承認が必要なクライアントの閲覧ユーザーの場合は、予約・今すぐ投稿の代わりに「承認待ち」にする */
+export async function savePost(input: SavePostInput): Promise<Result<{ id: string; publishNow: boolean; pending: boolean }>> {
   try {
     const { v, admin } = await poster(input.clientId);
     const platforms = [...new Set(input.platforms)].filter(isPlatform);
@@ -100,26 +104,34 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     }
     if (errors.length) return { ok: false, errors };
 
-    const status: PostStatus = input.mode === "draft" ? "draft" : "scheduled";
+    // クライアントの閲覧ユーザーの投稿は、設定に応じてスタッフの承認を待つ
+    const needsApproval = input.mode !== "draft" && v.kind === "client" && (await getRequireApproval(admin, input.clientId));
+    const status: PostStatus = input.mode === "draft" ? "draft" : needsApproval ? "pending" : "scheduled";
+    const requestedMode = needsApproval ? (input.mode === "now" ? "now" : "schedule") : null;
+    if (needsApproval && input.mode === "now") scheduledAt = null;
     let id = input.id;
     if (id) {
       if (!UUID_RE.test(id)) return { ok: false, errors: ["投稿の指定が正しくありません"] };
       const cur = await getScheduledPost(admin, id);
       if (!cur || cur.client_id !== input.clientId) return { ok: false, errors: ["投稿が見つかりません"] };
-      if (!["draft", "scheduled", "canceled"].includes(cur.status)) return { ok: false, errors: ["投稿済み・処理中の投稿は編集できません"] };
+      if (!EDITABLE.includes(cur.status)) return { ok: false, errors: ["投稿済み・処理中の投稿は編集できません"] };
       // 外した画像は削除する
       await removeMedia(admin, cur.media.map((m) => m.path).filter((p) => !mediaPaths.includes(p)));
-      await updateScheduledPost(admin, id, { text, platform_texts: platformTexts, platforms, media, status, scheduled_at: scheduledAt, results: {} });
+      await updateScheduledPost(admin, id, {
+        text, platform_texts: platformTexts, platforms, media, status, scheduled_at: scheduledAt, results: {}, requested_mode: requestedMode,
+        // 依頼し直したら、前回の差し戻しの記録は消す（下書き保存のときは、理由を見ながら直せるよう残す）
+        ...(status !== "draft" ? { review_note: null, reviewed_by: null, reviewed_by_name: null, reviewed_at: null } : {}),
+      });
     } else {
       id = await insertScheduledPost(admin, {
         client_id: input.clientId, text, platform_texts: platformTexts, platforms, media, status, scheduled_at: scheduledAt,
-        created_by: v.id, created_by_name: v.name || v.email,
+        created_by: v.id, created_by_name: v.name || v.email, requested_mode: requestedMode,
       });
     }
-    const what = { draft: "下書き保存", schedule: `予約（${scheduledAt}）`, now: "今すぐ投稿" }[input.mode];
+    const what = needsApproval ? `承認を依頼（${input.mode === "now" ? "今すぐ" : `予約 ${scheduledAt}`}）` : { draft: "下書き保存", schedule: `予約（${scheduledAt}）`, now: "今すぐ投稿" }[input.mode];
     await audit(admin, v, "post.save", input.clientId, `${what}・${platforms.join(",")}・画像${media.length}枚`, await clientIp());
     revalidatePath(`/clients/${input.clientId}/publish`);
-    return { ok: true, id: id!, publishNow: input.mode === "now" };
+    return { ok: true, id: id!, publishNow: input.mode === "now" && !needsApproval, pending: needsApproval };
   } catch (e) {
     return fail(e);
   }
@@ -136,7 +148,7 @@ async function ownPost(clientId: string, postId: string) {
 export async function cancelPost(clientId: string, postId: string): Promise<Result> {
   try {
     const { v, admin, post } = await ownPost(clientId, postId);
-    if (post.status !== "scheduled") return { ok: false, errors: ["予約中の投稿だけ取り消せます"] };
+    if (!["scheduled", "pending"].includes(post.status)) return { ok: false, errors: ["予約中・承認待ちの投稿だけ取り消せます"] };
     await updateScheduledPost(admin, postId, { status: "canceled" });
     await audit(admin, v, "post.cancel", clientId, postId, await clientIp());
     revalidatePath(`/clients/${clientId}/publish`);
@@ -167,6 +179,54 @@ export async function deletePost(clientId: string, postId: string): Promise<Resu
     await removeMedia(admin, post.media.map((m) => m.path));
     await deleteScheduledPost(admin, postId);
     await audit(admin, v, "post.delete", clientId, `${postId}（${post.status}）`, await clientIp());
+    revalidatePath(`/clients/${clientId}/publish`);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---- 承認（スタッフのみ） -------------------------------------------------------------
+
+async function reviewer(clientId: string, postId: string) {
+  const ctx = await ownPost(clientId, postId);
+  if (ctx.v.kind !== "staff") throw new Error("承認・差し戻しはスタッフだけが行えます");
+  if (ctx.post.status !== "pending") throw new Error("承認待ちの投稿ではありません");
+  return ctx;
+}
+
+/** 承認する。依頼が「今すぐ」か、予約日時を過ぎている場合は、このあと画面から公開の処理を呼ぶ */
+export async function approvePost(clientId: string, postId: string): Promise<Result<{ publishNow: boolean }>> {
+  try {
+    const { v, admin, post } = await reviewer(clientId, postId);
+    const due = post.requested_mode === "now" || !post.scheduled_at || new Date(post.scheduled_at).getTime() <= Date.now() + 60_000;
+    // 承認の時点でも、投稿先の連携と投稿の許可を確かめる
+    const conns = await listConnections(admin, clientId);
+    const missing = post.platforms.filter((p) => !conns.find((c) => c.platform === p)?.can_publish);
+    if (missing.length) return { ok: false, errors: [`${missing.map((p) => PLATFORM_LABELS[p]).join("・")}：連携されていないか、投稿の許可がありません`] };
+    await updateScheduledPost(admin, postId, {
+      status: "scheduled", scheduled_at: due ? new Date().toISOString() : post.scheduled_at,
+      reviewed_by: v.id, reviewed_by_name: v.name || v.email, reviewed_at: new Date().toISOString(), review_note: null,
+    });
+    await audit(admin, v, "post.approve", clientId, `${postId}${due ? "（すぐに投稿）" : `（予約 ${post.scheduled_at}）`}`, await clientIp());
+    revalidatePath(`/clients/${clientId}/publish`);
+    return { ok: true, publishNow: due };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** 差し戻す（理由を付けて、クライアントに直してもらう） */
+export async function rejectPost(clientId: string, postId: string, note: string): Promise<Result> {
+  try {
+    const { v, admin } = await reviewer(clientId, postId);
+    const reason = String(note ?? "").trim();
+    if (!reason) return { ok: false, errors: ["差し戻しの理由を入力してください"] };
+    if (reason.length > 500) return { ok: false, errors: ["差し戻しの理由は500文字以内で入力してください"] };
+    await updateScheduledPost(admin, postId, {
+      status: "rejected", review_note: reason, reviewed_by: v.id, reviewed_by_name: v.name || v.email, reviewed_at: new Date().toISOString(),
+    });
+    await audit(admin, v, "post.reject", clientId, `${postId}：${reason.slice(0, 100)}`, await clientIp());
     revalidatePath(`/clients/${clientId}/publish`);
     return { ok: true };
   } catch (e) {

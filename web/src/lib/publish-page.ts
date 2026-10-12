@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireClientAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PLATFORMS } from "@/lib/sns/models";
-import { getClient, listConnections } from "@/lib/sns/store";
+import { getClient, getRequireApproval, listConnections } from "@/lib/sns/store";
 import type { ComposerConnection } from "@/components/post-composer";
 
 /** 投稿画面の共通準備（権限の確認と、投稿できるSNSの一覧） */
@@ -18,5 +18,7 @@ export async function publishContext(clientId: string) {
     const c = conns.find((x) => x.platform === p);
     return { platform: p, connected: Boolean(c), canPublish: Boolean(c?.can_publish), username: c?.username ?? null };
   });
-  return { v, admin, client, connections };
+  // クライアントの閲覧ユーザーで、承認が必要な設定か
+  const needsApproval = v.kind === "client" && (await getRequireApproval(admin, clientId));
+  return { v, admin, client, connections, needsApproval };
 }

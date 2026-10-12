@@ -116,6 +116,24 @@ export async function getBrandContext(db: Db, clientId: string): Promise<string>
   return (row as { brand_context?: string } | null)?.brand_context ?? "";
 }
 
+/** クライアントの閲覧ユーザーの投稿に、スタッフの承認が必要か（設定がなければ必要） */
+export async function getRequireApproval(db: Db, clientId: string): Promise<boolean> {
+  const row = check(await db.from("sns_client_settings").select("require_approval").eq("client_id", clientId).maybeSingle(), "クライアント設定の読み込み");
+  return (row as { require_approval?: boolean } | null)?.require_approval ?? true;
+}
+
+export async function setRequireApproval(admin: Db, clientId: string, value: boolean): Promise<void> {
+  check(await admin.from("sns_client_settings").upsert({ client_id: clientId, require_approval: value }, { onConflict: "client_id" }), "クライアント設定の保存");
+}
+
+/** スタッフ向け：クライアントごとの承認待ちの件数 */
+export async function pendingCounts(admin: Db): Promise<Map<string, number>> {
+  const rows = check(await admin.from("sns_scheduled_posts").select("client_id").eq("status", "pending"), "承認待ちの確認") as { client_id: string }[];
+  const m = new Map<string, number>();
+  for (const r of rows) m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
+  return m;
+}
+
 export async function setBrandContext(admin: Db, clientId: string, text: string): Promise<void> {
   check(await admin.from("sns_client_settings").upsert({ client_id: clientId, brand_context: text }, { onConflict: "client_id" }), "クライアント設定の保存");
 }
@@ -539,13 +557,16 @@ export async function deletePosts(admin: Db, ids: string[]): Promise<void> {
 export type PostState = "published" | "failed" | "pending";
 export type PlatformResult = { state: PostState; id?: string | null; permalink?: string | null; error?: string | null; at?: string };
 export type MediaItem = { path: string; url: string };
-export type PostStatus = "draft" | "scheduled" | "publishing" | "published" | "partial" | "failed" | "canceled";
+export type PostStatus = "draft" | "pending" | "rejected" | "scheduled" | "publishing" | "published" | "partial" | "failed" | "canceled";
 
 export type ScheduledPost = {
   id: string; client_id: string; text: string; platform_texts: Partial<Record<Platform, string>>; platforms: Platform[];
   media: MediaItem[]; status: PostStatus; scheduled_at: string | null; results: Partial<Record<Platform, PlatformResult>>;
   locked_at: string | null; created_by: string | null; created_by_name: string | null; published_at: string | null;
   created_at: string; updated_at: string;
+  // 承認
+  requested_mode: "now" | "schedule" | null; review_note: string | null; reviewed_by: string | null;
+  reviewed_by_name: string | null; reviewed_at: string | null;
 };
 
 export async function listScheduledPosts(db: Db, clientId: string, limit = 200): Promise<ScheduledPost[]> {
@@ -557,7 +578,7 @@ export async function getScheduledPost(db: Db, id: string): Promise<ScheduledPos
   return check(await db.from("sns_scheduled_posts").select("*").eq("id", id).maybeSingle(), "投稿の読み込み") as ScheduledPost | null;
 }
 
-export async function insertScheduledPost(admin: Db, row: Omit<ScheduledPost, "id" | "results" | "locked_at" | "published_at" | "created_at" | "updated_at">): Promise<string> {
+export async function insertScheduledPost(admin: Db, row: Omit<ScheduledPost, "id" | "results" | "locked_at" | "published_at" | "created_at" | "updated_at" | "review_note" | "reviewed_by" | "reviewed_by_name" | "reviewed_at"> & Partial<Pick<ScheduledPost, "review_note">>): Promise<string> {
   return (check(await admin.from("sns_scheduled_posts").insert(row).select("id").single(), "投稿の保存") as { id: string }).id;
 }
 

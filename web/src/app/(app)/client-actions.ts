@@ -10,7 +10,7 @@ import { getViewer, UUID_RE } from "@/lib/auth";
 import { clientIp } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  addViewerRow, audit, createSnsClient, deleteSnsClient, deleteViewerRow, getClient, getViewerRow, listViewers,
+  addViewerRow, audit, createSnsClient, setRequireApproval, deleteSnsClient, deleteViewerRow, getClient, getViewerRow, listViewers,
   updateSnsClient, updateViewerRow, usedByMeo,
 } from "@/lib/sns/store";
 import type { ActionState } from "./clients/[id]/settings/actions";
@@ -65,6 +65,21 @@ export async function updateClientAction(_: ActionState, form: FormData): Promis
     await audit(admin, v, "client.update", id, name, await clientIp());
     revalidatePath("/", "layout");
     return { ok: "クライアント情報を保存しました。" };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setApprovalAction(_: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const { v, admin } = await staff();
+    const id = String(form.get("client_id") ?? "");
+    if (!UUID_RE.test(id) || !(await getClient(admin, id))) return { error: "クライアントの指定が正しくありません" };
+    const value = form.get("require_approval") === "on";
+    await setRequireApproval(admin, id, value);
+    await audit(admin, v, "client.approval", id, value ? "承認を必須にする" : "承認なしで投稿できる", await clientIp());
+    revalidatePath(`/clients/${id}`, "layout");
+    return { ok: value ? "クライアントの投稿は、スタッフの承認を経てから公開されます。" : "クライアントの投稿は、承認なしで公開されます。" };
   } catch (e) {
     return fail(e);
   }

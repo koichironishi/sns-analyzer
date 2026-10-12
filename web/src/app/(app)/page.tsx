@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { connectionOverview, listClients, listCollectState } from "@/lib/sns/store";
+import { connectionOverview, listClients, listCollectState, pendingCounts } from "@/lib/sns/store";
 import { PLATFORMS, PLATFORM_LABELS } from "@/lib/sns/models";
 import { fmtDateTime } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -20,7 +20,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
   if (v.kind === "client") redirect(`/clients/${v.clientId}`);
   const db = await createClient();
   const admin = createAdminClient();
-  const [clients, conns, states] = await Promise.all([listClients(db), connectionOverview(admin), listCollectState(db)]);
+  const [clients, conns, states, pendings] = await Promise.all([listClients(db), connectionOverview(admin), listCollectState(db), pendingCounts(admin)]);
   return (
     <main id="main" className="app-main" tabIndex={-1}>
       <h1 className="page-title">クライアント</h1>
@@ -56,6 +56,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
                   </div>
                   <span className="small muted">最終収集：{last ? fmtDateTime(last) : "まだありません"}</span>
                   {errors > 0 && <span className="badge warn">要対応：連携エラー {errors}件</span>}
+                  {(pendings.get(c.id) ?? 0) > 0 && <span className="badge info">承認待ちの投稿 {pendings.get(c.id)}件</span>}
                 </Link>
               </li>
             );

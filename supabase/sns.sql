@@ -82,6 +82,9 @@ create table if not exists sns_client_settings (
   updated_at    timestamptz not null default now()
 );
 
+-- クライアントの閲覧ユーザーが作った投稿に、スタッフの承認を必須にするか
+alter table sns_client_settings add column if not exists require_approval boolean not null default true;
+
 drop trigger if exists trg_sns_client_settings_updated on sns_client_settings;
 create trigger trg_sns_client_settings_updated before update on sns_client_settings
   for each row execute function set_updated_at();
@@ -254,8 +257,7 @@ create table if not exists sns_scheduled_posts (
                     and platforms <@ array['instagram', 'facebook', 'threads', 'x']),
   -- 画像 [{"path": "<client_id>/<file>.jpg", "url": "https://..."}]（最大10枚）
   media           jsonb not null default '[]',
-  status          text not null default 'draft'
-                  check (status in ('draft', 'scheduled', 'publishing', 'published', 'partial', 'failed', 'canceled')),
+  status          text not null default 'draft',
   scheduled_at    timestamptz,
   -- SNSごとの結果 {"instagram": {"state": "published", "id": "...", "permalink": "...", "error": null, "at": "..."}}
   results         jsonb not null default '{}',
@@ -266,6 +268,18 @@ create table if not exists sns_scheduled_posts (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
+-- 承認（クライアントの閲覧ユーザーが作った投稿は、スタッフの承認を経て公開する）
+--   pending  : 承認待ち（requested_mode = 'now' なら承認と同時に投稿、'schedule' なら scheduled_at に投稿）
+--   rejected : 差し戻し（review_note に理由）
+alter table sns_scheduled_posts add column if not exists requested_mode   text check (requested_mode in ('now', 'schedule'));
+alter table sns_scheduled_posts add column if not exists review_note      text;
+alter table sns_scheduled_posts add column if not exists reviewed_by      uuid references auth.users(id) on delete set null;
+alter table sns_scheduled_posts add column if not exists reviewed_by_name text;
+alter table sns_scheduled_posts add column if not exists reviewed_at      timestamptz;
+alter table sns_scheduled_posts drop constraint if exists sns_scheduled_posts_status_check;
+alter table sns_scheduled_posts add constraint sns_scheduled_posts_status_check
+  check (status in ('draft', 'pending', 'rejected', 'scheduled', 'publishing', 'published', 'partial', 'failed', 'canceled'));
+
 create index if not exists idx_sns_scheduled_posts_due on sns_scheduled_posts(status, scheduled_at);
 create index if not exists idx_sns_scheduled_posts_client on sns_scheduled_posts(client_id, created_at desc);
 

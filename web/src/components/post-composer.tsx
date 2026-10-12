@@ -35,9 +35,10 @@ function localNow(offsetMin = 0) {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
-export function PostComposer({ clientId, connections, initial }: {
+export function PostComposer({ clientId, connections, initial, needsApproval = false }: {
   clientId: string;
   connections: ComposerConnection[];
+  needsApproval?: boolean;
   initial?: { id: string; text: string; platformTexts: Partial<Record<Platform, string>>; platforms: Platform[]; media: { path: string; url: string }[]; scheduledLocal: string | null };
 }) {
   const router = useRouter();
@@ -97,7 +98,9 @@ export function PostComposer({ clientId, connections, initial }: {
       clientId, id: initial?.id, text, platformTexts: perText, platforms, mediaPaths: images.map((i) => i.path!), mode, scheduledLocal: when,
     });
     if (!r.ok) { setBusy(null); return setErrors(r.errors); }
-    if (r.publishNow) {
+    if (r.pending) {
+      router.push(`/clients/${clientId}/publish?ok=pending`);
+    } else if (r.publishNow) {
       setBusy("投稿しています…（画像の処理などで1分ほどかかることがあります）");
       const res = await fetch(`/api/clients/${clientId}/posts/${r.id}/publish`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
@@ -188,6 +191,7 @@ export function PostComposer({ clientId, connections, initial }: {
 
       <fieldset className="card" style={{ margin: 0 }}>
         <legend>投稿のタイミング</legend>
+        {needsApproval && <p className="hint" style={{ marginTop: 0 }}>この投稿は、担当者の承認を経てから公開されます。「今すぐ投稿」は承認されたときに、「予約」は承認後の予約日時に投稿します。</p>}
         <div className="checks" role="radiogroup" aria-label="投稿のタイミング">
           <label className="check"><input type="radio" name="mode" checked={mode === "now"} onChange={() => setMode("now")} />今すぐ投稿</label>
           <label className="check"><input type="radio" name="mode" checked={mode === "schedule"} onChange={() => setMode("schedule")} />日時を指定して予約</label>
@@ -204,7 +208,8 @@ export function PostComposer({ clientId, connections, initial }: {
 
       <div className="form-actions">
         <button type="submit" className="btn primary" disabled={Boolean(busy) || uploading} aria-disabled={Boolean(busy) || uploading}>
-          {busy ? <><span className="spinner" aria-hidden="true" />{busy}</> : mode === "now" ? "今すぐ投稿する" : mode === "schedule" ? "予約する" : "下書きを保存"}
+          {busy ? <><span className="spinner" aria-hidden="true" />{busy}</> : mode === "draft" ? "下書きを保存"
+            : needsApproval ? "承認を依頼する" : mode === "now" ? "今すぐ投稿する" : "予約する"}
         </button>
         <a className="btn ghost" href={`/clients/${clientId}/publish`}>キャンセル</a>
       </div>

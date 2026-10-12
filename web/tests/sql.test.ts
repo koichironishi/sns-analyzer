@@ -147,3 +147,10 @@ test("投稿先のSNSは4種類だけ・1つ以上", async () => {
   await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms) values ('${IDS.clientA}', array['tiktok'])`));
   await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms) values ('${IDS.clientA}', array[]::text[])`));
 });
+
+test("投稿の承認：承認待ち・差し戻しの状態を持てる", async () => {
+  await db.query(`insert into sns_scheduled_posts (client_id, platforms, status, requested_mode) values ('${IDS.clientA}', array['x'], 'pending', 'now')`);
+  await db.query(`insert into sns_scheduled_posts (client_id, platforms, status, review_note) values ('${IDS.clientA}', array['x'], 'rejected', '表現を直してください')`);
+  await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms, status) values ('${IDS.clientA}', array['x'], 'approved')`));
+  await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms, requested_mode) values ('${IDS.clientA}', array['x'], 'later')`));
+});

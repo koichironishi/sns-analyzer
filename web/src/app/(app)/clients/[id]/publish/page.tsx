@@ -12,18 +12,21 @@ import { PostActions } from "@/components/post-actions";
 export const metadata: Metadata = { title: "投稿" };
 
 const STATUS: Record<ScheduledPost["status"], [string, string]> = {
-  draft: ["下書き", ""], scheduled: ["予約中", "info"], publishing: ["投稿中", "info"], published: ["投稿済み", "good"],
+  draft: ["下書き", ""], pending: ["承認待ち", "info"], rejected: ["差し戻し", "warn"], scheduled: ["予約中", "info"], publishing: ["投稿中", "info"], published: ["投稿済み", "good"],
   partial: ["一部失敗", "warn"], failed: ["失敗", "warn"], canceled: ["取り消し", ""],
 };
 const OK: Record<string, [kind: "ok" | "error", text: string]> = {
   published: ["ok", "投稿しました。"], partial: ["error", "一部のSNSで投稿に失敗しました。下の一覧で理由を確認し、再投稿してください。"],
   failed: ["error", "投稿に失敗しました。下の一覧で理由を確認してください。"], publish_error: ["error", "投稿の処理を始められませんでした。一覧で状態を確認してください。"],
   scheduled: ["ok", "予約しました。予約時刻から数分以内に投稿します。"], draft: ["ok", "下書きを保存しました。"],
+  pending: ["ok", "担当者に承認を依頼しました。承認されると投稿されます。"],
 };
 
-function PostCard({ post, clientId }: { post: ScheduledPost; clientId: string }) {
+function PostCard({ post, clientId, isStaff }: { post: ScheduledPost; clientId: string; isStaff: boolean }) {
   const [label, kind] = STATUS[post.status];
-  const when = post.status === "scheduled" ? `予約：${fmtDateTime(post.scheduled_at)}` : post.published_at ? `投稿：${fmtDateTime(post.published_at)}` : `作成：${fmtDateTime(post.created_at)}`;
+  const when = post.status === "pending"
+    ? (post.requested_mode === "now" ? "希望：承認されたらすぐ投稿" : `希望の予約：${fmtDateTime(post.scheduled_at)}`)
+    : post.status === "scheduled" ? `予約：${fmtDateTime(post.scheduled_at)}` : post.published_at ? `投稿：${fmtDateTime(post.published_at)}` : `作成：${fmtDateTime(post.created_at)}`;
   return (
     <li className="card post-card">
       <div className="row">
@@ -31,6 +34,8 @@ function PostCard({ post, clientId }: { post: ScheduledPost; clientId: string })
         <span className="small muted">{when}</span>
         <span className="small muted">作成者：{post.created_by_name ?? "—"}</span>
       </div>
+      {post.status === "rejected" && post.review_note && <p className="msg error" style={{ margin: "8px 0" }}>差し戻しの理由（{post.reviewed_by_name ?? "担当者"}）：{post.review_note}</p>}
+      {post.reviewed_at && post.status !== "rejected" && post.status !== "pending" && <p className="small muted" style={{ margin: "4px 0" }}>承認：{post.reviewed_by_name}（{fmtDateTime(post.reviewed_at)}）</p>}
       <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{truncate(post.text, 160) || <span className="muted">（本文なし）</span>}</p>
       {post.media.length > 0 && (
         <ul className="thumbs small-thumbs" aria-label="画像">
@@ -52,7 +57,7 @@ function PostCard({ post, clientId }: { post: ScheduledPost; clientId: string })
           );
         })}
       </ul>
-      <PostActions clientId={clientId} postId={post.id} status={post.status} />
+      <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
     </li>
   );
 }
@@ -60,11 +65,13 @@ function PostCard({ post, clientId }: { post: ScheduledPost; clientId: string })
 export default async function PublishPage({ params, searchParams }: PageProps<"/clients/[id]/publish">) {
   const { id } = await params;
   const sp = await searchParams;
-  const { admin, client, connections } = await publishContext(id);
+  const { v, admin, client, connections, needsApproval } = await publishContext(id);
+  const isStaff = v.kind === "staff";
   const posts = await listScheduledPosts(admin, id);
   const ok = typeof sp.ok === "string" ? OK[sp.ok] : undefined;
+  const pending = posts.filter((p) => p.status === "pending");
   const upcoming = posts.filter((p) => ["scheduled", "publishing"].includes(p.status)).sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
-  const drafts = posts.filter((p) => ["draft", "canceled"].includes(p.status));
+  const drafts = posts.filter((p) => ["draft", "rejected", "canceled"].includes(p.status));
   const done = posts.filter((p) => ["published", "partial", "failed"].includes(p.status));
   const canPost = connections.some((c) => c.canPublish);
   return (
@@ -75,11 +82,13 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
         {canPost ? <Link className="btn primary" href={`/clients/${id}/publish/new`}>新しい投稿を作成</Link>
           : <p className="msg" role="status" style={{ margin: 0 }}>投稿できるSNSがありません。スタッフが「設定・連携」で、投稿の許可を含めて SNS を連携すると使えるようになります。</p>}
       </div>
-      {[["予約中", upcoming, "予約中の投稿はありません。"], ["下書き・取り消し", drafts, "下書きはありません。"], ["投稿済み・失敗", done, "まだ投稿はありません。"]].map(([title, list, empty]) => (
+      {needsApproval && <p className="note-top">この画面で作成した投稿は、担当者の承認を経てから公開されます。</p>}
+      {[["承認待ち", pending, isStaff ? "承認待ちの投稿はありません。" : "承認を待っている投稿はありません。"], ["予約中", upcoming, "予約中の投稿はありません。"],
+        ["下書き・差し戻し・取り消し", drafts, "下書きはありません。"], ["投稿済み・失敗", done, "まだ投稿はありません。"]].map(([title, list, empty]) => (
         <section key={title as string} aria-labelledby={`h-${title}`}>
           <h2 id={`h-${title}`}>{title as string}</h2>
           {(list as ScheduledPost[]).length === 0 ? <p className="muted">{empty as string}</p>
-            : <ul className="post-list">{(list as ScheduledPost[]).map((p) => <PostCard key={p.id} post={p} clientId={id} />)}</ul>}
+            : <ul className="post-list">{(list as ScheduledPost[]).map((p) => <PostCard key={p.id} post={p} clientId={id} isStaff={isStaff} />)}</ul>}
         </section>
       ))}
     </>

@@ -7,8 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORMS, PLATFORM_LABELS, todayIn, type Platform } from "@/lib/sns/models";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
-import { getAppSettings, getBrandContext, getClient, getConsentRow, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
-import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, updateClientAction } from "../../../client-actions";
+import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
+import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
 import { ActionForm } from "@/components/action-form";
 import { Flash } from "@/components/flash";
 import { CollectButton } from "@/components/collect-button";
@@ -53,9 +53,9 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
   const admin = createAdminClient();
   const client = await getClient(admin, id);
   if (!client) notFound();
-  const [conns, states, competitors, consentRow, brand, settings, viewers] = await Promise.all([
+  const [conns, states, competitors, consentRow, brand, settings, viewers, requireApproval] = await Promise.all([
     listConnections(admin, id), listCollectState(admin, id), listCompetitors(admin, id), getConsentRow(admin, id),
-    getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id),
+    getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id), getRequireApproval(admin, id),
   ]);
   const consent = consentState(consentRow);
   const connOf = (p: Platform) => conns.find((c) => c.platform === p);
@@ -344,6 +344,15 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
             </table>
           </div>
         )}
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>投稿の承認</h3>
+          <ActionForm action={setApprovalAction}>
+            <Hidden id={id} />
+            <label className="check"><input type="checkbox" name="require_approval" defaultChecked={requireApproval} />閲覧ユーザーが作った投稿は、スタッフの承認を経てから公開する</label>
+            <p className="hint">承認待ちの投稿は「投稿」の画面に表示され、スタッフが「承認する」か「差し戻す」を選べます。スタッフが作った投稿は承認なしで公開されます。</p>
+            <div className="form-actions"><SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton></div>
+          </ActionForm>
+        </div>
         <div className="card" style={{ marginTop: 16 }}>
           <h3>閲覧ユーザーを追加</h3>
           <ActionForm action={addViewerAction} resetOnSuccess>

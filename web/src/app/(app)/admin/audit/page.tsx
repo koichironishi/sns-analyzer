@@ -17,7 +17,7 @@ const ACTIONS: Record<string, string> = {
   "viewer.add": "閲覧ユーザーを追加", "viewer.reset_password": "初期パスワードを再発行", "viewer.remove": "閲覧ユーザーを削除",
   "account.password": "パスワードを変更", "connect.x.failed": "X 連携に失敗",
   "post.save": "投稿を保存・予約", "post.publish": "投稿を実行", "post.cancel": "予約を取り消し", "post.retry": "再投稿", "post.delete": "投稿を削除",
-  "cron.publish": "予約投稿",
+  "cron.publish": "予約投稿", "post.approve": "投稿を承認", "post.reject": "投稿を差し戻し", "client.approval": "承認の設定を変更",
 };
 
 export default async function AuditPage() {
