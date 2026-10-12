@@ -30,7 +30,7 @@ export default async function PostsPage({ params, searchParams }: PageProps<"/cl
             </tbody>
           </table>
         </div>
-        <p className="note">すべての投稿は「<Link href={`/clients/${id}/list${periodQuery(r.period)}`}>投稿一覧</Link>」で確認できます。</p>
+        <p className="note">すべての投稿は「<Link href={`/clients/${id}${periodQuery(r.period)}#posts`}>ダッシュボード</Link>」の投稿一覧で確認できます。</p>
       </section>
     </ReportPage>
   );

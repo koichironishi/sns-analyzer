@@ -25,7 +25,6 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
     { href: "/competitors", label: "競合比較" },
     { href: "/timing", label: "投稿時間" },
     { href: "/content", label: "形式・タグ" },
-    { href: "/list", label: "投稿一覧" },
     { href: "/posts", label: "投稿ランキング" },
     { href: "/downloads", label: "ダウンロード" },
     { href: "/publish", label: "投稿", keepQuery: false },

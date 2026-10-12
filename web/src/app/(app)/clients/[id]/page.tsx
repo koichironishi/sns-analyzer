@@ -5,6 +5,7 @@ import { Chip, Delta, Insights } from "@/components/report-ui";
 import { Legend, Sparkline, StackedDaily } from "@/components/charts";
 import { fmtNum, fmtPct, fmtSigned, slash } from "@/lib/format";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
+import { PostList } from "@/components/post-list";
 
 // レイアウトのタイトルの型は同じ階層のページには効かないため、ここで組み立てる
 export async function generateMetadata({ params }: PageProps<"/clients/[id]">): Promise<Metadata> {
@@ -14,7 +15,8 @@ export async function generateMetadata({ params }: PageProps<"/clients/[id]">): 
 
 export default async function OverviewPage({ params, searchParams }: PageProps<"/clients/[id]">) {
   const { id } = await params;
-  const r = await reportFromSearch(id, await searchParams);
+  const sp = await searchParams;
+  const r = await reportFromSearch(id, sp);
   const d = r.analysis;
   const t = d.total;
   const fol = d.platforms.map((p) => d.summary[p]!.followers).filter((v): v is number => v !== null);
@@ -106,6 +108,11 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </div>
           </details>
         </div>
+      </section>
+
+      <section aria-labelledby="h-posts" id="posts">
+        <h2 id="h-posts">投稿一覧</h2>
+        <PostList report={r} sp={sp} anchor="posts" />
       </section>
     </ReportPage>
   );
