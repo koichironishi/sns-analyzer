@@ -57,7 +57,7 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
         {posts.length === 0 ? (
           <div className="card empty"><p>この期間の投稿はありません。</p></div>
         ) : (
-          <div className="card flush scroll post-list">
+          <div className="card flush scroll posts-table">
             <table>
               <caption className="sr-only">投稿一覧（{SORTS[sort].label}の{sort === "date" ? "新しい" : "大きい"}順）</caption>
               <thead><tr>

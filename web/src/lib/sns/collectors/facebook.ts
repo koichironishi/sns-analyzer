@@ -12,9 +12,6 @@ const POST_FIELDS = `${BASIC_FIELDS},reactions.summary(total_count).limit(0),com
 // post_impressions / post_impressions_unique は Graph API v25 以降で提供終了
 export const DEFAULT_METRICS = ["post_media_view", "post_total_media_view_unique", "post_clicks", "post_reactions_by_type_total"];
 
-export const USER_CONTENT_WARNING = "コメント数を取得する権限（pages_read_user_content）がないため、コメント数は 0 として記録しました。"
-  + "反応数はインサイトから取得しています。Meta アプリの構成に権限を追加し、もう一度連携すると取得できます";
-
 /** reactions / comments の取得に pages_read_user_content が必要というエラーか */
 const isUserContentError = (e: unknown) => e instanceof ApiError && /pages_read_user_content/.test(e.message);
 
@@ -58,8 +55,8 @@ export class FacebookCollector implements Collector {
         for await (const p of graphPaginate(http, `${pid}/posts`, { fields: POST_FIELDS, limit: 50, since })) { yielded = true; yield p; }
       } catch (e) {
         if (yielded || !isUserContentError(e)) throw e;
+        // 権限がないのは設定上の制約で、収集自体は問題ないため注意として出さない
         limited = true;
-        warnings.push(USER_CONTENT_WARNING);
         yield* graphPaginate(http, `${pid}/posts`, { fields: BASIC_FIELDS, limit: 50, since });
       }
     }

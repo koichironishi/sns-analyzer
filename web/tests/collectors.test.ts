@@ -112,7 +112,7 @@ test("Facebook: pages_read_user_content がなければ反応数をインサイ�
   const r = await createCollector({ platform: "facebook", externalId: "p1", username: "", accessToken: "t" }, deps(fn)).collect(opts);
   assert.equal(r.posts.length, 1);
   assert.deepEqual(r.posts[0].metrics, { views: 19, reach: 12, likes: 4, comments: 0, shares: 2, saves: 0, quotes: 0, clicks: null });
-  assert.ok(r.warnings.some((w) => w.includes("pages_read_user_content")));
+  assert.deepEqual(r.warnings, []);
 });
 
 test("Threads: リポストを除外、フォロワー取得失敗は警告", async () => {
