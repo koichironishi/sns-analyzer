@@ -5,14 +5,19 @@ import { getViewer } from "@/lib/auth";
 import { slash } from "@/lib/format";
 import { todayIn } from "@/lib/sns/models";
 import { PeriodForm } from "./period-form";
+import { PlatformSwitch } from "./platform-switch";
+import { PLATFORM_LABELS } from "@/lib/sns/models";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
-export async function ReportPage({ report, title, lead, children, needsData = true }: {
+export async function ReportPage({ report, title, lead, children, needsData = true, platformSwitch = true }: {
   report: Report; title: string; lead: string; children: React.ReactNode; needsData?: boolean;
+  /** SNSごとの切り替えを出すか（AI分析など、SNSで絞り込まないページは false） */
+  platformSwitch?: boolean;
 }) {
   const { start, end, days } = report.analysis.period;
-  const eyebrow = `${report.client.name} ・ ${slash(start)}〜${slash(end)}（${days}日間）`;
+  const sns = platformSwitch ? report.period.sns : null;
+  const eyebrow = `${report.client.name}${sns ? ` ・ ${PLATFORM_LABELS[sns]}` : ""} ・ ${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
   return (
@@ -20,6 +25,7 @@ export async function ReportPage({ report, title, lead, children, needsData = tr
       <PageHead eyebrow={eyebrow} title={title} lead={lead}>
         <div className="page-period no-print">
           <Suspense><PeriodForm today={todayIn()} /></Suspense>
+          {platformSwitch && report.platforms.length > 1 && <Suspense><PlatformSwitch platforms={report.platforms} current={sns} /></Suspense>}
         </div>
       </PageHead>
       {empty ? (

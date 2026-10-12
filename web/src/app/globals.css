@@ -89,7 +89,9 @@ h1, h2, h3 { line-height: 1.4; font-weight: 700; letter-spacing: .01em; }
 .tab { font: inherit; font-size: var(--fs-sm); font-weight: 600; min-height: 44px; min-width: 44px; padding: 8px 16px; border: 0;
   border-radius: 8px; background: transparent; color: var(--text-2); cursor: pointer; }
 .tab:hover { color: var(--text); }
-.tab[aria-pressed="true"], .tab[aria-current="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 0 1px var(--border); }
+.platform-switch { margin: var(--s3) 0 0; }
+.platform-switch .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.tab[aria-pressed="true"], .tab[aria-current="true"], .tab[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 0 1px var(--border); }
 
 /* チップ・バッジ */
 .chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: var(--fs-md); }

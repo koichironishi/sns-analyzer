@@ -10,6 +10,7 @@ export function PeriodForm({ today }: { today: string }) {
   const router = useRouter();
   const days = sp.get("days") ?? "30";
   const end = sp.get("end") ?? today;
+  const sns = sp.get("sns");
   return (
     <form className="period" action={path} method="get" onSubmit={(e) => {
       e.preventDefault();
@@ -17,6 +18,7 @@ export function PeriodForm({ today }: { today: string }) {
       const q = new URLSearchParams();
       if (f.get("days") !== "30") q.set("days", String(f.get("days")));
       if (f.get("end") && f.get("end") !== today) q.set("end", String(f.get("end")));
+      if (sns) q.set("sns", sns);
       router.push(q.size ? `${path}?${q}` : path);
     }}>
       <div>
@@ -29,6 +31,7 @@ export function PeriodForm({ today }: { today: string }) {
         <label htmlFor="end">終了日</label>
         <input id="end" name="end" type="date" max={today} defaultValue={end} key={end} />
       </div>
+      {sns && <input type="hidden" name="sns" value={sns} />}
       <button type="submit" className="btn sm">表示</button>
     </form>
   );

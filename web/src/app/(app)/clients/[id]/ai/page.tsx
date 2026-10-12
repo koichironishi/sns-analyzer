@@ -32,7 +32,7 @@ export default async function AiPage({ params, searchParams }: PageProps<"/clien
   const PHead = ({ p }: { p: string }) => (isPlatform(p) ? <Chip platform={p} /> : <>全体</>);
 
   return (
-    <ReportPage report={r} title="AI分析" lead="投稿本文と数値をもとに、Claude が改善策と投稿アイデアを提案します。" needsData={false}>
+    <ReportPage report={r} title="AI分析" lead="投稿本文と数値をもとに、Claude が改善策と投稿アイデアを提案します。" needsData={false} platformSwitch={false}>
       {v?.kind === "staff" && (
         <>
           <AiRunner clientId={id} days={r.period.days} end={r.period.end} disabledReason={disabled} />

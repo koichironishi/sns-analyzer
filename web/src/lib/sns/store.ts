@@ -165,6 +165,24 @@ export type ReportData = {
   lastPostDate: string | null;
 };
 
+/** 自社のデータがあるSNS（絞り込みの選択肢） */
+export const reportPlatforms = (d: ReportData): Platform[] =>
+  PLATFORMS.filter((p) => d.ownNames[p] || d.ownFollowers[p] || d.ownPosts.some((x) => x.platform === p));
+
+/** 1つのSNSに絞り込む（null ならそのまま） */
+export function filterReportData(d: ReportData, sns: Platform | null): ReportData {
+  if (!sns) return d;
+  const ownPosts = d.ownPosts.filter((p) => p.platform === sns);
+  const ownFollowers: FollowerSeries = d.ownFollowers[sns] ? { [sns]: d.ownFollowers[sns] } : {};
+  return {
+    ...d, ownPosts, ownFollowers,
+    ownNames: d.ownNames[sns] ? { [sns]: d.ownNames[sns] } : {},
+    competitors: d.competitors.filter((c) => c.platform === sns),
+    hasData: ownPosts.length > 0 || Object.keys(ownFollowers).length > 0,
+    lastPostDate: ownPosts.length ? ownPosts[ownPosts.length - 1].postedAt.slice(0, 10) : null,
+  };
+}
+
 export async function loadReportData(db: Db, clientId: string, opts: { days: number; end: string; tz?: string }): Promise<ReportData> {
   const start = addDays(opts.end, -(opts.days - 1));
   const from = `${addDays(start, -opts.days - 1)}T00:00:00Z`; // 前期間の比較用にさかのぼる

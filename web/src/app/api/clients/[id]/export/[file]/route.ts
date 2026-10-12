@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { analyze } from "@/lib/sns/analysis";
 import { compare } from "@/lib/sns/compare";
 import { DOWNLOAD_FILES, downloads, zip, type DownloadName } from "@/lib/sns/export";
-import { audit, getClient, latestAiResult, loadReportData } from "@/lib/sns/store";
+import { audit, filterReportData, getClient, latestAiResult, loadReportData } from "@/lib/sns/store";
 
 export async function GET(req: Request, ctx: RouteContext<"/api/clients/[id]/export/[file]">) {
   const { id, file } = await ctx.params;
@@ -15,16 +15,17 @@ export async function GET(req: Request, ctx: RouteContext<"/api/clients/[id]/exp
   if (file !== "all.zip" && !(file in DOWNLOAD_FILES)) return new Response("見つかりません", { status: 404 });
 
   const url = new URL(req.url);
-  const { days, end } = parsePeriod(Object.fromEntries(url.searchParams));
+  const { days, end, sns } = parsePeriod(Object.fromEntries(url.searchParams));
   const db = await createClient();
   const client = await getClient(db, id);
   if (!client) return new Response("見つかりません", { status: 404 });
-  const [data, stored] = await Promise.all([loadReportData(db, id, { days, end }), latestAiResult(db, id)]);
+  const [all, stored] = await Promise.all([loadReportData(db, id, { days, end }), latestAiResult(db, id)]);
+  const data = filterReportData(all, sns);
   const analysis = analyze(data.ownPosts, data.ownFollowers, { days, end, accountNames: data.ownNames });
   const cmp = data.competitors.length ? compare(data.ownPosts, data.ownFollowers, data.competitors, { days, end, ownNames: data.ownNames }) : null;
   const files = downloads(analysis, data.ownPosts, data.ownFollowers, cmp, stored?.result ?? null, client.name);
 
-  const slug = `sns_${end}_${days}d`;
+  const slug = `sns_${end}_${days}d${sns ? `_${sns}` : ""}`;
   let body: Uint8Array | string;
   let type: string;
   let name: string;

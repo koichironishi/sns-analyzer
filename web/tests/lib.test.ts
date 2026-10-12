@@ -123,3 +123,28 @@ test("ZIP：unzip で検証でき、日本語名と BOM 付き CSV を含む", (
   assert.match(out, /No errors detected/);
   assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
 });
+
+test("SNSの絞り込み：選んだSNSの投稿・フォロワー・競合だけ残す", async () => {
+  const { filterReportData, reportPlatforms } = await import("../src/lib/sns/store.ts");
+  const post = (id: string, platform: Post["platform"], postedAt: string): Post => ({
+    id, accountId: `a-${platform}`, platform, externalId: id, postedAt, text: "", mediaType: "image", permalink: null, metrics: emptyMetrics(),
+  });
+  const data = {
+    ownPosts: [post("1", "instagram", "2026-10-01T00:00:00Z"), post("2", "facebook", "2026-10-02T00:00:00Z")],
+    ownFollowers: { instagram: [["2026-10-01", 100]], facebook: [["2026-10-01", 50]] } as never,
+    ownNames: { instagram: "ig", facebook: "fb", threads: "th" },
+    competitors: [{ id: "c1", platform: "instagram" as const, competitorName: "A", username: "a", series: [], posts: [] },
+      { id: "c2", platform: "x" as const, competitorName: "B", username: "b", series: [], posts: [] }],
+    competitorList: [], hasData: true, lastPostDate: "2026-10-02",
+  };
+  assert.deepEqual(reportPlatforms(data), ["instagram", "facebook", "threads"]);
+  assert.equal(filterReportData(data, null), data);
+  const ig = filterReportData(data, "instagram");
+  assert.deepEqual(ig.ownPosts.map((p) => p.id), ["1"]);
+  assert.deepEqual(Object.keys(ig.ownFollowers), ["instagram"]);
+  assert.deepEqual(ig.ownNames, { instagram: "ig" });
+  assert.deepEqual(ig.competitors.map((c) => c.id), ["c1"]);
+  assert.equal(ig.lastPostDate, "2026-10-01");
+  const th = filterReportData(data, "threads");
+  assert.equal(th.hasData, false);
+});

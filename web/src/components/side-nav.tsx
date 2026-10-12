@@ -2,12 +2,12 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-/** レポートの目次。期間（?days=&end=）を引き継いでページを移動する */
+/** レポートの目次。期間とSNSの絞り込み（?days=&end=&sns=）を引き継いでページを移動する */
 export function SideNav({ base, items }: { base: string; items: { href: string; label: string; keepQuery?: boolean }[] }) {
   const path = usePathname();
   const sp = useSearchParams();
   const q = new URLSearchParams();
-  for (const k of ["days", "end"]) {
+  for (const k of ["days", "end", "sns"]) {
     const v = sp.get(k);
     if (v) q.set(k, v);
   }

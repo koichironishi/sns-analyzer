@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { reportFromSearch } from "@/lib/report";
 import { ReportPage } from "@/components/report-shell";
-import { TabLinks } from "@/components/tab-links";
 import { SLOTS, WEEKDAYS } from "@/lib/sns/analysis";
-import { PLATFORM_LABELS, isPlatform } from "@/lib/sns/models";
+import { PLATFORM_LABELS } from "@/lib/sns/models";
 
 export const metadata: Metadata = { title: "投稿時間" };
 
@@ -18,7 +17,8 @@ export default async function TimingPage({ params, searchParams }: PageProps<"/c
   const sp = await searchParams;
   const r = await reportFromSearch(id, sp);
   const d = r.analysis;
-  const key = typeof sp.sns === "string" && isPlatform(sp.sns) && d.heatmap[sp.sns] ? sp.sns : "all";
+  // 上の「SNSの切り替え」で選んだSNS（すべてなら全体）
+  const key = r.period.sns && d.heatmap[r.period.sns] ? r.period.sns : "all";
   const h = d.heatmap[key];
   const name = key === "all" ? "全体" : PLATFORM_LABELS[key];
   return (
@@ -27,8 +27,6 @@ export default async function TimingPage({ params, searchParams }: PageProps<"/c
         <h2 id="h-heat">曜日 × 時間帯</h2>
         <p className="sub">パフォーマンス指数の平均（100＝そのSNSの普段の投稿、200＝2倍の反応）。空欄は投稿なし。</p>
         <div className="card">
-          <TabLinks param="sns" current={key} sp={sp} label="SNSを選択"
-            options={[{ value: "all", label: "全体" }, ...d.platforms.map((p) => ({ value: p, label: PLATFORM_LABELS[p] }))]} />
           {h ? (
             <div className="scroll">
               <table className="heatmap">

@@ -4,9 +4,8 @@ import { reportFromSearch } from "@/lib/report";
 import { getViewer } from "@/lib/auth";
 import { ReportPage } from "@/components/report-shell";
 import { Bar, Chip, Insights } from "@/components/report-ui";
-import { TabLinks } from "@/components/tab-links";
 import { fmtNum, fmtPct, fmtSigned, truncate } from "@/lib/format";
-import { PLATFORMS, PLATFORM_LABELS, isPlatform } from "@/lib/sns/models";
+import { PLATFORMS, PLATFORM_LABELS } from "@/lib/sns/models";
 import type { AccountStats } from "@/lib/sns/compare";
 
 export const metadata: Metadata = { title: "競合比較" };
@@ -33,16 +32,19 @@ export default async function CompetitorsPage({ params, searchParams }: PageProp
     );
   }
   const available = PLATFORMS.filter((p) => c.platforms[p]);
-  const cur = typeof sp.sns === "string" && isPlatform(sp.sns) && c.platforms[sp.sns] ? sp.sns : available[0];
-  const blk = c.platforms[cur]!;
-  const mx = Math.max(0, ...blk.rows.map((x) => x.erFollowers ?? 0)) || 1;
+  // 上の「SNSの切り替え」で選んだSNSだけ。「すべて」ならSNSごとに並べる
+  const shown = r.period.sns ? available.filter((p) => p === r.period.sns) : available;
   return (
     <ReportPage report={r} title="競合比較" lead="競合アカウントと、公開されている数値だけで条件をそろえて比べます。" needsData={false}>
       <p className="note-top">同じ期間の自社と競合アカウントの比較。フォロワー増減は、競合の記録を始めてからの期間のみ表示されます。</p>
       {c.insights.length > 0 && <div className="card"><Insights items={c.insights} visible={5} /></div>}
-      <section>
+      {shown.map((cur) => {
+        const blk = c.platforms[cur]!;
+        const mx = Math.max(0, ...blk.rows.map((x) => x.erFollowers ?? 0)) || 1;
+        return (
+      <section key={cur} aria-labelledby={`h-comp-${cur}`}>
+        <h2 id={`h-comp-${cur}`}><Chip platform={cur} /></h2>
         <div className="card scroll">
-          <TabLinks param="sns" current={cur} sp={sp} label="SNSを選択" options={available.map((p) => ({ value: p, label: PLATFORM_LABELS[p] }))} />
           <table>
             <caption className="sr-only">{PLATFORM_LABELS[cur]}の競合比較</caption>
             <thead><tr><th scope="col">アカウント</th><th scope="col" className="num">フォロワー</th><th scope="col" className="num">期間増減</th>
@@ -70,6 +72,8 @@ export default async function CompetitorsPage({ params, searchParams }: PageProp
           <p className="note">反応＝{blk.metricLabel}（競合と条件をそろえるため公開値のみで算出）。</p>
         </div>
       </section>
+        );
+      })}
       {c.topPosts.length > 0 && (
         <section aria-labelledby="h-ctop">
           <h2 id="h-ctop">競合で反応の良かった投稿</h2>
