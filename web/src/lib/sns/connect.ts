@@ -75,14 +75,20 @@ export async function metaExchangeCode(app: MetaApp, code: string, redirectUri: 
   const perms = await c.get<{ data?: { permission?: string; status?: string }[] }>("me/permissions", { access_token: userToken })
     .then((r) => (r.data ?? []).filter((x) => x.status === "granted").map((x) => str(x.permission)))
     .catch(() => [] as string[]);
+  const pages = await listMetaPages(app, userToken, http);
+  return { userId: str(me.id), userToken, pages, granted: perms };
+}
+
+/** ログインした利用者が管理しているページと、紐づく Instagram ビジネスアカウント */
+export async function listMetaPages(app: Pick<MetaApp, "graphVersion">, userToken: string, http?: HttpOptions): Promise<MetaPage[]> {
+  const c = new HttpClient(`https://graph.facebook.com/${app.graphVersion}`, http);
   const resp = await c.get<{ data?: Record<string, unknown>[] }>("me/accounts", {
     fields: "id,name,access_token,instagram_business_account{id,username}", limit: 100, access_token: userToken,
   });
-  const pages: MetaPage[] = (resp.data ?? []).map((p) => {
+  return (resp.data ?? []).map((p) => {
     const ig = (p.instagram_business_account ?? {}) as Record<string, unknown>;
     return { pageId: str(p.id), name: str(p.name), accessToken: str(p.access_token), igUserId: str(ig.id), igUsername: str(ig.username) };
   });
-  return { userId: str(me.id), pages, granted: perms };
 }
 
 // ---- Threads ------------------------------------------------------------------

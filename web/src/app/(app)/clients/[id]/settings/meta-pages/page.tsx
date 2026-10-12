@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { readPages } from "@/lib/connect-flow";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listMetaPages } from "@/lib/sns/connect";
+import { getAppSettings } from "@/lib/sns/store";
 import { PageHead } from "@/components/report-ui";
 import { SubmitButton } from "@/components/submit-button";
 import { selectMetaPage } from "../actions";
@@ -13,6 +16,9 @@ export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]
   const { id } = await params;
   const pending = await readPages();
   if (!pending || pending.clientId !== id || pending.userId !== v.id) redirect(`/clients/${id}/settings?e=expired#connections`);
+  const { graph_api_version } = await getAppSettings(createAdminClient());
+  const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => null);
+  if (!pages) redirect(`/clients/${id}/settings?e=exchange#connections`);
   return (
     <>
       <PageHead eyebrow="SNS連携" title="連携するページを選んでください" lead="選んだ Facebook ページと、そのページに紐づく Instagram アカウントを連携します。" />
@@ -20,7 +26,7 @@ export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]
         <input type="hidden" name="client_id" value={id} />
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="sr-only">Facebook ページ</legend>
-          {pending.pages.map((p, i) => (
+          {pages.map((p, i) => (
             <label className="check" key={p.pageId} style={{ display: "flex" }}>
               <input type="radio" name="page_id" value={p.pageId} defaultChecked={i === 0} required />
               <span>{p.name}<span className="muted small">{p.igUsername ? `（Instagram：@${p.igUsername}）` : "（Instagram の紐づけなし）"}</span></span>

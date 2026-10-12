@@ -2,7 +2,6 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { seal, unseal } from "@/lib/seal";
-import type { MetaPage } from "@/lib/sns/connect";
 
 const STATE_COOKIE = "sns_oauth";
 export const PAGES_COOKIE = "sns_meta_pages";
@@ -27,7 +26,8 @@ export async function finishOAuth(service: OAuthState["service"], state: string 
   return saved;
 }
 
-type PendingPages = { clientId: string; userId: string; metaUserId: string; pages: MetaPage[]; granted: string[] };
+/** ページの選択待ち。Cookie は約4KBまでなので、ページごとのトークンではなく利用者のトークンだけを預け、一覧は画面で取り直す */
+type PendingPages = { clientId: string; userId: string; metaUserId: string; userToken: string; granted: string[] };
 
 export async function stashPages(p: PendingPages) {
   (await cookies()).set(PAGES_COOKIE, seal(p, 900), { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 900 });

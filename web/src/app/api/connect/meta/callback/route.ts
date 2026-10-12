@@ -34,6 +34,6 @@ export async function GET(req: Request) {
     redirect(`${back}?ok=meta#connections`);
   }
   // 複数のページを管理している場合は、どのページを連携するか選んでもらう
-  await stashPages({ clientId: flow.clientId, userId: v.id, metaUserId: result.userId, pages: result.pages.slice(0, 12), granted: result.granted });
+  await stashPages({ clientId: flow.clientId, userId: v.id, metaUserId: result.userId, userToken: result.userToken, granted: result.granted });
   redirect(`${back}/meta-pages`);
 }

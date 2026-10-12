@@ -12,7 +12,7 @@ import { clientIp } from "@/lib/http";
 import { saveMetaPage } from "@/lib/meta-pages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cleanHandle } from "@/lib/sns/collectors/types";
-import { checkConnection, xVerify } from "@/lib/sns/connect";
+import { checkConnection, listMetaPages, xVerify } from "@/lib/sns/connect";
 import { ImportError, readCsv } from "@/lib/sns/importers";
 import { PLATFORMS, PLATFORM_LABELS, isPlatform, todayIn, type Platform } from "@/lib/sns/models";
 import { CONSENT_VERSION } from "@/lib/sns/privacy";
@@ -102,10 +102,13 @@ export async function disconnect(_: ActionState, form: FormData): Promise<Action
 export async function selectMetaPage(form: FormData): Promise<void> {
   const { v, clientId, admin } = await staff(form);
   const pending = await readPages();
-  const page = pending?.pages.find((p) => p.pageId === String(form.get("page_id")));
-  if (!pending || pending.clientId !== clientId || pending.userId !== v.id || !page) {
+  if (!pending || pending.clientId !== clientId || pending.userId !== v.id) {
     redirect(`/clients/${clientId}/settings?e=expired#connections`);
   }
+  const { graph_api_version } = await getAppSettings(admin);
+  const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => []);
+  const page = pages.find((p) => p.pageId === String(form.get("page_id")));
+  if (!page) redirect(`/clients/${clientId}/settings?e=expired#connections`);
   await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
   revalidatePath(`/clients/${clientId}`, "layout");
