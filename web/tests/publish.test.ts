@@ -113,3 +113,12 @@ test("X の連携：PKCE とトークン期限", () => {
   assert.equal(xNeedsRefresh(new Date(Date.now() + 60_000).toISOString()), true);
   assert.equal(xNeedsRefresh(new Date(Date.now() + 3600_000).toISOString()), false);
 });
+
+test("Facebook ログイン：構成ID があれば config_id、なければ scope で権限を指定", async () => {
+  const { metaAuthorizeUrl } = await import("../src/lib/sns/connect.ts");
+  const a = new URL(metaAuthorizeUrl({ appId: "1", appSecret: "s", graphVersion: "v26.0", configId: "999" }, "https://app/cb", "st"));
+  assert.equal(a.searchParams.get("config_id"), "999");
+  assert.equal(a.searchParams.get("scope"), null);
+  const b = new URL(metaAuthorizeUrl({ appId: "1", appSecret: "s", graphVersion: "v26.0" }, "https://app/cb", "st"));
+  assert.match(b.searchParams.get("scope")!, /pages_manage_posts/);
+});

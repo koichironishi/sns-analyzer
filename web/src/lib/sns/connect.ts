@@ -37,15 +37,23 @@ export function daysLeft(expires: string | null, now = Date.now()): number | nul
   return (new Date(expires).getTime() - now) / 86_400_000;
 }
 
-export type MetaApp = { appId: string; appSecret: string; graphVersion: string };
+export type MetaApp = { appId: string; appSecret: string; graphVersion: string; configId?: string };
 export type ThreadsApp = { appId: string; appSecret: string };
 
 // ---- Meta ---------------------------------------------------------------------
 
+/**
+ * Facebook ログインの画面のURL。
+ * ビジネス用のアプリ（Facebook Login for Business）は、権限の一覧ではなく「構成ID（config_id）」で指定する。
+ */
 export function metaAuthorizeUrl(app: MetaApp, redirectUri: string, state: string): string {
-  const q = new URLSearchParams({
-    client_id: app.appId, redirect_uri: redirectUri, state, response_type: "code", scope: META_SCOPES.join(","),
-  });
+  const q = new URLSearchParams({ client_id: app.appId, redirect_uri: redirectUri, state, response_type: "code" });
+  if (app.configId) {
+    q.set("config_id", app.configId);
+    q.set("override_default_response_type", "true");
+  } else {
+    q.set("scope", META_SCOPES.join(","));
+  }
   return `https://www.facebook.com/${app.graphVersion}/dialog/oauth?${q}`;
 }
 

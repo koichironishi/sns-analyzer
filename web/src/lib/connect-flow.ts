@@ -44,7 +44,7 @@ export async function clearPages() {
 export function metaApp() {
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
-  return appId && appSecret ? { appId, appSecret } : null;
+  return appId && appSecret ? { appId, appSecret, configId: process.env.META_CONFIG_ID || undefined } : null;
 }
 
 export function threadsApp() {
