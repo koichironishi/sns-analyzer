@@ -20,13 +20,13 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   if (!name) notFound();
   const items = [
     { href: "", label: "ダッシュボード" },
+    { href: "/publish", label: "投稿", keepQuery: false },
     { href: "/ai", label: "AI分析" },
     { href: "/sns", label: "SNS比較" },
     { href: "/competitors", label: "競合比較" },
     { href: "/timing", label: "投稿時間" },
     { href: "/content", label: "形式・タグ" },
     { href: "/downloads", label: "ダウンロード" },
-    { href: "/publish", label: "投稿", keepQuery: false },
     ...(v.kind === "staff" ? [{ href: "/settings", label: "設定・連携", keepQuery: false }] : []),
   ];
   return (
