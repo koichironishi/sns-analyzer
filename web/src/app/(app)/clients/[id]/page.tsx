@@ -9,7 +9,7 @@ import { PLATFORM_LABELS } from "@/lib/sns/models";
 // レイアウトのタイトルの型は同じ階層のページには効かないため、ここで組み立てる
 export async function generateMetadata({ params }: PageProps<"/clients/[id]">): Promise<Metadata> {
   const name = await clientName((await params).id);
-  return { title: { absolute: name ? `概要｜${name} | SNS分析` : "概要 | SNS分析" } };
+  return { title: { absolute: name ? `ダッシュボード｜${name} | SNS分析` : "ダッシュボード | SNS分析" } };
 }
 
 export default async function OverviewPage({ params, searchParams }: PageProps<"/clients/[id]">) {
@@ -33,7 +33,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
   const weeks = Array.from({ length: Math.ceil(dates.length / 7) }, (_, i) => [i * 7, Math.min(i * 7 + 7, dates.length)] as const);
 
   return (
-    <ReportPage report={r} title="概要" lead="期間全体の結果と、まず押さえるべきポイントです。">
+    <ReportPage report={r} title="ダッシュボード" lead="期間全体の結果と、まず押さえるべきポイントです。">
       <section aria-label="主要指標">
         <div className="hero">
           {tiles.map((x) => (

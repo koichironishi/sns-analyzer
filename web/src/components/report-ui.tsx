@@ -64,12 +64,13 @@ export function Bar({ value, max, color, label }: { value: number; max: number; 
   );
 }
 
-export function PageHead({ eyebrow, title, lead }: { eyebrow: string; title: string; lead?: string }) {
+export function PageHead({ eyebrow, title, lead, children }: { eyebrow: string; title: string; lead?: string; children?: React.ReactNode }) {
   return (
     <header className="page-head">
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
       {lead && <p className="lead">{lead}</p>}
+      {children}
     </header>
   );
 }

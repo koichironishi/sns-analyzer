@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import type { Report } from "@/lib/report";
 import { getViewer } from "@/lib/auth";
 import { slash } from "@/lib/format";
+import { todayIn } from "@/lib/sns/models";
+import { PeriodForm } from "./period-form";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
@@ -14,7 +17,11 @@ export async function ReportPage({ report, title, lead, children, needsData = tr
   const empty = needsData && !report.data.hasData;
   return (
     <>
-      <PageHead eyebrow={eyebrow} title={title} lead={lead} />
+      <PageHead eyebrow={eyebrow} title={title} lead={lead}>
+        <div className="page-period no-print">
+          <Suspense><PeriodForm today={todayIn()} /></Suspense>
+        </div>
+      </PageHead>
       {empty ? (
         <div className="card empty">
           <h2>この期間のデータがありません</h2>

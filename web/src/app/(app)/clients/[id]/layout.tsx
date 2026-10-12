@@ -3,9 +3,7 @@ import { Suspense } from "react";
 import { clientName } from "@/lib/report";
 import { notFound } from "next/navigation";
 import { UUID_RE, requireClientAccess } from "@/lib/auth";
-import { todayIn } from "@/lib/sns/models";
 import { SideNav } from "@/components/side-nav";
-import { PeriodForm } from "@/components/period-form";
 import { PrintButton } from "@/components/print-button";
 
 /** タブを並べても区別できるよう、ページ名にクライアント名を添える */
@@ -21,7 +19,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   const name = await clientName(id);
   if (!name) notFound();
   const items = [
-    { href: "", label: "概要" },
+    { href: "", label: "ダッシュボード" },
     { href: "/ai", label: "AI分析" },
     { href: "/sns", label: "SNS比較" },
     { href: "/competitors", label: "競合比較" },
@@ -40,7 +38,6 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
           <p className="side-title">{name}</p>
         </div>
         <Suspense>
-          <PeriodForm today={todayIn()} />
           <SideNav base={`/clients/${id}`} items={items} />
         </Suspense>
         <div className="side-actions"><PrintButton /></div>
