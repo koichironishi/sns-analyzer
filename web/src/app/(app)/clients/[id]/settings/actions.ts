@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getViewer, UUID_RE } from "@/lib/auth";
-import { clearPages, readPages } from "@/lib/connect-flow";
+import { checkPending, clearPages } from "@/lib/connect-flow";
 import { clientIp } from "@/lib/http";
 import { saveMetaPage } from "@/lib/meta-pages";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -101,14 +101,16 @@ export async function disconnect(_: ActionState, form: FormData): Promise<Action
 
 export async function selectMetaPage(form: FormData): Promise<void> {
   const { v, clientId, admin } = await staff(form);
-  const pending = await readPages();
-  if (!pending || pending.clientId !== clientId || pending.userId !== v.id) {
-    redirect(`/clients/${clientId}/settings?e=expired#connections`);
+  const chk = await checkPending(clientId, v.id);
+  if (!chk.ok) {
+    console.error("Meta ページ選択（保存時）：選択待ちの情報を読めません", chk.reason);
+    redirect(`/clients/${clientId}/settings?e=expired&r=${chk.reason}-save#connections`);
   }
+  const pending = chk.pending;
   const { graph_api_version } = await getAppSettings(admin);
   const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => []);
   const page = pages.find((p) => p.pageId === String(form.get("page_id")));
-  if (!page) redirect(`/clients/${clientId}/settings?e=expired#connections`);
+  if (!page) redirect(`/clients/${clientId}/settings?e=expired&r=nopage-${pages.length}#connections`);
   await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
   revalidatePath(`/clients/${clientId}`, "layout");

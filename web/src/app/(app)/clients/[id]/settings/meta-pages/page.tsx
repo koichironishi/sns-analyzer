@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
-import { readPages } from "@/lib/connect-flow";
+import { checkPending } from "@/lib/connect-flow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listMetaPages } from "@/lib/sns/connect";
 import { getAppSettings } from "@/lib/sns/store";
@@ -14,11 +14,15 @@ export const metadata: Metadata = { title: "連携する Facebook ページの�
 export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]/settings/meta-pages">) {
   const v = await requireStaff();
   const { id } = await params;
-  const pending = await readPages();
-  if (!pending || pending.clientId !== id || pending.userId !== v.id) redirect(`/clients/${id}/settings?e=expired#connections`);
+  const chk = await checkPending(id, v.id);
+  if (!chk.ok) {
+    console.error("Meta ページ選択：選択待ちの情報を読めません", chk.reason);
+    redirect(`/clients/${id}/settings?e=expired&r=${chk.reason}#connections`);
+  }
+  const pending = chk.pending;
   const { graph_api_version } = await getAppSettings(createAdminClient());
   const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => null);
-  if (!pages) redirect(`/clients/${id}/settings?e=exchange#connections`);
+  if (!pages) redirect(`/clients/${id}/settings?e=exchange&r=listpages#connections`);
   return (
     <>
       <PageHead eyebrow="SNS連携" title="連携するページを選んでください" lead="選んだ Facebook ページと、そのページに紐づく Instagram アカウントを連携します。" />

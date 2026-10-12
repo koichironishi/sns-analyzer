@@ -63,7 +63,8 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
   const hasMeta = Boolean(metaApp());
   const hasThreads = Boolean(threadsApp());
   const hasX = Boolean(xApp());
-  const e = typeof sp.e === "string" ? ERRORS[sp.e] : undefined;
+  const reason = typeof sp.r === "string" && /^[a-z0-9-]{1,40}$/.test(sp.r) ? sp.r : null;
+  const e = typeof sp.e === "string" && ERRORS[sp.e] ? `${ERRORS[sp.e]}${reason ? `（原因の手がかり：${reason}）` : ""}` : undefined;
   const ok = typeof sp.ok === "string" ? OKS[sp.ok] : undefined;
   const notice = (section: string) => (
     <>

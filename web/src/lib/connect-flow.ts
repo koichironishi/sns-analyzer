@@ -37,6 +37,17 @@ export async function readPages(): Promise<PendingPages | null> {
   return unseal<PendingPages>((await cookies()).get(PAGES_COOKIE)?.value);
 }
 
+/** 選択待ちの情報を確認する。読めない場合は理由（画面に出して原因を調べるため）を返す */
+export async function checkPending(clientId: string, userId: string): Promise<{ ok: true; pending: PendingPages } | { ok: false; reason: string }> {
+  const raw = (await cookies()).get(PAGES_COOKIE)?.value;
+  if (!raw) return { ok: false, reason: "nocookie" };
+  const pending = unseal<PendingPages>(raw);
+  if (!pending) return { ok: false, reason: `unseal${raw.length}` };
+  if (pending.clientId !== clientId) return { ok: false, reason: "client" };
+  if (pending.userId !== userId) return { ok: false, reason: "user" };
+  return { ok: true, pending };
+}
+
 export async function clearPages() {
   (await cookies()).delete(PAGES_COOKIE);
 }
