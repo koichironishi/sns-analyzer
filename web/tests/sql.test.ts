@@ -72,6 +72,7 @@ before(async () => {
                     ($1, $2, current_date, 5)`, [post, c]);
     await db.query(`insert into sns_connections (client_id, platform, external_id, access_token) values ($1, 'x', 'u', 'SECRET')`, [c]);
     await db.query(`insert into sns_ai_consents (client_id, status, version) values ($1, 'granted', 'v1')`, [c]);
+    await db.query(`insert into sns_scheduled_posts (client_id, text, platforms, status) values ($1, '予約', array['x','threads'], 'scheduled')`, [c]);
   }
   await db.exec(`insert into sns_audit (action) values ('test')`);
 });
@@ -91,7 +92,7 @@ test("スタッフは全クライアントの分析データを読める", async
 });
 
 test("クライアント閲覧者は自社分だけ読める", async () => {
-  for (const t of ["sns_accounts", "sns_posts", "sns_post_metrics", "sns_ai_consents"]) {
+  for (const t of ["sns_accounts", "sns_posts", "sns_post_metrics", "sns_ai_consents", "sns_scheduled_posts"]) {
     const rows = await as<{ client_id: string }>(IDS.viewerA, `select client_id from ${t}`);
     assert.ok(rows.length > 0, t);
     assert.ok(rows.every((r) => r.client_id === IDS.clientA), t);
@@ -140,4 +141,9 @@ test("SNS分析のクライアントを削除すると、関連データもす�
     `select (select count(*) from sns_posts where client_id = '${IDS.clientB}')::int +
             (select count(*) from sns_connections where client_id = '${IDS.clientB}')::int as n`);
   assert.equal(left.rows[0].n, 0);
+});
+
+test("投稿先のSNSは4種類だけ・1つ以上", async () => {
+  await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms) values ('${IDS.clientA}', array['tiktok'])`));
+  await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms) values ('${IDS.clientA}', array[]::text[])`));
 });

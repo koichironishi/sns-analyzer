@@ -30,10 +30,10 @@ export async function GET(req: Request) {
   }
   if (!result.pages.length) redirect(`${back}?e=nopages#connections`);
   if (result.pages.length === 1) {
-    await saveMetaPage(admin, v, flow.clientId, result.pages[0], result.userId);
+    await saveMetaPage(admin, v, flow.clientId, result.pages[0], result.userId, result.granted);
     redirect(`${back}?ok=meta#connections`);
   }
   // 複数のページを管理している場合は、どのページを連携するか選んでもらう
-  await stashPages({ clientId: flow.clientId, userId: v.id, metaUserId: result.userId, pages: result.pages.slice(0, 12) });
+  await stashPages({ clientId: flow.clientId, userId: v.id, metaUserId: result.userId, pages: result.pages.slice(0, 12), granted: result.granted });
   redirect(`${back}/meta-pages`);
 }

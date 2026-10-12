@@ -9,6 +9,7 @@ Python 版（`../snsanalyzer`）の全機能を、MEO コンソールと同じ *
 - レポート：概要／AI分析／SNS比較／競合比較／投稿時間／形式・タグ／投稿ランキング／ダウンロード（CSV・Markdown・ZIP）、PDF 保存（印刷）
 - 設定：競合の登録、AI分析の同意、事業内容、CSV 取り込み、フォロワー数の手動記録、データ削除
 - 管理者：全体設定（保存期間・収集件数・AI モデル・ポリシーの事業者情報）、操作ログ
+- 投稿：Instagram・Facebook・Threads・X への投稿（今すぐ・予約・下書き、画像は10枚まで）。スタッフと、そのクライアントの閲覧ユーザーが使える
 - 公開ページ：プライバシーポリシー、利用規約、データ削除のご案内・状況確認、Meta / Threads のデータ削除コールバック
 
 ## 1. Supabase にテーブルを追加する
@@ -39,7 +40,7 @@ MEO のアプリとは別に作ることをおすすめします（必要な権�
 
 1. [Meta for Developers](https://developers.facebook.com/apps/) でアプリを作成し、「Facebook ログイン for Business」を追加
 2. 有効な OAuth リダイレクト URI：`{NEXT_PUBLIC_SITE_URL}/api/connect/meta/callback`
-3. 権限：`pages_show_list` `pages_read_engagement` `read_insights` `instagram_basic` `instagram_manage_insights` `business_management`
+3. 権限：`pages_show_list` `pages_read_engagement` `read_insights` `instagram_basic` `instagram_manage_insights` `business_management`、投稿用に `pages_manage_posts` `instagram_content_publish`（あとから追加した場合は、各クライアントで「再連携」が必要）
 4. 設定 → ベーシック
    - プライバシーポリシーの URL：`{NEXT_PUBLIC_SITE_URL}/privacy`
    - 利用規約の URL：`{NEXT_PUBLIC_SITE_URL}/terms`
@@ -52,12 +53,20 @@ MEO のアプリとは別に作ることをおすすめします（必要な権�
 1. Meta アプリに「Threads API にアクセス」のユースケースを追加
 2. リダイレクトコールバック URL：`{NEXT_PUBLIC_SITE_URL}/api/connect/threads/callback`
 3. アンインストールコールバック URL・削除コールバック URL：どちらも `{NEXT_PUBLIC_SITE_URL}/api/data-deletion/threads`
-4. 権限：`threads_basic` `threads_manage_insights`。競合のフォロワー数も取る場合は `threads_profile_discovery` の承認を得てから、環境変数 `THREADS_PROFILE_DISCOVERY=1` を設定して連携し直す
+4. 権限：`threads_basic` `threads_manage_insights` `threads_content_publish`（投稿用）。競合のフォロワー数も取る場合は `threads_profile_discovery` の承認を得てから、環境変数 `THREADS_PROFILE_DISCOVERY=1` を設定して連携し直す
 5. Threads のアプリ ID・シークレットを `THREADS_APP_ID` / `THREADS_APP_SECRET` に設定
 
 ## 5. X
 
-X Developer Portal でアプリを作り、Bearer Token を発行します。クライアントの「設定・連携」→ X の「Bearer Token で連携する」に、ユーザー名と一緒に入力します。X API は従量課金のため、全体設定の「1回あたりの取得件数の上限」で使用量を抑えてください。
+**投稿もする場合（推奨）**：X Developer Portal のアプリで「User authentication settings」を有効にし、次のとおり設定します。
+- App permissions：**Read and write**
+- Type of App：**Web App（Confidential client）**
+- Callback URI：`{NEXT_PUBLIC_SITE_URL}/api/connect/x/callback`
+- Website URL：`{NEXT_PUBLIC_SITE_URL}`
+- 発行された **OAuth 2.0 Client ID / Client Secret** を `X_CLIENT_ID` / `X_CLIENT_SECRET` に設定し、クライアントの「設定・連携」→「X でログインして連携」で連携します
+- X の投稿・画像のアップロードは、X API の料金プラン（または従量課金）の対象です
+
+**分析だけの場合**：X Developer Portal でアプリを作り、Bearer Token を発行します。クライアントの「設定・連携」→ X の「Bearer Token で連携する」に、ユーザー名と一緒に入力します。X API は従量課金のため、全体設定の「1回あたりの取得件数の上限」で使用量を抑えてください。
 
 ## 6. Vercel にデプロイ
 
@@ -66,6 +75,13 @@ X Developer Portal でアプリを作り、Bearer Token を発行します。ク
 3. 独自ドメインを使う場合は、ドメインを追加してから `NEXT_PUBLIC_SITE_URL` と各アプリのリダイレクト URI をそのドメインに合わせる
 
 `vercel.json` で東京リージョン（`hnd1`）と、1日1回の自動収集（日本時間 4:00）を設定しています。MEO の Supabase が別のリージョンにある場合は、`regions` をそれに近い場所に変えてください。
+
+### 予約投稿について
+
+予約投稿は、Supabase の pg_cron から5分おきに `/api/cron/publish` を呼んで処理します（`../supabase/sns-cron.sql` の後半）。これを設定しないと、予約した投稿は公開されません（「今すぐ投稿」は設定なしで動きます）。
+
+- 画像は Supabase Storage のバケット `sns-media`（`sns.sql` で作成）に保存します。Instagram・Threads が画像を取りに来るため公開バケットで、ファイル名は推測できない値にしています
+- 途中で処理が止まった投稿は「失敗」として残し、自動では出し直しません（二重投稿を避けるため）。画面の「失敗したSNSに再投稿」で出し直します
 
 ### 自動収集について
 

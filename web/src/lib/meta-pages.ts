@@ -6,13 +6,15 @@ import type { MetaPage } from "@/lib/sns/connect";
 import { audit, saveConnection } from "@/lib/sns/store";
 
 /** 選んだページで Facebook（と、紐づく Instagram）の接続を保存する */
-export async function saveMetaPage(admin: SupabaseClient, v: Viewer, clientId: string, page: MetaPage, metaUserId: string) {
+export async function saveMetaPage(admin: SupabaseClient, v: Viewer, clientId: string, page: MetaPage, metaUserId: string, granted: string[]) {
   await saveConnection(admin, clientId, "facebook", {
     externalId: page.pageId, username: page.name, accessToken: page.accessToken, expiresAt: null, connectedUserId: metaUserId,
+    canPublish: granted.includes("pages_manage_posts"), authKind: "oauth",
   });
   if (page.igUserId) {
     await saveConnection(admin, clientId, "instagram", {
       externalId: page.igUserId, username: page.igUsername, accessToken: page.accessToken, expiresAt: null, connectedUserId: metaUserId,
+      canPublish: granted.includes("instagram_content_publish"), authKind: "oauth",
     });
   }
   await audit(admin, v, "connect.meta", clientId, `ページ「${page.name}」${page.igUserId ? `・Instagram @${page.igUsername}` : "（Instagram の紐づけなし）"}`, await clientIp());

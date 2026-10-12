@@ -4,16 +4,25 @@
  * Meta（Facebook / Instagram）：Facebook ログイン → 認可コード → 短期ユーザートークン
  *   → 長期ユーザートークン（約60日）→ ページアクセストークン（期限なし）を両SNSで使う。
  * Threads：OAuth → 認可コード → 短期トークン → 長期トークン（60日）。期限前に refresh で延長。
- * X：開発者ポータルの Bearer Token を検証して保存する。
+ * X：ユーザーとしてログイン（OAuth 2.0・PKCE）して投稿と分析に使う。分析だけなら開発者ポータルの Bearer Token でもよい。
  */
+import { createHash, randomBytes } from "node:crypto";
 import { ApiError, HttpClient, num, str, type HttpOptions } from "./collectors/http.ts";
 import type { Platform } from "./models.ts";
 
 export const META_SCOPES = [
   "pages_show_list", "pages_read_engagement", "read_insights",
   "instagram_basic", "instagram_manage_insights", "business_management",
+  // 投稿用
+  "pages_manage_posts", "instagram_content_publish",
 ];
-export const THREADS_SCOPES = ["threads_basic", "threads_manage_insights"];
+export const THREADS_SCOPES = ["threads_basic", "threads_manage_insights", "threads_content_publish"];
+export const X_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "offline.access"];
+
+/** 投稿に必要な権限（SNSごと） */
+export const PUBLISH_SCOPE: Partial<Record<Platform, string>> = {
+  facebook: "pages_manage_posts", instagram: "instagram_content_publish", threads: "threads_content_publish", x: "tweet.write",
+};
 export const REFRESH_BEFORE_DAYS = 10;
 
 export class ConnectError extends Error {}
@@ -54,6 +63,10 @@ export async function metaExchangeCode(app: MetaApp, code: string, redirectUri: 
   });
   const userToken = str(long.access_token);
   const me = await c.get("me", { fields: "id", access_token: userToken });
+  // 利用者が実際に許可した権限（画面で一部を外されることがある）
+  const perms = await c.get<{ data?: { permission?: string; status?: string }[] }>("me/permissions", { access_token: userToken })
+    .then((r) => (r.data ?? []).filter((x) => x.status === "granted").map((x) => str(x.permission)))
+    .catch(() => [] as string[]);
   const resp = await c.get<{ data?: Record<string, unknown>[] }>("me/accounts", {
     fields: "id,name,access_token,instagram_business_account{id,username}", limit: 100, access_token: userToken,
   });
@@ -61,7 +74,7 @@ export async function metaExchangeCode(app: MetaApp, code: string, redirectUri: 
     const ig = (p.instagram_business_account ?? {}) as Record<string, unknown>;
     return { pageId: str(p.id), name: str(p.name), accessToken: str(p.access_token), igUserId: str(ig.id), igUsername: str(ig.username) };
   });
-  return { userId: str(me.id), pages };
+  return { userId: str(me.id), pages, granted: perms };
 }
 
 // ---- Threads ------------------------------------------------------------------
@@ -115,6 +128,56 @@ export async function xVerify(bearerToken: string, username: string, http?: Http
   const user = (await c.get<{ data: Record<string, unknown> }>(`users/by/username/${handle}`, { "user.fields": "public_metrics" })).data;
   return { userId: str(user.id), username: str(user.username) };
 }
+
+// ---- X（OAuth 2.0・PKCE） ----------------------------------------------------------
+
+export type XApp = { clientId: string; clientSecret: string };
+
+export function pkcePair() {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+export function xAuthorizeUrl(app: XApp, redirectUri: string, state: string, challenge: string): string {
+  const q = new URLSearchParams({
+    response_type: "code", client_id: app.clientId, redirect_uri: redirectUri, scope: X_SCOPES.join(" "),
+    state, code_challenge: challenge, code_challenge_method: "S256",
+  });
+  return `https://x.com/i/oauth2/authorize?${q}`;
+}
+
+function xTokenClient(app: XApp, http?: HttpOptions) {
+  const basic = Buffer.from(`${app.clientId}:${app.clientSecret}`).toString("base64");
+  return new HttpClient("https://api.x.com/2", { ...http, headers: { Authorization: `Basic ${basic}` } });
+}
+
+export type XTokens = { accessToken: string; refreshToken: string; expiresAt: string | null };
+
+const toXTokens = (r: Record<string, unknown>): XTokens => {
+  if (!str(r.access_token)) throw new ApiError("X のトークンを取得できませんでした");
+  return { accessToken: str(r.access_token), refreshToken: str(r.refresh_token), expiresAt: expiresAt(r.expires_in) };
+};
+
+export async function xExchangeCode(app: XApp, code: string, redirectUri: string, verifier: string, http?: HttpOptions) {
+  const t = toXTokens(await xTokenClient(app, http).post("oauth2/token", {
+    grant_type: "authorization_code", code, redirect_uri: redirectUri, code_verifier: verifier, client_id: app.clientId,
+  }));
+  const me = await new HttpClient("https://api.x.com/2", { ...http, headers: { Authorization: `Bearer ${t.accessToken}` } })
+    .get<{ data: Record<string, unknown> }>("users/me", { "user.fields": "username" });
+  return { ...t, userId: str(me.data?.id), username: str(me.data?.username) };
+}
+
+/** X のアクセストークン（約2時間）を延長する。リフレッシュトークンも新しくなるので必ず保存し直す */
+export async function xRefresh(app: XApp, refreshToken: string, http?: HttpOptions): Promise<XTokens> {
+  return toXTokens(await xTokenClient(app, http).post("oauth2/token", {
+    grant_type: "refresh_token", refresh_token: refreshToken, client_id: app.clientId,
+  }));
+}
+
+/** 期限まで5分を切っていたら延長が必要 */
+export const xNeedsRefresh = (expires: string | null, now = Date.now()) =>
+  Boolean(expires) && new Date(expires!).getTime() - now < 5 * 60_000;
 
 // ---- 接続確認 -----------------------------------------------------------------
 

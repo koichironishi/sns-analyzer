@@ -102,6 +102,11 @@ create table if not exists sns_connections (
   primary key (client_id, platform)
 );
 
+-- 投稿用：X のリフレッシュトークン、投稿の権限があるか、連携の方式
+alter table sns_connections add column if not exists refresh_token text;
+alter table sns_connections add column if not exists can_publish boolean not null default false;
+alter table sns_connections add column if not exists auth_kind text not null default 'token';
+
 drop trigger if exists trg_sns_connections_updated on sns_connections;
 create trigger trg_sns_connections_updated before update on sns_connections
   for each row execute function set_updated_at();
@@ -238,6 +243,47 @@ create table if not exists sns_collect_state (
   primary key (client_id, platform)
 );
 
+-- ---------- SNSへの投稿（予約・即時） ----------
+create table if not exists sns_scheduled_posts (
+  id              uuid primary key default gen_random_uuid(),
+  client_id       uuid not null references sns_clients(id) on delete cascade,
+  text            text not null default '' check (length(text) <= 63206),
+  -- SNSごとに本文を変える場合 {"x": "短い文", ...}
+  platform_texts  jsonb not null default '{}',
+  platforms       text[] not null check (cardinality(platforms) between 1 and 4
+                    and platforms <@ array['instagram', 'facebook', 'threads', 'x']),
+  -- 画像 [{"path": "<client_id>/<file>.jpg", "url": "https://..."}]（最大10枚）
+  media           jsonb not null default '[]',
+  status          text not null default 'draft'
+                  check (status in ('draft', 'scheduled', 'publishing', 'published', 'partial', 'failed', 'canceled')),
+  scheduled_at    timestamptz,
+  -- SNSごとの結果 {"instagram": {"state": "published", "id": "...", "permalink": "...", "error": null, "at": "..."}}
+  results         jsonb not null default '{}',
+  locked_at       timestamptz,
+  created_by      uuid references auth.users(id) on delete set null,
+  created_by_name text,
+  published_at    timestamptz,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists idx_sns_scheduled_posts_due on sns_scheduled_posts(status, scheduled_at);
+create index if not exists idx_sns_scheduled_posts_client on sns_scheduled_posts(client_id, created_at desc);
+
+drop trigger if exists trg_sns_scheduled_posts_updated on sns_scheduled_posts;
+create trigger trg_sns_scheduled_posts_updated before update on sns_scheduled_posts
+  for each row execute function set_updated_at();
+
+-- 投稿画像の置き場所（Instagram・Threads は公開URLから画像を取りに来るため公開バケット。ファイル名は推測できない値）
+do $$
+begin
+  if to_regclass('storage.buckets') is not null then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('sns-media', 'sns-media', true, 8388608, array['image/jpeg'])
+    on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+  end if;
+end $$;
+
 -- ---------- 操作ログ ----------
 create table if not exists sns_audit (
   id          bigserial primary key,
@@ -281,6 +327,7 @@ alter table sns_ai_results        enable row level security;
 alter table sns_collect_state     enable row level security;
 alter table sns_audit             enable row level security;
 alter table sns_deletion_requests enable row level security;
+alter table sns_scheduled_posts   enable row level security;
 
 -- スタッフ専用の表
 drop policy if exists sns_app_settings_staff    on sns_app_settings;
@@ -308,7 +355,7 @@ declare t text;
 begin
   foreach t in array array[
     'sns_competitors', 'sns_accounts', 'sns_snapshots', 'sns_posts',
-    'sns_post_metrics', 'sns_ai_consents', 'sns_ai_results'
+    'sns_post_metrics', 'sns_ai_consents', 'sns_ai_results', 'sns_scheduled_posts'
   ] loop
     execute format('drop policy if exists %I_staff_select on %I;', t, t);
     execute format('drop policy if exists %I_client_select on %I;', t, t);

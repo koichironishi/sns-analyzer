@@ -22,6 +22,7 @@ export async function GET(req: Request) {
     const r = await threadsExchangeCode(app, code, `${siteUrl(req)}/api/connect/threads/callback`);
     await saveConnection(admin, flow.clientId, "threads", {
       externalId: r.userId, username: r.username, accessToken: r.accessToken, expiresAt: r.expiresAt, connectedUserId: r.userId,
+      canPublish: true, authKind: "oauth",
     });
     await audit(admin, v, "connect.threads", flow.clientId, `@${r.username}`, await clientIp());
   } catch (e) {

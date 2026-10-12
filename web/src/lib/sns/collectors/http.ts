@@ -18,6 +18,7 @@ export class ApiError extends Error {
 }
 
 type Params = Record<string, string | number | undefined>;
+type Body = { kind: "form"; form: Params } | { kind: "json"; json: unknown } | { kind: "multipart"; data: FormData };
 
 export type HttpOptions = {
   queryAuth?: Record<string, string>;
@@ -71,7 +72,17 @@ export class HttpClient {
 
   /** application/x-www-form-urlencoded で POST（トークン交換用） */
   post<T = Record<string, unknown>>(path: string, form: Params = {}, params: Params = {}): Promise<T> {
-    return this.request<T>("POST", path, params, form);
+    return this.request<T>("POST", path, params, { kind: "form", form });
+  }
+
+  /** JSON で POST（X の投稿など） */
+  postJson<T = Record<string, unknown>>(path: string, json: unknown, params: Params = {}): Promise<T> {
+    return this.request<T>("POST", path, params, { kind: "json", json });
+  }
+
+  /** multipart/form-data で POST（画像のアップロード） */
+  postMultipart<T = Record<string, unknown>>(path: string, data: FormData, params: Params = {}): Promise<T> {
+    return this.request<T>("POST", path, params, { kind: "multipart", data });
   }
 
   private buildUrl(path: string, params: Params): string {
@@ -87,13 +98,18 @@ export class HttpClient {
     return query ? `${url}${url.includes("?") ? "&" : "?"}${query}` : url;
   }
 
-  private async request<T>(method: string, path: string, params: Params, form?: Params): Promise<T> {
+  private async request<T>(method: string, path: string, params: Params, payloadBody?: Body): Promise<T> {
     const url = this.buildUrl(path, params);
     const headers: Record<string, string> = { "User-Agent": "sns-analyzer/2.0", Accept: "application/json", ...(this.opts.headers ?? {}) };
-    let body: string | undefined;
-    if (form) {
-      body = toQuery(form);
+    let body: string | FormData | undefined;
+    if (payloadBody?.kind === "form") {
+      body = toQuery(payloadBody.form);
       headers["Content-Type"] = "application/x-www-form-urlencoded";
+    } else if (payloadBody?.kind === "json") {
+      body = JSON.stringify(payloadBody.json);
+      headers["Content-Type"] = "application/json";
+    } else if (payloadBody?.kind === "multipart") {
+      body = payloadBody.data; // Content-Type（境界文字列つき）は fetch に任せる
     }
     const { maxRetries, sleep } = this.opts;
     for (let attempt = 0; ; attempt++) {

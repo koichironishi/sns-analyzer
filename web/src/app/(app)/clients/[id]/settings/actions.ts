@@ -106,7 +106,7 @@ export async function selectMetaPage(form: FormData): Promise<void> {
   if (!pending || pending.clientId !== clientId || pending.userId !== v.id || !page) {
     redirect(`/clients/${clientId}/settings?e=expired#connections`);
   }
-  await saveMetaPage(admin, v, clientId, page, pending.metaUserId);
+  await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
   revalidatePath(`/clients/${clientId}`, "layout");
   redirect(`/clients/${clientId}/settings?ok=meta#connections`);

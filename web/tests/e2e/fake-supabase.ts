@@ -124,7 +124,7 @@ async function seed() {
     await posts(acc, c.posts);
     await series(acc, c.series);
   }
-  await db.query("insert into sns_connections (client_id, platform, external_id, username, access_token, token_expires_at) values ($1,'threads','th1','demo_shop','FAKE-TOKEN', now() + interval '50 days')", [CLIENT_A]);
+  await db.query("insert into sns_connections (client_id, platform, external_id, username, access_token, token_expires_at, can_publish, auth_kind) values ($1,'threads','th1','demo_shop','FAKE-TOKEN', now() + interval '50 days', true, 'oauth'), ($1,'facebook','fb1','デモ株式会社','FAKE-TOKEN', null, false, 'oauth')", [CLIENT_A]);
   await db.query("insert into sns_collect_state (client_id, platform, last_run_at, last_success_at, posts_saved) values ($1,'threads', now(), now(), 42)", [CLIENT_A]);
 }
 
@@ -222,7 +222,9 @@ function orderBy(s: string | null): string {
   }).join(", ");
 }
 
-const toParam = (v: unknown) => (v !== null && typeof v === "object" ? JSON.stringify(v) : v);
+// 文字列だけの配列は text[] 列としてそのまま渡し、それ以外のオブジェクト・配列は jsonb として文字列にする
+const toParam = (v: unknown) =>
+  Array.isArray(v) && v.every((x) => typeof x === "string") ? v : v !== null && typeof v === "object" ? JSON.stringify(v) : v;
 
 let queue: Promise<unknown> = Promise.resolve();
 const serial = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -314,10 +316,17 @@ function send(res: ServerResponse, rows: unknown[], accept: string, headers: Rec
   res.end(empty ? "" : JSON.stringify(rows));
 }
 
-async function readBody(req: IncomingMessage): Promise<unknown> {
+const files = new Map<string, Buffer>(); // ストレージ（"bucket/path" → 中身）
+const uploadTokens = new Map<string, string>();
+
+async function readRaw(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
-  const s = Buffer.concat(chunks).toString();
+  return Buffer.concat(chunks);
+}
+
+function parseBody(raw: Buffer): unknown {
+  const s = raw.toString();
   if (!s) return null;
   try { return JSON.parse(s); } catch { return Object.fromEntries(new URLSearchParams(s)); }
 }
@@ -326,8 +335,45 @@ export async function start(port = PORT) {
   await seed();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+    // ブラウザから直接アップロードするため CORS を許可する
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
     try {
-      const body = await readBody(req);
+      const raw = await readRaw(req);
+      const body = parseBody(raw);
+      const st = url.pathname.match(/^\/storage\/v1\/object\/(upload\/sign|public|list)?\/?([a-z0-9-]+)\/?(.*)$/);
+      if (st) {
+        const [, kind, bucket, path] = st;
+        const key = `${bucket}/${decodeURIComponent(path)}`;
+        const jsonOut = (status: number, b: unknown) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(b)); };
+        if (kind === "upload/sign" && req.method === "POST") {
+          if (req.headers["apikey"] !== SERVICE_KEY) return jsonOut(401, { message: "service role required" });
+          const token = crypto.randomUUID();
+          uploadTokens.set(token, key);
+          return jsonOut(200, { url: `/object/upload/sign/${key}?token=${token}` });
+        }
+        if (kind === "upload/sign" && req.method === "PUT") {
+          if (uploadTokens.get(url.searchParams.get("token") ?? "") !== key) return jsonOut(400, { message: "invalid token" });
+          files.set(key, raw);
+          return jsonOut(200, { Key: key });
+        }
+        if (kind === "public" && req.method === "GET") {
+          const f = files.get(key);
+          if (!f) { res.writeHead(404).end(); return; }
+          res.writeHead(200, { "Content-Type": "image/jpeg" });
+          return res.end(f);
+        }
+        if (kind === "list") {
+          const prefix = `${bucket}/${(body as { prefix?: string })?.prefix ?? ""}/`;
+          return jsonOut(200, [...files.keys()].filter((k) => k.startsWith(prefix)).map((k) => ({ name: k.slice(prefix.length) })));
+        }
+        if (!kind && req.method === "DELETE") {
+          for (const pth of (body as { prefixes?: string[] })?.prefixes ?? []) files.delete(`${bucket}/${pth}`);
+          return jsonOut(200, []);
+        }
+      }
       if (url.pathname === "/auth/v1/token") {
         const grant = url.searchParams.get("grant_type");
         const b = body as Record<string, string>;

@@ -377,7 +377,7 @@ td.heat { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabul
 .period { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: end; margin: 0; }
 .period label { margin: 0 0 4px; }
 .period select, .period input { width: auto; min-width: 140px; }
-input[type=date], input[type=number], input[type=email], input[type=file] { font: inherit; font-size: var(--fs-base); min-height: 44px;
+input[type=date], input[type=datetime-local], input[type=number], input[type=email], input[type=file] { font: inherit; font-size: var(--fs-base); min-height: 44px;
   padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); color: var(--text); max-width: 440px; width: 100%; }
 input[type=file] { padding: 8px; }
 fieldset { border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4) var(--s4); margin: var(--s4) 0 0; }
@@ -446,3 +446,11 @@ pre.code { white-space: pre-wrap; word-break: break-all; background: var(--surfa
 @media (max-width: 520px) { .bars { height: 220px; } }
 .pcard-title { margin: 0; font-size: var(--fs-base); font-weight: 700; line-height: 1.4; }
 .scroll[role="region"]:focus-visible { outline-offset: -2px; }
+/* 投稿 */
+.post-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: var(--s3); }
+.post-results { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.post-results li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.thumbs { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--border); display: block; }
+.thumbs .row { gap: 4px; margin-top: 4px; }
+.small-thumbs { grid-template-columns: repeat(auto-fill, minmax(72px, 96px)); }

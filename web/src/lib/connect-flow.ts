@@ -8,11 +8,11 @@ const STATE_COOKIE = "sns_oauth";
 export const PAGES_COOKIE = "sns_meta_pages";
 const secure = process.env.NODE_ENV === "production";
 
-type OAuthState = { state: string; clientId: string; service: "meta" | "threads"; userId: string };
+type OAuthState = { state: string; clientId: string; service: "meta" | "threads" | "x"; userId: string; verifier?: string };
 
-export async function startOAuth(service: OAuthState["service"], clientId: string, userId: string): Promise<string> {
+export async function startOAuth(service: OAuthState["service"], clientId: string, userId: string, verifier?: string): Promise<string> {
   const state = randomBytes(16).toString("base64url");
-  (await cookies()).set(STATE_COOKIE, seal({ state, clientId, service, userId } satisfies OAuthState, 600), {
+  (await cookies()).set(STATE_COOKIE, seal({ state, clientId, service, userId, verifier } satisfies OAuthState, 600), {
     httpOnly: true, secure, sameSite: "lax", path: "/api/connect", maxAge: 600,
   });
   return state;
@@ -27,7 +27,7 @@ export async function finishOAuth(service: OAuthState["service"], state: string 
   return saved;
 }
 
-type PendingPages = { clientId: string; userId: string; metaUserId: string; pages: MetaPage[] };
+type PendingPages = { clientId: string; userId: string; metaUserId: string; pages: MetaPage[]; granted: string[] };
 
 export async function stashPages(p: PendingPages) {
   (await cookies()).set(PAGES_COOKIE, seal(p, 900), { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 900 });
@@ -51,4 +51,10 @@ export function threadsApp() {
   const appId = process.env.THREADS_APP_ID;
   const appSecret = process.env.THREADS_APP_SECRET;
   return appId && appSecret ? { appId, appSecret } : null;
+}
+
+export function xApp() {
+  const clientId = process.env.X_CLIENT_ID;
+  const clientSecret = process.env.X_CLIENT_SECRET;
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
 }

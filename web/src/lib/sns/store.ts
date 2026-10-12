@@ -290,13 +290,14 @@ export async function recordFollowers(admin: Db, clientId: string, platform: Pla
 export type ConnectionInfo = {
   platform: Platform; external_id: string; username: string | null; token_expires_at: string | null;
   status: "connected" | "error"; last_error: string | null; connected_at: string; updated_at: string;
+  can_publish: boolean; auth_kind: string;
 };
-export type ConnectionSecret = ConnectionInfo & { client_id: string; access_token: string; connected_user_id: string | null };
+export type ConnectionSecret = ConnectionInfo & { client_id: string; access_token: string; connected_user_id: string | null; refresh_token: string | null };
 
 /** 画面表示用。トークンは返さない */
 export async function listConnections(admin: Db, clientId: string): Promise<ConnectionInfo[]> {
   return check(await admin.from("sns_connections")
-    .select("platform,external_id,username,token_expires_at,status,last_error,connected_at,updated_at")
+    .select("platform,external_id,username,token_expires_at,status,last_error,connected_at,updated_at,can_publish,auth_kind")
     .eq("client_id", clientId), "接続情報の読み込み") as ConnectionInfo[];
 }
 
@@ -308,16 +309,19 @@ export async function getConnectionSecrets(admin: Db, clientId?: string): Promis
 
 export async function saveConnection(admin: Db, clientId: string, platform: Platform, c: {
   externalId: string; username: string; accessToken: string; expiresAt: string | null; connectedUserId: string | null;
+  refreshToken?: string | null; canPublish?: boolean; authKind?: "token" | "oauth";
 }): Promise<void> {
   check(await admin.from("sns_connections").upsert({
     client_id: clientId, platform, external_id: c.externalId, username: c.username || null, access_token: c.accessToken,
     token_expires_at: c.expiresAt, connected_user_id: c.connectedUserId, status: "connected", last_error: null,
-    connected_at: new Date().toISOString(),
+    connected_at: new Date().toISOString(), refresh_token: c.refreshToken ?? null, can_publish: c.canPublish ?? false,
+    auth_kind: c.authKind ?? "token",
   }, { onConflict: "client_id,platform" }), "接続情報の保存");
 }
 
 export async function updateConnection(admin: Db, clientId: string, platform: Platform, patch: Partial<{
   access_token: string; token_expires_at: string | null; status: "connected" | "error"; last_error: string | null;
+  refresh_token: string | null;
 }>): Promise<void> {
   check(await admin.from("sns_connections").update(patch).eq("client_id", clientId).eq("platform", platform), "接続情報の更新");
 }
@@ -417,7 +421,14 @@ export async function purgeExpired(admin: Db, retentionDays: number, tz = DEFAUL
   const snapshots = await del("sns_snapshots", "date", cutoff);
   const ai = await del("sns_ai_results", "created_at", `${cutoff}T00:00:00Z`);
   await del("sns_deletion_requests", "created_at", `${cutoff}T00:00:00Z`);
-  return `${cutoff.replaceAll("-", "/")}より前のデータを削除しました：投稿 ${posts}件・指標 ${metrics}件・フォロワー記録 ${snapshots}件・AI分析 ${ai}件`;
+  // 保存期間を過ぎた投稿の記録と画像（予約中・処理中のものは残す）
+  const oldPosts = check(await admin.from("sns_scheduled_posts").select("id,media").lt("created_at", `${cutoff}T00:00:00Z`)
+    .not("status", "in", "(scheduled,publishing)").limit(500), "古い投稿の確認") as { id: string; media: { path: string }[] }[];
+  if (oldPosts.length) {
+    await admin.storage.from("sns-media").remove(oldPosts.flatMap((x) => (x.media ?? []).map((m) => m.path)));
+    for (const ids of chunks(oldPosts.map((x) => x.id), 100)) check(await admin.from("sns_scheduled_posts").delete().in("id", ids), "古い投稿の削除");
+  }
+  return `${cutoff.replaceAll("-", "/")}より前のデータを削除しました：投稿 ${posts}件・指標 ${metrics}件・フォロワー記録 ${snapshots}件・AI分析 ${ai}件・投稿の記録 ${oldPosts.length}件`;
 }
 
 // ---- Meta / Threads のデータ削除リクエスト ------------------------------------------------
@@ -521,4 +532,68 @@ export async function xPostsToVerify(admin: Db, clientId: string, before: string
 
 export async function deletePosts(admin: Db, ids: string[]): Promise<void> {
   for (const batch of chunks(ids, 100)) check(await admin.from("sns_posts").delete().in("id", batch), "投稿の削除");
+}
+
+// ---- SNSへの投稿 ----------------------------------------------------------------------
+
+export type PostState = "published" | "failed" | "pending";
+export type PlatformResult = { state: PostState; id?: string | null; permalink?: string | null; error?: string | null; at?: string };
+export type MediaItem = { path: string; url: string };
+export type PostStatus = "draft" | "scheduled" | "publishing" | "published" | "partial" | "failed" | "canceled";
+
+export type ScheduledPost = {
+  id: string; client_id: string; text: string; platform_texts: Partial<Record<Platform, string>>; platforms: Platform[];
+  media: MediaItem[]; status: PostStatus; scheduled_at: string | null; results: Partial<Record<Platform, PlatformResult>>;
+  locked_at: string | null; created_by: string | null; created_by_name: string | null; published_at: string | null;
+  created_at: string; updated_at: string;
+};
+
+export async function listScheduledPosts(db: Db, clientId: string, limit = 200): Promise<ScheduledPost[]> {
+  return check(await db.from("sns_scheduled_posts").select("*").eq("client_id", clientId)
+    .order("created_at", { ascending: false }).limit(limit), "投稿の読み込み") as ScheduledPost[];
+}
+
+export async function getScheduledPost(db: Db, id: string): Promise<ScheduledPost | null> {
+  return check(await db.from("sns_scheduled_posts").select("*").eq("id", id).maybeSingle(), "投稿の読み込み") as ScheduledPost | null;
+}
+
+export async function insertScheduledPost(admin: Db, row: Omit<ScheduledPost, "id" | "results" | "locked_at" | "published_at" | "created_at" | "updated_at">): Promise<string> {
+  return (check(await admin.from("sns_scheduled_posts").insert(row).select("id").single(), "投稿の保存") as { id: string }).id;
+}
+
+export async function updateScheduledPost(admin: Db, id: string, patch: Partial<Omit<ScheduledPost, "id" | "client_id" | "created_at" | "updated_at">>) {
+  check(await admin.from("sns_scheduled_posts").update(patch).eq("id", id), "投稿の更新");
+}
+
+export async function deleteScheduledPost(admin: Db, id: string) {
+  check(await admin.from("sns_scheduled_posts").delete().eq("id", id), "投稿の削除");
+}
+
+/**
+ * 公開の処理を始める投稿を1件確保する。予約時刻を過ぎた「予約中」だけを「処理中」に変える。
+ * 同時に複数の処理が走っても、同じ投稿を二重に出さないため（更新できた側だけが処理する）。
+ */
+export async function claimScheduledPost(admin: Db, id: string): Promise<ScheduledPost | null> {
+  const now = new Date().toISOString();
+  const rows = check(await admin.from("sns_scheduled_posts").update({ status: "publishing", locked_at: now })
+    .eq("id", id).eq("status", "scheduled").lte("scheduled_at", now).select("*"), "投稿の確保") as ScheduledPost[];
+  return rows[0] ?? null;
+}
+
+export async function duePostIds(admin: Db, limit = 20): Promise<string[]> {
+  const rows = check(await admin.from("sns_scheduled_posts").select("id").eq("status", "scheduled")
+    .lte("scheduled_at", new Date().toISOString()).order("scheduled_at").limit(limit), "予約投稿の確認") as { id: string }[];
+  return rows.map((r) => r.id);
+}
+
+/** 「処理中」のまま止まった投稿（処理が途中で打ち切られたもの） */
+export async function stalePublishing(admin: Db, olderThanMinutes = 15): Promise<ScheduledPost[]> {
+  const before = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+  return check(await admin.from("sns_scheduled_posts").select("*").eq("status", "publishing").lt("locked_at", before), "投稿の確認") as ScheduledPost[];
+}
+
+export const MEDIA_BUCKET = "sns-media";
+
+export async function removeMedia(admin: Db, paths: string[]) {
+  if (paths.length) await admin.storage.from(MEDIA_BUCKET).remove(paths);
 }

@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, createCollector, XCollector } from "./collectors/index.ts";
-import { isTokenError, needsRefresh, threadsRefresh } from "./connect.ts";
+import { isTokenError, needsRefresh, threadsRefresh, xNeedsRefresh, xRefresh } from "./connect.ts";
 import { cleanHandle } from "./collectors/types.ts";
 import { PLATFORM_LABELS, addDays, toLocal, todayIn, type Platform } from "./models.ts";
 import {
@@ -33,6 +33,19 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
       await updateConnection(admin, conn.client_id, platform, { access_token: r.accessToken, token_expires_at: r.expiresAt });
     } catch (e) {
       warnings.push(`トークンを延長できませんでした（${e instanceof Error ? e.message : "不明なエラー"}）`);
+    }
+  }
+
+  // X をユーザーとして連携している場合、アクセストークン（約2時間）を延長する
+  if (platform === "x" && conn.refresh_token && xNeedsRefresh(conn.token_expires_at)) {
+    const app = process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET ? { clientId: process.env.X_CLIENT_ID, clientSecret: process.env.X_CLIENT_SECRET } : null;
+    try {
+      if (!app) throw new Error("X_CLIENT_ID / X_CLIENT_SECRET が設定されていません");
+      const t = await xRefresh(app, conn.refresh_token);
+      token = t.accessToken;
+      await updateConnection(admin, conn.client_id, "x", { access_token: t.accessToken, refresh_token: t.refreshToken || conn.refresh_token, token_expires_at: t.expiresAt });
+    } catch (e) {
+      warnings.push(`X のトークンを延長できませんでした（${e instanceof Error ? e.message : "不明なエラー"}）`);
     }
   }
 

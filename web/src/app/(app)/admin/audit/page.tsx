@@ -15,7 +15,9 @@ const ACTIONS: Record<string, string> = {
   "deletion.request": "削除リクエスト（Meta・Threads）", "cron.collect": "自動収集",
   "client.create": "クライアントを登録", "client.update": "クライアント情報を更新", "client.delete": "クライアントを削除",
   "viewer.add": "閲覧ユーザーを追加", "viewer.reset_password": "初期パスワードを再発行", "viewer.remove": "閲覧ユーザーを削除",
-  "account.password": "パスワードを変更",
+  "account.password": "パスワードを変更", "connect.x.failed": "X 連携に失敗",
+  "post.save": "投稿を保存・予約", "post.publish": "投稿を実行", "post.cancel": "予約を取り消し", "post.retry": "再投稿", "post.delete": "投稿を削除",
+  "cron.publish": "予約投稿",
 };
 
 export default async function AuditPage() {

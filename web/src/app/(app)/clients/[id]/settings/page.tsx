@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
-import { metaApp, threadsApp } from "@/lib/connect-flow";
+import { metaApp, threadsApp, xApp } from "@/lib/connect-flow";
 import { fmtDateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
@@ -24,6 +24,7 @@ export const metadata: Metadata = { title: "設定・連携" };
 const ERRORS: Record<string, string> = {
   meta_env: "Meta アプリが設定されていません（環境変数 META_APP_ID / META_APP_SECRET）。",
   threads_env: "Threads アプリが設定されていません（環境変数 THREADS_APP_ID / THREADS_APP_SECRET）。",
+  x_env: "X アプリが設定されていません（環境変数 X_CLIENT_ID / X_CLIENT_SECRET）。",
   denied: "連携がキャンセルされました。",
   exchange: "連携に失敗しました。アプリの設定（リダイレクトURI・権限）を確認して、もう一度お試しください。",
   nopages: "管理している Facebook ページが見つかりませんでした。Facebook ログインの画面で、対象のページへのアクセスを許可してください。",
@@ -32,6 +33,7 @@ const ERRORS: Record<string, string> = {
 const OKS: Record<string, [section: string, text: string]> = {
   meta: ["connections", "Facebook（と紐づく Instagram）を連携しました。"],
   threads: ["connections", "Threads を連携しました。"],
+  x: ["connections", "X を連携しました（投稿と分析に使えます）。"],
   disconnected: ["connections", "連携を解除しました（収集済みのデータは残っています）。"],
   disconnected_data: ["connections", "連携を解除し、収集済みのデータを削除しました。"],
   competitor_deleted: ["competitors", "競合とそのデータを削除しました。"],
@@ -60,6 +62,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
   const stateOf = (p: Platform) => states.find((s) => s.platform === p);
   const hasMeta = Boolean(metaApp());
   const hasThreads = Boolean(threadsApp());
+  const hasX = Boolean(xApp());
   const e = typeof sp.e === "string" ? ERRORS[sp.e] : undefined;
   const ok = typeof sp.ok === "string" ? OKS[sp.ok] : undefined;
   const notice = (section: string) => (
@@ -89,6 +92,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
                   <div className="conn-name">
                     <Chip platform={p} />
                     {c ? (c.status === "error" ? <span className="badge warn">要再連携</span> : <span className="badge good">連携中</span>) : <span className="badge">未連携</span>}
+                    {c && (c.can_publish ? <span className="badge good">投稿できます</span> : <span className="badge">投稿するには再連携が必要</span>)}
                   </div>
                   {c && <p className="conn-meta">{c.username ? `${p === "facebook" ? "" : "@"}${c.username}` : c.external_id}{left !== null && `・トークンの有効期限まであと${Math.max(0, Math.floor(left))}日`}</p>}
                   {st && <p className="conn-meta">最終収集：{fmtDateTime(st.last_run_at)}{st.posts_saved !== null && `・投稿 ${st.posts_saved}件`}{st.last_error && <><br /><span style={{ color: "var(--warn)" }}>{st.last_error}</span></>}</p>}
@@ -107,16 +111,21 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
                       <SubmitButton className="btn" pendingText="確認しています…">連携を確認</SubmitButton></ActionForm>
                   )}
                 </div>
+                {p === "x" && hasX && (
+                  <div className="row" style={{ gridColumn: "1 / -1" }}>
+                    <a className={`btn ${c?.auth_kind === "oauth" ? "" : "primary"}`} href={`/api/connect/x?client=${id}`}>{c?.auth_kind === "oauth" ? "X で再連携" : "X でログインして連携（投稿・分析）"}</a>
+                  </div>
+                )}
                 {p === "x" && (
                   <details className="more" style={{ gridColumn: "1 / -1" }}>
-                    <summary>{c ? "Bearer Token を更新する" : "Bearer Token で連携する"}</summary>
+                    <summary>{hasX ? "分析だけに使う：Bearer Token で連携する" : c ? "Bearer Token を更新する" : "Bearer Token で連携する"}</summary>
                     <ActionForm action={connectX} resetOnSuccess>
                       <Hidden id={id} />
                       <label htmlFor="x-user">X のユーザー名<span className="req">必須</span></label>
                       <input id="x-user" name="username" type="text" required aria-required="true" autoComplete="off" defaultValue={c?.username ?? ""} placeholder="例：example" />
                       <label htmlFor="x-token">Bearer Token<span className="req">必須</span></label>
                       <input id="x-token" name="bearer_token" type="password" required aria-required="true" autoComplete="off" aria-describedby="x-token-hint" />
-                      <p className="hint" id="x-token-hint">X Developer Portal のアプリで発行します。保存後は画面に表示されません。X API は従量課金のため、取得件数は全体設定の上限に従います。</p>
+                      <p className="hint" id="x-token-hint">X Developer Portal のアプリで発行します。保存後は画面に表示されません。Bearer Token では投稿できません（分析だけ）。X API は従量課金のため、取得件数は全体設定の上限に従います。</p>
                       <div className="form-actions"><SubmitButton pendingText="確認しています…">保存して確認</SubmitButton></div>
                     </ActionForm>
                   </details>
@@ -134,8 +143,8 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
               </div>
             );
           })}
-          {(!hasMeta || !hasThreads) && (
-            <p className="note">{!hasMeta && "Facebook・Instagram の連携には Meta アプリの設定（META_APP_ID / META_APP_SECRET）が必要です。"}{!hasThreads && "Threads の連携には THREADS_APP_ID / THREADS_APP_SECRET が必要です。"}手順は README をご覧ください。</p>
+          {(!hasMeta || !hasThreads || !hasX) && (
+            <p className="note">{!hasMeta && "Facebook・Instagram の連携には Meta アプリの設定（META_APP_ID / META_APP_SECRET）が必要です。"}{!hasThreads && "Threads の連携には THREADS_APP_ID / THREADS_APP_SECRET が必要です。"}{!hasX && "X への投稿には X_CLIENT_ID / X_CLIENT_SECRET が必要です。"}手順は README をご覧ください。</p>
           )}
         </div>
         <div className="card" style={{ marginTop: 16 }}>
@@ -300,7 +309,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
       <section id="viewers" aria-labelledby="h-viewers">
         <h2 id="h-viewers">閲覧ユーザー</h2>
         {notice("viewers")}
-        <p className="sub">このクライアントのレポートだけを閲覧・ダウンロードできるアカウントです。設定の変更やAI分析の実行はできません。</p>
+        <p className="sub">このクライアントのレポートの閲覧・ダウンロードと、SNSへの投稿の作成・予約ができるアカウントです。設定の変更やAI分析の実行はできません。</p>
         {viewers.length > 0 && (
           <div className="card flush scroll">
             <table>

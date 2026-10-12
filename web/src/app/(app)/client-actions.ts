@@ -83,6 +83,9 @@ export async function deleteClientAction(_: ActionState, form: FormData): Promis
     for (const u of viewers) {
       if (u.created_by_sns && !(await usedByMeo(admin, u.user_id))) await admin.auth.admin.deleteUser(u.user_id);
     }
+    // 投稿用の画像も削除する（フォルダ＝クライアントID）
+    const { data: files } = await admin.storage.from("sns-media").list(id, { limit: 1000 });
+    if (files?.length) await admin.storage.from("sns-media").remove(files.map((f) => `${id}/${f.name}`));
     await deleteSnsClient(admin, id);
     await audit(admin, v, "client.delete", null, `${client.name}（閲覧ユーザー ${viewers.length}人を含む）`, await clientIp());
     revalidatePath("/", "layout");
