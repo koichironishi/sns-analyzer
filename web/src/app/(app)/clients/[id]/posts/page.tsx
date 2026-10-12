@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { reportFromSearch } from "@/lib/report";
+import Link from "next/link";
+import { periodQuery, reportFromSearch } from "@/lib/report";
 import { ReportPage } from "@/components/report-shell";
 import { Chip } from "@/components/report-ui";
 import { fmtNum, fmtPct, truncate } from "@/lib/format";
@@ -29,7 +30,7 @@ export default async function PostsPage({ params, searchParams }: PageProps<"/cl
             </tbody>
           </table>
         </div>
-        <p className="note">すべての投稿は、「ダウンロード」の「投稿一覧」（CSV）で確認できます。</p>
+        <p className="note">すべての投稿は「<Link href={`/clients/${id}/list${periodQuery(r.period)}`}>投稿一覧</Link>」で確認できます。</p>
       </section>
     </ReportPage>
   );
