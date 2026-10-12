@@ -23,6 +23,24 @@
         "3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "sns-web-prod",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY=fake-anon-key",
+        "SUPABASE_SERVICE_ROLE_KEY=fake-service-role-key",
+        "NEXT_PUBLIC_SITE_URL=http://localhost:3101",
+        "META_APP_SECRET=test-meta-secret",
+        "THREADS_APP_SECRET=test-threads-secret",
+        "CRON_SECRET=test-cron-secret",
+        "NEXT_TELEMETRY_DISABLED=1",
+        "sh",
+        "-c",
+        "npm --prefix web run build && npm --prefix web run start -- -p 3101"
+      ],
+      "port": 3101
     }
   ]
 }
