@@ -48,7 +48,7 @@ export async function createClientAction(_: ActionState, form: FormData): Promis
     const id = await createSnsClient(admin, name, note);
     await audit(admin, v, "client.create", id, name, await clientIp());
     revalidatePath("/");
-    to = `/clients/${id}/settings?ok=client_created#connections`;
+    to = `/clients/${id}/settings/connections?ok=client_created#connections`;
   } catch (e) {
     return fail(e);
   }
@@ -198,7 +198,7 @@ export async function removeViewerAction(_: ActionState, form: FormData): Promis
     await audit(admin, v, "viewer.remove", row.client_id, `${row.name}（${row.email}）${deleteLogin ? "・ログインアカウントも削除" : ""}`, await clientIp());
     revalidatePath(`/clients/${row.client_id}`, "layout");
     // 削除した行のフォームは画面から消えるので、結果はページ側に表示する
-    to = `/clients/${row.client_id}/settings?ok=${deleteLogin ? "viewer_removed" : "viewer_removed_kept"}#viewers`;
+    to = `/clients/${row.client_id}/settings/users?ok=${deleteLogin ? "viewer_removed" : "viewer_removed_kept"}#viewers`;
   } catch (e) {
     return fail(e);
   }

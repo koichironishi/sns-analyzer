@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   if (!v || v.kind !== "staff") return new Response("権限がありません", { status: 403 });
   const flow = await finishOAuth("meta", url.searchParams.get("state"), v.id);
   if (!flow) redirect("/?e=oauth_state");
-  const back = `/clients/${flow.clientId}/settings`;
+  const back = `/clients/${flow.clientId}/settings/connections`;
   if (url.searchParams.get("error")) redirect(`${back}?e=denied#connections`);
   const code = url.searchParams.get("code");
   const app = metaApp();
@@ -35,5 +35,5 @@ export async function GET(req: Request) {
   }
   // 複数のページを管理している場合は、どのページを連携するか選んでもらう
   await stashPages({ clientId: flow.clientId, userId: v.id, metaUserId: result.userId, userToken: result.userToken, granted: result.granted });
-  redirect(`${back}/meta-pages`);
+  redirect(`/clients/${flow.clientId}/settings/meta-pages`);
 }

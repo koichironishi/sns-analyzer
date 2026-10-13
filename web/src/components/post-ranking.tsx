@@ -1,10 +1,11 @@
 import type { AnalysisResult } from "@/lib/sns/analysis";
 import { Chip } from "./report-ui";
+import { EmptyState } from "./empty-state";
 import { fmtNum, fmtPct, truncate } from "@/lib/format";
 
 /** 投稿ランキング（SNSの規模差を補正したパフォーマンス指数の順） */
 export function PostRanking({ analysis: d }: { analysis: AnalysisResult }) {
-  if (!d.topPosts.length) return <div className="card empty"><p>この期間の投稿はありません。</p></div>;
+  if (!d.topPosts.length) return <EmptyState title="この期間の投稿はありません" body="期間を広げるか、別のSNSを選ぶと表示される場合があります。" />;
   return (
     <div className="card flush scroll">
       <table>

@@ -24,7 +24,9 @@ function pageLabel(rest: string): string {
   if (rest === "publish/new") return "新しい投稿";
   if (rest.startsWith("publish/")) return "投稿の編集";
   if (rest === "settings/meta-pages") return "連携するページの選択";
-  if (rest.startsWith("settings")) return "設定・連携";
+  if (rest === "settings/connections") return "SNS連携";
+  if (rest === "settings/users") return "利用者管理";
+  if (rest === "settings") return "クライアント情報";
   const seg = rest.split("/")[0];
   const t = TABS.find((x) => x.seg === seg || ("also" in x && (x.also as readonly string[]).includes(seg)));
   return t?.label ?? "";

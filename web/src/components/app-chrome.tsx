@@ -32,7 +32,9 @@ export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNod
         <aside className="app-drawer no-print" aria-label="メニュー"><DrawerHead /><DrawerNav v={v} /><DrawerUser v={v} /></aside>
         <div className="frame-main">
           {children}
-          <footer className="footer no-print">
+          {/* 画面の下の注記（3製品共通の形） */}
+          <footer className="rw-footer footer no-print">
+            <span>© Rhythmos Works</span>
             <Link href="/privacy">プライバシーポリシー</Link>
             <Link href="/terms">利用規約</Link>
             <span>本サービスは Meta Platforms, Inc. および X Corp. が提供・承認するものではありません。</span>

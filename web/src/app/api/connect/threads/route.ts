@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const v = await getViewer();
   if (!v || v.kind !== "staff" || !UUID_RE.test(clientId)) return new Response("権限がありません", { status: 403 });
   const app = threadsApp();
-  if (!app) redirect(`/clients/${clientId}/settings?e=threads_env#connections`);
+  if (!app) redirect(`/clients/${clientId}/settings/connections?e=threads_env#connections`);
   const state = await startOAuth("threads", clientId, v.id);
   redirect(threadsAuthorizeUrl(app, `${siteUrl(req)}/api/connect/threads/callback`, state, process.env.THREADS_PROFILE_DISCOVERY === "1"));
 }

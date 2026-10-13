@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const v = await getViewer();
   if (!v || v.kind !== "staff" || !UUID_RE.test(clientId)) return new Response("権限がありません", { status: 403 });
   const app = metaApp();
-  if (!app) redirect(`/clients/${clientId}/settings?e=meta_env#connections`);
+  if (!app) redirect(`/clients/${clientId}/settings/connections?e=meta_env#connections`);
   const { graph_api_version } = await getAppSettings(createAdminClient());
   const state = await startOAuth("meta", clientId, v.id);
   redirect(metaAuthorizeUrl({ ...app, graphVersion: graph_api_version }, `${siteUrl(req)}/api/connect/meta/callback`, state));

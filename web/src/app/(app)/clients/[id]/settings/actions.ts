@@ -91,7 +91,7 @@ export async function disconnect(_: ActionState, form: FormData): Promise<Action
     else await deleteConnection(admin, clientId, platform);
     await audit(admin, v, "disconnect", clientId, `${platform}${withData ? "（データも削除）" : ""}`, await clientIp());
     revalidatePath(`/clients/${clientId}`, "layout");
-    to = `/clients/${clientId}/settings?ok=${withData ? "disconnected_data" : "disconnected"}&p=${platform}#connections`;
+    to = `/clients/${clientId}/settings/connections?ok=${withData ? "disconnected_data" : "disconnected"}&p=${platform}#connections`;
   } catch (e) {
     return fail(e);
   }
@@ -104,17 +104,17 @@ export async function selectMetaPage(form: FormData): Promise<void> {
   const chk = await checkPending(clientId, v.id);
   if (!chk.ok) {
     console.error("Meta ページ選択（保存時）：選択待ちの情報を読めません", chk.reason);
-    redirect(`/clients/${clientId}/settings?e=expired&r=${chk.reason}-save#connections`);
+    redirect(`/clients/${clientId}/settings/connections?e=expired&r=${chk.reason}-save#connections`);
   }
   const pending = chk.pending;
   const { graph_api_version } = await getAppSettings(admin);
   const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => []);
   const page = pages.find((p) => p.pageId === String(form.get("page_id")));
-  if (!page) redirect(`/clients/${clientId}/settings?e=expired&r=nopage-${pages.length}#connections`);
+  if (!page) redirect(`/clients/${clientId}/settings/connections?e=expired&r=nopage-${pages.length}#connections`);
   await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
   revalidatePath(`/clients/${clientId}`, "layout");
-  redirect(`/clients/${clientId}/settings?ok=meta#connections`);
+  redirect(`/clients/${clientId}/settings/connections?ok=meta#connections`);
 }
 
 // ---- 競合 -----------------------------------------------------------------------
@@ -152,7 +152,7 @@ export async function removeCompetitor(_: ActionState, form: FormData): Promise<
     const msg = await deleteCompetitor(admin, clientId, id);
     await audit(admin, v, "competitor.delete", clientId, msg, await clientIp());
     revalidatePath(`/clients/${clientId}`, "layout");
-    to = `/clients/${clientId}/settings?ok=competitor_deleted#competitors`;
+    to = `/clients/${clientId}/settings/connections?ok=competitor_deleted#competitors`;
   } catch (e) {
     return fail(e);
   }

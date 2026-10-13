@@ -10,6 +10,7 @@ import { fmtDateTime } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
 import { Flash } from "@/components/flash";
 import { SubmitButton } from "@/components/submit-button";
+import { EmptyState } from "@/components/empty-state";
 import { createClientAction } from "./client-actions";
 
 export const metadata: Metadata = { title: "クライアント" };
@@ -37,7 +38,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
         </ActionForm>
       </details>
       {clients.length === 0 ? (
-        <div className="card empty"><h2>クライアントがまだありません</h2><p>「クライアントを追加」から登録してください。</p></div>
+        <EmptyState title="クライアントがまだありません" body="上の「クライアントを追加」から登録すると、ここに一覧が表示されます。" />
       ) : (
         <ul className="client-list">
           {clients.map((c) => {

@@ -6,6 +6,7 @@ import { ReportPage } from "@/components/report-shell";
 import { Bar, Chip, Insights } from "@/components/report-ui";
 import { fmtNum, fmtPct, fmtSigned, truncate } from "@/lib/format";
 import { PLATFORMS, PLATFORM_LABELS } from "@/lib/sns/models";
+import { EmptyState } from "@/components/empty-state";
 import type { AccountStats } from "@/lib/sns/compare";
 
 export const metadata: Metadata = { title: "競合比較" };
@@ -22,12 +23,9 @@ export default async function CompetitorsPage({ params, searchParams }: PageProp
   if (!c) {
     return (
       <ReportPage report={r} title="競合比較" lead="競合アカウントと、公開されている数値だけで条件をそろえて比べます。" needsData={false}>
-        <div className="card empty">
-          <h2>競合のデータがありません</h2>
-          {v?.kind === "staff"
-            ? <p>「<Link href={`/clients/${id}/settings#competitors`}>設定・連携</Link>」で競合アカウントを登録すると、次回のデータ収集から比較できます。</p>
-            : <p>競合アカウントが登録されると、ここに比較が表示されます。</p>}
-        </div>
+        <EmptyState title="競合との比較はまだありません"
+          body={v?.kind === "staff" ? "競合アカウントを登録すると、次回のデータ収集から比較できます。" : "競合アカウントが登録されると、ここに比較が表示されます。"}
+          action={v?.kind === "staff" ? <Link className="btn primary" href={`/clients/${id}/settings/connections#competitors`}>競合アカウントを登録する</Link> : undefined} />
       </ReportPage>
     );
   }

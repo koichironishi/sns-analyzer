@@ -215,6 +215,11 @@
 .rw-delta { font-size: var(--rw-fs-sm); font-weight: 700; }
 .rw-delta.up { color: var(--rw-good); } .rw-delta.down { color: var(--rw-crit); }
 
+/* ---------- 画面の下の注記（全製品共通のフッター） ---------- */
+.rw-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--rw-s4); margin-top: var(--rw-s7); padding-top: var(--rw-s4);
+  border-top: 1px solid var(--rw-border); font-size: var(--rw-fs-sm); color: var(--rw-muted); }
+.rw-footer a { display: inline-flex; align-items: center; min-height: 44px; color: var(--rw-text-2); }
+
 /* ---------- ログイン画面（全製品共通） ----------
    <body class="rw-auth"> または <main class="rw-auth"> の中に
    .rw-auth-box > .rw-auth-brand ＋ .rw-auth-card（.rw-auth-title / .rw-auth-lead / フォーム）＋ .rw-auth-foot */

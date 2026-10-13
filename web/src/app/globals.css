@@ -450,6 +450,26 @@ legend { font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); paddin
 .conn-name { display: flex; gap: 8px; align-items: center; font-weight: 700; }
 .conn-meta { font-size: var(--fs-sm); color: var(--text-2); margin: 2px 0 0; }
 .danger-zone { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
+/* ご利用ガイド（MEO と同じ形：章立てと、開いて読む項目） */
+.guide section { margin-top: var(--s6); scroll-margin-top: calc(var(--appbar-h) + 8px); }
+.guide section > h2 { font-size: var(--fs-lg); }
+.guide p { line-height: 1.9; }
+.guide-toc { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s4) 0 0; }
+.guide-toc a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
+.guide-row + .guide-row { border-top: 1px solid var(--border); }
+.guide-row summary { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: var(--s3); align-items: center;
+  padding: var(--s4) var(--s5); cursor: pointer; min-height: 44px; }
+.guide-row-title { font-weight: 700; }
+.guide-row-sum { color: var(--text-2); font-size: var(--fs-sm); }
+.guide-row-body { padding: 0 var(--s5) var(--s4); color: var(--text-2); }
+@media (max-width: 600px) { .guide-row summary { grid-template-columns: 1fr; gap: 2px; } }
+
+/* データがないときの表示（MEO と同じ形：中央寄せの見出し・説明・操作） */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: var(--s2); text-align: center; padding: var(--s6) var(--s5); }
+.empty-title { margin: 0; font-size: var(--fs-base); font-weight: 700; color: var(--text); }
+.empty-body { margin: 0; max-width: 46ch; color: var(--text-2); line-height: 1.8; }
+.empty-action { margin-top: 6px; }
 .empty { text-align: center; padding: var(--s7) var(--s5); color: var(--text-2); }
 .empty h2 { color: var(--text); font-size: var(--fs-lg); margin: 0 0 var(--s2); }
 .client-list { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); list-style: none; padding: 0; margin: 0; }

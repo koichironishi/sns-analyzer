@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const v = await getViewer();
   if (!v || v.kind !== "staff" || !UUID_RE.test(clientId)) return new Response("権限がありません", { status: 403 });
   const app = xApp();
-  if (!app) redirect(`/clients/${clientId}/settings?e=x_env#connections`);
+  if (!app) redirect(`/clients/${clientId}/settings/connections?e=x_env#connections`);
   const { verifier, challenge } = pkcePair();
   const state = await startOAuth("x", clientId, v.id, verifier);
   redirect(xAuthorizeUrl(app, `${siteUrl(req)}/api/connect/x/callback`, state, challenge));

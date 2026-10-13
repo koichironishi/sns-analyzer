@@ -20,7 +20,11 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   const name = await clientName(id);
   if (!name) notFound();
   // 左メニュー：全体のメニュー／選択中のクライアント（設定・連携）／名前とログアウト（MEO と同じ並び）
-  const clientItems = v.kind === "staff" ? [{ href: "/settings", label: "設定・連携", keepQuery: false, match: ["/settings/meta-pages"] }] : [];
+  const clientItems = v.kind === "staff" ? [
+    { href: "/settings", label: "クライアント情報", keepQuery: false },
+    { href: "/settings/connections", label: "SNS連携", keepQuery: false, match: ["/settings/meta-pages"] },
+    { href: "/settings/users", label: "利用者管理", keepQuery: false },
+  ] : [];
   return (
     <div className="shell">
       <aside className="side no-print" aria-label="メニュー">

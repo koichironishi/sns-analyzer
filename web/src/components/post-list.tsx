@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Report } from "@/lib/report";
 import { Chip } from "./report-ui";
 import { fmtNum, slash, truncate } from "@/lib/format";
+import { EmptyState } from "./empty-state";
 import { CONTENT_LABELS, MEDIA_LABELS, toLocal, type Post } from "@/lib/sns/models";
 
 const SORTS = {
@@ -56,7 +57,7 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
     <>
         <p className="sub">{posts.length}件。見出しを押すと並べ替えられます。アクセス数＝投稿を見たアカウント数（リーチ）、インプレッション数＝表示された回数、フォロワーの閲覧数＝そのうちフォロワーによる表示（Facebook のみ）。ストーリーズは公開中の24時間に収集できたものを表示します（分析の集計には含めません）。「—」はそのSNSでは取得できない数値です。</p>
         {posts.length === 0 ? (
-          <div className="card empty"><p>この期間の投稿はありません。</p></div>
+          <EmptyState title="この期間の投稿はありません" body="期間を広げるか、別のSNSを選ぶと表示される場合があります。" />
         ) : (
           <div className="card flush scroll posts-table">
             <table>

@@ -10,6 +10,7 @@ import { isPlatform } from "@/lib/sns/models";
 import { ReportPage } from "@/components/report-shell";
 import { Chip } from "@/components/report-ui";
 import { fmtDateTime, slash } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 import { AiRunner } from "./ai-runner";
 
 export const metadata: Metadata = { title: "AI分析" };
@@ -51,12 +52,14 @@ export default async function AiPage({ params, searchParams }: PageProps<"/clien
       {v?.kind === "staff" && (
         <>
           <AiRunner clientId={id} days={r.period.days} end={r.period.end} disabledReason={disabled} />
-          {disabled && <p className="note">同意は「<Link href={`/clients/${id}/settings#consent`}>設定・連携</Link>」で記録できます。</p>}
+          {disabled && <p className="note">同意は「<Link href={`/clients/${id}/settings#consent`}>クライアント情報</Link>」で記録できます。</p>}
         </>
       )}
       {!ai ? (
-        <div className="card empty" style={{ marginTop: 16 }}><h2>AI分析の結果はまだありません</h2>
-          <p>{v?.kind === "staff" ? "上のボタンから実行できます。" : "担当者がAI分析を実行すると、ここに表示されます。"}</p></div>
+        <div style={{ marginTop: 16 }}>
+          <EmptyState title="AI分析の結果はまだありません"
+            body={v?.kind === "staff" ? "上の「AI分析を実行」から実行できます。結果は保存され、クライアントの利用者も見られます。" : "担当者がAI分析を実行すると、ここに表示されます。"} />
+        </div>
       ) : (
         <div className="ai" aria-label="AI分析の結果" role="region">
           {!samePeriod && <div className="msg" role="status">表示しているのは最新の分析結果（{stored!.days}日間・{slash(stored!.period_end)}まで）で、選んでいる期間とは異なります。</div>}

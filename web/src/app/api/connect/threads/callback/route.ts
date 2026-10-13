@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   if (!v || v.kind !== "staff") return new Response("権限がありません", { status: 403 });
   const flow = await finishOAuth("threads", url.searchParams.get("state"), v.id);
   if (!flow) redirect("/?e=oauth_state");
-  const back = `/clients/${flow.clientId}/settings`;
+  const back = `/clients/${flow.clientId}/settings/connections`;
   if (url.searchParams.get("error")) redirect(`${back}?e=denied#connections`);
   const code = url.searchParams.get("code");
   const app = threadsApp();

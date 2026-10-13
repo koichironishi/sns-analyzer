@@ -17,12 +17,12 @@ export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]
   const chk = await checkPending(id, v.id);
   if (!chk.ok) {
     console.error("Meta ページ選択：選択待ちの情報を読めません", chk.reason);
-    redirect(`/clients/${id}/settings?e=expired&r=${chk.reason}#connections`);
+    redirect(`/clients/${id}/settings/connections?e=expired&r=${chk.reason}#connections`);
   }
   const pending = chk.pending;
   const { graph_api_version } = await getAppSettings(createAdminClient());
   const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => null);
-  if (!pages) redirect(`/clients/${id}/settings?e=exchange&r=listpages#connections`);
+  if (!pages) redirect(`/clients/${id}/settings/connections?e=exchange&r=listpages#connections`);
   return (
     <>
       <PageHead lead="選んだ Facebook ページと、そのページに紐づく Instagram アカウントを連携します。" />
@@ -39,7 +39,7 @@ export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]
         </fieldset>
         <div className="form-actions">
           <SubmitButton pendingText="連携しています…">このページを連携</SubmitButton>
-          <a className="btn ghost" href={`/clients/${id}/settings#connections`}>キャンセル</a>
+          <a className="btn ghost" href={`/clients/${id}/settings/connections#connections`}>キャンセル</a>
         </div>
       </form>
     </>

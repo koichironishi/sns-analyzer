@@ -7,6 +7,7 @@ import { todayIn } from "@/lib/sns/models";
 import { PeriodForm } from "./period-form";
 import { PlatformSwitch } from "./platform-switch";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
+import { EmptyState } from "./empty-state";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
@@ -33,14 +34,11 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
         </div>
       </PageHead>
       {empty ? (
-        <div className="card empty">
-          <h2>この期間のデータがありません</h2>
-          {v?.kind === "staff" ? (
-            <p>「<Link href={`/clients/${report.client.id}/settings`}>設定・連携</Link>」で SNS を連携するか、CSVを取り込んでください。連携後は、毎日自動でデータを収集します。</p>
-          ) : (
-            <p>データの準備ができるまでお待ちください。期間を変えると表示される場合があります。</p>
-          )}
-        </div>
+        <EmptyState title="この期間のデータがありません"
+          body={v?.kind === "staff"
+            ? "SNSを連携するか、CSVを取り込むと表示されます。連携後は、毎日自動でデータを収集します。"
+            : "データの準備ができるまでお待ちください。期間を変えると表示される場合があります。"}
+          action={v?.kind === "staff" ? <Link className="btn primary" href={`/clients/${report.client.id}/settings/connections`}>SNSを連携する</Link> : undefined} />
       ) : children}
     </>
   );
