@@ -29,7 +29,7 @@ export function AiRunner({ clientId, days, end, disabledReason }: { clientId: st
           <label htmlFor="q">AIへの質問（任意）</label>
           <textarea id="q" value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)}
             placeholder="例：リールの反応を上げるには？" aria-describedby="q-hint" />
-          <p className="hint" id="q-hint">500文字まで。分析には1〜3分ほどかかります。結果は保存され、クライアントの閲覧ユーザーも見られます。</p>
+          <p className="hint" id="q-hint">500文字まで。分析には1〜3分ほどかかります。結果は保存され、クライアントの利用者も見られます。</p>
           <div className="form-actions">
             <button type="submit" className="btn primary" disabled={state.busy} aria-disabled={state.busy}>
               {state.busy ? <><span className="spinner" aria-hidden="true" />分析しています…</> : "AI分析を実行"}

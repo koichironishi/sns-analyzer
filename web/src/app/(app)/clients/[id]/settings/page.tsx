@@ -40,8 +40,8 @@ const OKS: Record<string, [section: string, text: string]> = {
   consent_granted: ["consent", "AI分析の同意を記録しました。"],
   consent_revoked: ["consent", "AI分析の同意を撤回し、保存済みのAI分析結果を削除しました。"],
   client_created: ["connections", "クライアントを登録しました。続けて SNS を連携してください。"],
-  viewer_removed: ["viewers", "閲覧ユーザーを削除しました（ログインアカウントも削除しました）。"],
-  viewer_removed_kept: ["viewers", "閲覧ユーザーを削除しました（MEO と共通のアカウントのため、ログインアカウントは残しています）。"],
+  viewer_removed: ["viewers", "利用者を削除しました（ログインアカウントも削除しました）。"],
+  viewer_removed_kept: ["viewers", "利用者を削除しました（MEO と共通のアカウントのため、ログインアカウントは残しています）。"],
 };
 
 const Hidden = ({ id }: { id: string }) => <input type="hidden" name="client_id" value={id} />;
@@ -76,7 +76,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
 
   return (
     <>
-      <PageHead eyebrow={client.name} title="設定・連携" lead="SNSの連携、競合の登録、AI分析の同意、クライアント情報と閲覧ユーザー、データの取り込みと削除を管理します（スタッフのみ）。" />
+      <PageHead eyebrow={client.name} title="設定・連携" lead="SNSの連携、競合の登録、AI分析の同意、クライアント情報と利用者、データの取り込みと削除を管理します（スタッフのみ）。" />
 
       <section id="connections" aria-labelledby="h-conn">
         <h2 id="h-conn">SNS連携</h2>
@@ -308,13 +308,13 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
       </section>
 
       <section id="viewers" aria-labelledby="h-viewers">
-        <h2 id="h-viewers">閲覧ユーザー</h2>
+        <h2 id="h-viewers">利用者</h2>
         {notice("viewers")}
         <p className="sub">このクライアントのレポートの閲覧・ダウンロードと、SNSへの投稿の作成・予約ができるアカウントです。設定の変更やAI分析の実行はできません。</p>
         {viewers.length > 0 && (
           <div className="card flush scroll">
             <table>
-              <caption className="sr-only">閲覧ユーザーの一覧</caption>
+              <caption className="sr-only">利用者の一覧</caption>
               <thead><tr><th scope="col">氏名</th><th scope="col">メールアドレス</th><th scope="col">状態</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead>
               <tbody>
                 {viewers.map((u) => (
@@ -333,7 +333,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
                         )}
                         <ActionForm action={removeViewerAction}>
                           <Hidden id={id} /><input type="hidden" name="user_id" value={u.user_id} />
-                          <label className="check"><input type="checkbox" name="confirm" required />「{u.name}」を閲覧ユーザーから削除します</label>
+                          <label className="check"><input type="checkbox" name="confirm" required />「{u.name}」を利用者から削除します</label>
                           <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">削除</SubmitButton></div>
                         </ActionForm>
                       </details>
@@ -348,13 +348,13 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
           <h3>投稿の承認</h3>
           <ActionForm action={setApprovalAction}>
             <Hidden id={id} />
-            <label className="check"><input type="checkbox" name="require_approval" defaultChecked={requireApproval} />閲覧ユーザーが作った投稿は、スタッフの承認を経てから公開する</label>
+            <label className="check"><input type="checkbox" name="require_approval" defaultChecked={requireApproval} />利用者が作った投稿は、スタッフの承認を経てから公開する</label>
             <p className="hint">承認待ちの投稿は「投稿」の画面に表示され、スタッフが「承認する」か「差し戻す」を選べます。スタッフが作った投稿は承認なしで公開されます。</p>
             <div className="form-actions"><SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton></div>
           </ActionForm>
         </div>
         <div className="card" style={{ marginTop: 16 }}>
-          <h3>閲覧ユーザーを追加</h3>
+          <h3>利用者を追加</h3>
           <ActionForm action={addViewerAction} resetOnSuccess>
             <Hidden id={id} />
             <label htmlFor="vw-name">氏名<span className="req">必須</span></label>
@@ -387,7 +387,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
               <summary>このクライアントを削除する（契約終了時など）</summary>
               <ActionForm action={deleteClientAction}>
                 <Hidden id={id} />
-                <p className="small">クライアントと、その連携・競合・収集データ・AI分析結果・同意の記録・閲覧ユーザーをすべて削除します（管理者のみ）。MEO のデータには影響しません。</p>
+                <p className="small">クライアントと、その連携・競合・収集データ・AI分析結果・同意の記録・利用者をすべて削除します（管理者のみ）。MEO のデータには影響しません。</p>
                 <label htmlFor="d-name">確認のため、クライアント名「{client.name}」を入力してください</label>
                 <input id="d-name" name="confirm_name" type="text" required autoComplete="off" />
                 <div className="form-actions"><SubmitButton className="btn danger" pendingText="削除しています…">クライアントを削除</SubmitButton></div>

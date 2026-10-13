@@ -18,7 +18,7 @@ export async function publishContext(clientId: string) {
     const c = conns.find((x) => x.platform === p);
     return { platform: p, connected: Boolean(c), canPublish: Boolean(c?.can_publish), username: c?.username ?? null };
   });
-  // クライアントの閲覧ユーザーで、承認が必要な設定か
+  // クライアントの利用者で、承認が必要な設定か
   const needsApproval = v.kind === "client" && (await getRequireApproval(admin, clientId));
   return { v, admin, client, connections, needsApproval };
 }

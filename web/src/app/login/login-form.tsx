@@ -21,7 +21,7 @@ export function LoginForm({ next }: { next: string }) {
       <button type="submit" className="rw-btn primary block" disabled={pending} aria-disabled={pending}>
         {pending ? "ログインしています…" : "ログイン"}
       </button>
-      <p className="rw-auth-note">閲覧ユーザーの方は、担当者から受け取ったメールアドレスと初期パスワードでログインしてください。パスワードを忘れた場合は、担当者にご連絡ください。</p>
+      <p className="rw-auth-note">利用者の方は、担当者から受け取ったメールアドレスと初期パスワードでログインしてください。パスワードを忘れた場合は、担当者にご連絡ください。</p>
     </form>
   );
 }

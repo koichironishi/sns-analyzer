@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * ログイン中の利用者。ログイン（Supabase Auth）は MEO と共通。
  * - staff  : MEO のスタッフ（admin は全体設定・操作ログ・クライアント削除も可）。全クライアントを運用する
- * - client : SNS分析の閲覧ユーザー（sns_client_users）。自社のレポートを見るだけ
- *   ※ MEO の閲覧ユーザー（client_users）は、SNS分析では権限なしとして扱う
+ * - client : SNS分析の利用者（sns_client_users）。自社のレポートを見るだけ
+ *   ※ MEO の利用者（client_users）は、SNS分析では権限なしとして扱う
  */
 export type Viewer =
   | { kind: "staff"; id: string; email: string; name: string; isAdmin: boolean }

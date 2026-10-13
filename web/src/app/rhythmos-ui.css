@@ -1,8 +1,10 @@
 /*
- * Rhythmos UI — MEO・SNS分析・WordPress ツール共通のデザインの決まり（v0.1）
+ * Rhythmos UI — MEO・SNS分析・記事作成 共通のデザインの決まり（v0.2）
  * 原本は SNS/design/rhythmos-ui/rhythmos-ui.css。各製品へはコピーして使い、変更は原本に入れてから配る
  *
  * 方針（案2：共通の骨組み＋製品ごとの目印色）
+ * - 製品：MEO（M・紫）／SNS分析（S・マゼンタ）／記事作成（記・オリーブ）。目印色は押せる青・状態色・SNSのグラフ色と色相を離してある
+ * - タブ：画面の移動は下線のタブ（.rw-navtabs）、絞り込みは塗りの切り替え（.rw-tabs）
  * - 色・文字・余白・部品は全製品で共通。ボタンやリンクの「押せる色」も共通の青
  * - 製品ごとの目印色（--rw-product）は、ロゴのマーク・選択中のメニュー・上バーの線だけに使う
  * - 左メニューは全製品とも黒（濃紺）。目印色は暗い面用の明るい色（--rw-product-on-dark）を使う
@@ -31,12 +33,12 @@
   --rw-crit: #b3261e; --rw-crit-bg: #fcebe8;
   --rw-focus: #14161b; --rw-focus-halo: #ffd43b;
   /* 製品の目印色 */
-  --rw-meo: #4338ca; --rw-sns: #0f766e; --rw-wp: #c2410c;
+  --rw-meo: #6d28d9; --rw-sns: #be185d; --rw-wp: #4d7c0f;   /* wp＝記事作成（内部の呼び名は wp のまま） */
   --rw-product: var(--rw-accent);
   /* 黒い左メニュー（ライト・ダークとも暗い面。目印色は暗い面用の明るい色を使う） */
   --rw-side-bg: #1c1f2e; --rw-side-text: #c4c9d6; --rw-side-dim: #9aa1b5; --rw-side-hover: #2d3350; --rw-side-active-text: #ffffff;
   --rw-side-border: #6b7391;   /* 黒い面の上のボタンの輪郭（3:1以上） */
-  --rw-meo-on-dark: #a5b4fc; --rw-sns-on-dark: #5eead4; --rw-wp-on-dark: #fdba74;
+  --rw-meo-on-dark: #c4b5fd; --rw-sns-on-dark: #f9a8d4; --rw-wp-on-dark: #bef264;
   --rw-product-on-dark: var(--rw-side-text);
   /* SNSの系列色（グラフ・チップ） */
   --rw-c-instagram: #eb6834; --rw-c-facebook: #2a78d6; --rw-c-threads: #1baf7a; --rw-c-x: #eda100;
@@ -50,7 +52,8 @@
   --rw-fs-nav: 15px;  /* 左メニューの項目（本文より一段小さく） */
   --rw-fs-lg: 19px;   /* 見出し3 */
   --rw-fs-xl: 23px;   /* 見出し2 */
-  --rw-fs-2xl: 28px;  /* ページ見出し */
+  --rw-fs-2xl: 28px;  /* 大きな見出し */
+  --rw-fs-title: 23px; /* ページ見出し（全製品共通） */
   --rw-fs-num: 34px;  /* 主要な数字 */
   --rw-lh: 1.7;
 
@@ -70,7 +73,7 @@
     --rw-accent: #6da7ec; --rw-accent-bg: #172a42; --rw-on-accent: #0b0d10;
     --rw-good: #6fd39a; --rw-good-bg: #15301f; --rw-warn: #f5b84a; --rw-warn-bg: #35280f; --rw-crit: #ff8a80; --rw-crit-bg: #3a1a17;
     --rw-focus: #ffffff; --rw-focus-halo: #b88a00;
-    --rw-meo: #a5b4fc; --rw-sns: #5eead4; --rw-wp: #fdba74;
+    --rw-meo: #c4b5fd; --rw-sns: #f9a8d4; --rw-wp: #bef264;
     --rw-side-bg: #12141c; --rw-side-hover: #23283a;
     --rw-shadow: none;
   }
@@ -81,7 +84,7 @@
   --rw-accent: #6da7ec; --rw-accent-bg: #172a42; --rw-on-accent: #0b0d10;
   --rw-good: #6fd39a; --rw-good-bg: #15301f; --rw-warn: #f5b84a; --rw-warn-bg: #35280f; --rw-crit: #ff8a80; --rw-crit-bg: #3a1a17;
   --rw-focus: #ffffff; --rw-focus-halo: #b88a00;
-  --rw-meo: #a5b4fc; --rw-sns: #5eead4; --rw-wp: #fdba74;
+  --rw-meo: #c4b5fd; --rw-sns: #f9a8d4; --rw-wp: #bef264;
   --rw-side-bg: #12141c; --rw-side-hover: #23283a;
   --rw-shadow: none;
 }
@@ -147,7 +150,7 @@
 
 /* ---------- 見出し ---------- */
 .rw-eyebrow { margin: 0 0 4px; font-size: var(--rw-fs-sm); font-weight: 700; color: var(--rw-muted); letter-spacing: .02em; }
-.rw-h1 { margin: 0 0 6px; font-size: var(--rw-fs-2xl); line-height: 1.35; }
+.rw-h1 { margin: 0 0 6px; font-size: var(--rw-fs-title); line-height: 1.4; }
 .rw-h2 { margin: var(--rw-s6) 0 var(--rw-s3); font-size: var(--rw-fs-xl); line-height: 1.4; }
 .rw-h3 { margin: 0 0 var(--rw-s2); font-size: var(--rw-fs-lg); line-height: 1.5; }
 .rw-lead { margin: 0; color: var(--rw-text-2); }
@@ -198,6 +201,10 @@
 .rw-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: var(--rw-r-md); background: var(--rw-surface-2); }
 .rw-tab { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px; font-size: var(--rw-fs-sm);
   font-weight: 700; color: var(--rw-text-2); text-decoration: none; border: 0; background: none; cursor: pointer; font-family: inherit; }
+.rw-navtabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--rw-border); scrollbar-width: none; }
+.rw-navtabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; white-space: nowrap; font-weight: 700;
+  font-size: var(--rw-fs-sm); color: var(--rw-text-2); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.rw-navtabs a[aria-current="page"] { color: var(--rw-accent); border-bottom-color: var(--rw-accent); }
 .rw-tab[aria-current="true"], .rw-tab[aria-pressed="true"] { background: var(--rw-surface); color: var(--rw-text); box-shadow: var(--rw-shadow), 0 0 0 1px var(--rw-border); }
 
 .rw-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rw-border);

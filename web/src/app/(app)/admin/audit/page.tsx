@@ -14,7 +14,7 @@ const ACTIONS: Record<string, string> = {
   "followers.manual": "フォロワー数を記録", "data.delete": "データ削除", "data.delete_all": "全データ削除", "settings.update": "全体設定を更新",
   "deletion.request": "削除リクエスト（Meta・Threads）", "cron.collect": "自動収集",
   "client.create": "クライアントを登録", "client.update": "クライアント情報を更新", "client.delete": "クライアントを削除",
-  "viewer.add": "閲覧ユーザーを追加", "viewer.reset_password": "初期パスワードを再発行", "viewer.remove": "閲覧ユーザーを削除",
+  "viewer.add": "利用者を追加", "viewer.reset_password": "初期パスワードを再発行", "viewer.remove": "利用者を削除",
   "account.password": "パスワードを変更", "account.email": "メールアドレスの変更を申請", "connect.x.failed": "X 連携に失敗",
   "post.save": "投稿を保存・予約", "post.publish": "投稿を実行", "post.cancel": "予約を取り消し", "post.retry": "再投稿", "post.delete": "投稿を削除",
   "cron.publish": "予約投稿", "post.approve": "投稿を承認", "post.reject": "投稿を差し戻し", "client.approval": "承認の設定を変更",

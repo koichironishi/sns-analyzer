@@ -200,7 +200,7 @@ td a:not(.btn) { display: inline-block; padding: 4px 0; }  /* 表内リンクの
 .content { padding: var(--s6) var(--s7) var(--s7); max-width: 1180px; width: 100%; }
 .content:focus, .page:focus, .page:focus-visible { outline: none; }
 .page-head { margin-bottom: var(--s5); }
-.page-head h1 { font-size: var(--fs-2xl); margin: 4px 0 6px; }
+.page-head h1 { font-size: var(--rw-fs-title); margin: 4px 0 6px; }
 .lead { margin: 0; color: var(--text-2); font-size: var(--fs-base); }
 section { margin-top: var(--s6); }
 .page-head + section { margin-top: 0; }
@@ -408,7 +408,7 @@ td.heat { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabul
 /* ---- Web 版の追加 ---- */
 .app-main { max-width: 1280px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
 .app-main.narrow { max-width: 880px; }
-.page-title { font-size: var(--fs-2xl); margin: 0 0 var(--s2); }
+.page-title { font-size: var(--rw-fs-title); margin: 0 0 var(--s2); }
 .stack { display: grid; gap: var(--s4); }
 .row { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
 .row.end { justify-content: flex-end; }

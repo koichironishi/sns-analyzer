@@ -1,7 +1,7 @@
 "use server";
 /**
  * SNSへの投稿（作成・予約・取り消し・削除・再投稿の準備）。
- * スタッフと、そのクライアントの閲覧ユーザーが使える。Server Action は外部から直接呼べるため、毎回権限を確認する。
+ * スタッフと、そのクライアントの利用者が使える。Server Action は外部から直接呼べるため、毎回権限を確認する。
  */
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -21,7 +21,7 @@ const EDITABLE: PostStatus[] = ["draft", "pending", "rejected", "scheduled", "ca
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; errors: string[] };
 
-/** そのクライアントの投稿を扱えるか（スタッフ、または自社の閲覧ユーザー） */
+/** そのクライアントの投稿を扱えるか（スタッフ、または自社の利用者） */
 async function poster(clientId: string): Promise<{ v: Viewer; admin: ReturnType<typeof createAdminClient> }> {
   const v = await getViewer();
   if (!v || !UUID_RE.test(clientId)) throw new Error("権限がありません");
@@ -59,7 +59,7 @@ export type SavePostInput = {
 };
 
 /** 下書き保存・予約・今すぐ投稿（今すぐの場合は、保存後に画面から公開の処理を呼ぶ）。
- *  承認が必要なクライアントの閲覧ユーザーの場合は、予約・今すぐ投稿の代わりに「承認待ち」にする */
+ *  承認が必要なクライアントの利用者の場合は、予約・今すぐ投稿の代わりに「承認待ち」にする */
 export async function savePost(input: SavePostInput): Promise<Result<{ id: string; publishNow: boolean; pending: boolean }>> {
   try {
     const { v, admin } = await poster(input.clientId);
@@ -104,7 +104,7 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     }
     if (errors.length) return { ok: false, errors };
 
-    // クライアントの閲覧ユーザーの投稿は、設定に応じてスタッフの承認を待つ
+    // クライアントの利用者の投稿は、設定に応じてスタッフの承認を待つ
     const needsApproval = input.mode !== "draft" && v.kind === "client" && (await getRequireApproval(admin, input.clientId));
     const status: PostStatus = input.mode === "draft" ? "draft" : needsApproval ? "pending" : "scheduled";
     const requestedMode = needsApproval ? (input.mode === "now" ? "now" : "schedule") : null;

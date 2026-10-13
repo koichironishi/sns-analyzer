@@ -37,7 +37,7 @@ export function DrawerFoot({ v }: { v: Viewer }) {
         <span className="drawer-avatar" aria-hidden="true">{(v.name || v.email || "?").slice(0, 1).toUpperCase()}</span>
         <span className="drawer-user-text">
           <span className="drawer-user-name">{v.name || v.email}</span>
-          <span className="drawer-user-sub">{v.kind === "staff" ? (v.isAdmin ? "Rhythmos ・ 管理者" : "Rhythmos") : "閲覧ユーザー"}</span>
+          <span className="drawer-user-sub">{v.kind === "staff" ? (v.isAdmin ? "Rhythmos ・ 管理者" : "Rhythmos") : "利用者"}</span>
         </span>
         <svg className="drawer-user-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
       </Link>

@@ -1,6 +1,6 @@
 "use server";
 /**
- * クライアント（SNS分析 専用）と閲覧ユーザーの管理。
+ * クライアント（SNS分析 専用）と利用者の管理。
  * ログイン（Supabase Auth）は MEO と共通のため、既存のアカウント（MEO のスタッフなど）を消さないよう注意する。
  */
 import { randomInt } from "node:crypto";
@@ -93,7 +93,7 @@ export async function deleteClientAction(_: ActionState, form: FormData): Promis
     const client = await getClient(admin, id);
     if (!client) return { error: "クライアントが見つかりません" };
     if (String(form.get("confirm_name") ?? "").trim() !== client.name) return { error: "確認のため、クライアント名を正確に入力してください" };
-    // SNS分析で作った閲覧ユーザーのログインアカウントも消す（MEO でも使われているアカウントは残す）
+    // SNS分析で作った利用者のログインアカウントも消す（MEO でも使われているアカウントは残す）
     const viewers = await listViewers(admin, id);
     for (const u of viewers) {
       if (u.created_by_sns && !(await usedByMeo(admin, u.user_id))) await admin.auth.admin.deleteUser(u.user_id);
@@ -102,7 +102,7 @@ export async function deleteClientAction(_: ActionState, form: FormData): Promis
     const { data: files } = await admin.storage.from("sns-media").list(id, { limit: 1000 });
     if (files?.length) await admin.storage.from("sns-media").remove(files.map((f) => `${id}/${f.name}`));
     await deleteSnsClient(admin, id);
-    await audit(admin, v, "client.delete", null, `${client.name}（閲覧ユーザー ${viewers.length}人を含む）`, await clientIp());
+    await audit(admin, v, "client.delete", null, `${client.name}（利用者 ${viewers.length}人を含む）`, await clientIp());
     revalidatePath("/", "layout");
   } catch (e) {
     return fail(e);
@@ -110,7 +110,7 @@ export async function deleteClientAction(_: ActionState, form: FormData): Promis
   redirect("/?ok=client_deleted");
 }
 
-// ---- 閲覧ユーザー --------------------------------------------------------------------
+// ---- 利用者 --------------------------------------------------------------------
 
 async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, email: string): Promise<string | null> {
   for (let page = 1; page <= 50; page++) {
@@ -138,7 +138,7 @@ export async function addViewerAction(_: ActionState, form: FormData): Promise<A
     let created = true;
     const res = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } });
     if (res.error) {
-      // すでにログインアカウントがある（MEO のアカウントなど）場合は、そのアカウントを閲覧ユーザーにする
+      // すでにログインアカウントがある（MEO のアカウントなど）場合は、そのアカウントを利用者にする
       const existing = res.error.status === 422 || /already|registered|exists/i.test(res.error.message) ? await findUserIdByEmail(admin, email) : null;
       if (!existing) return { error: `アカウントを作成できませんでした：${res.error.message}` };
       userId = existing;
@@ -147,13 +147,13 @@ export async function addViewerAction(_: ActionState, form: FormData): Promise<A
       userId = res.data.user.id;
     }
     const current = await getViewerRow(admin, userId);
-    if (current) return { error: current.client_id === clientId ? "このメールアドレスは、すでに閲覧ユーザーです" : "このメールアドレスは、別のクライアントの閲覧ユーザーです" };
+    if (current) return { error: current.client_id === clientId ? "このメールアドレスは、すでに利用者です" : "このメールアドレスは、別のクライアントの利用者です" };
     await addViewerRow(admin, { user_id: userId, client_id: clientId, name, email, must_change_password: created, created_by_sns: created });
     await audit(admin, v, "viewer.add", clientId, `${name}（${email}）${created ? "" : "・既存のアカウント"}`, await clientIp());
     revalidatePath(`/clients/${clientId}`, "layout");
     return created
-      ? { ok: `閲覧ユーザー「${name}」を作成しました。初期パスワード：${password}（この画面を閉じると再表示できません。ご本人に安全な方法で伝えてください。初回ログイン時にパスワードの変更を求めます）` }
-      : { ok: `すでにあるアカウント（${email}）を閲覧ユーザーにしました。今のパスワードでログインできます。` };
+      ? { ok: `利用者「${name}」を作成しました。初期パスワード：${password}（この画面を閉じると再表示できません。ご本人に安全な方法で伝えてください。初回ログイン時にパスワードの変更を求めます）` }
+      : { ok: `すでにあるアカウント（${email}）を利用者にしました。今のパスワードでログインできます。` };
   } catch (e) {
     return fail(e);
   }
@@ -162,9 +162,9 @@ export async function addViewerAction(_: ActionState, form: FormData): Promise<A
 async function viewerOf(admin: ReturnType<typeof createAdminClient>, form: FormData) {
   const clientId = String(form.get("client_id") ?? "");
   const userId = String(form.get("user_id") ?? "");
-  if (!UUID_RE.test(clientId) || !UUID_RE.test(userId)) throw new Error("閲覧ユーザーの指定が正しくありません");
+  if (!UUID_RE.test(clientId) || !UUID_RE.test(userId)) throw new Error("利用者の指定が正しくありません");
   const row = await getViewerRow(admin, userId);
-  if (!row || row.client_id !== clientId) throw new Error("閲覧ユーザーが見つかりません");
+  if (!row || row.client_id !== clientId) throw new Error("利用者が見つかりません");
   return row;
 }
 

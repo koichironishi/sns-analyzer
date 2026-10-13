@@ -70,12 +70,12 @@ export async function updateSnsClient(admin: Db, id: string, name: string, note:
   check(await admin.from("sns_clients").update({ name, note: note || null }).eq("id", id), "クライアントの更新");
 }
 
-/** クライアントを削除する（関連する SNS データ・連携・閲覧ユーザーの割り当てもすべて消える） */
+/** クライアントを削除する（関連する SNS データ・連携・利用者の割り当てもすべて消える） */
 export async function deleteSnsClient(admin: Db, id: string): Promise<void> {
   check(await admin.from("sns_clients").delete().eq("id", id), "クライアントの削除");
 }
 
-// ---- 閲覧ユーザー ------------------------------------------------------------------
+// ---- 利用者 ------------------------------------------------------------------
 
 export type ViewerRow = {
   user_id: string; client_id: string; name: string; email: string; is_active: boolean;
@@ -83,26 +83,26 @@ export type ViewerRow = {
 };
 
 export async function listViewers(db: Db, clientId: string): Promise<ViewerRow[]> {
-  return check(await db.from("sns_client_users").select("*").eq("client_id", clientId).order("created_at"), "閲覧ユーザーの読み込み") as ViewerRow[];
+  return check(await db.from("sns_client_users").select("*").eq("client_id", clientId).order("created_at"), "利用者の読み込み") as ViewerRow[];
 }
 
 export async function getViewerRow(db: Db, userId: string): Promise<ViewerRow | null> {
-  return check(await db.from("sns_client_users").select("*").eq("user_id", userId).maybeSingle(), "閲覧ユーザーの読み込み") as ViewerRow | null;
+  return check(await db.from("sns_client_users").select("*").eq("user_id", userId).maybeSingle(), "利用者の読み込み") as ViewerRow | null;
 }
 
 export async function addViewerRow(admin: Db, row: Pick<ViewerRow, "user_id" | "client_id" | "name" | "email" | "must_change_password" | "created_by_sns">) {
-  check(await admin.from("sns_client_users").insert(row), "閲覧ユーザーの登録");
+  check(await admin.from("sns_client_users").insert(row), "利用者の登録");
 }
 
 export async function updateViewerRow(admin: Db, userId: string, patch: Partial<Pick<ViewerRow, "is_active" | "must_change_password" | "name">>) {
-  check(await admin.from("sns_client_users").update(patch).eq("user_id", userId), "閲覧ユーザーの更新");
+  check(await admin.from("sns_client_users").update(patch).eq("user_id", userId), "利用者の更新");
 }
 
 export async function deleteViewerRow(admin: Db, userId: string) {
-  check(await admin.from("sns_client_users").delete().eq("user_id", userId), "閲覧ユーザーの削除");
+  check(await admin.from("sns_client_users").delete().eq("user_id", userId), "利用者の削除");
 }
 
-/** MEO 側でも使われているアカウントか（スタッフ・MEO の閲覧ユーザー）。使われていればログインアカウントは消さない */
+/** MEO 側でも使われているアカウントか（スタッフ・MEO の利用者）。使われていればログインアカウントは消さない */
 export async function usedByMeo(admin: Db, userId: string): Promise<boolean> {
   const [staff, cu] = await Promise.all([
     admin.from("staff").select("id").eq("id", userId).maybeSingle(),
@@ -116,7 +116,7 @@ export async function getBrandContext(db: Db, clientId: string): Promise<string>
   return (row as { brand_context?: string } | null)?.brand_context ?? "";
 }
 
-/** クライアントの閲覧ユーザーの投稿に、スタッフの承認が必要か（設定がなければ必要） */
+/** クライアントの利用者の投稿に、スタッフの承認が必要か（設定がなければ必要） */
 export async function getRequireApproval(db: Db, clientId: string): Promise<boolean> {
   const row = check(await db.from("sns_client_settings").select("require_approval").eq("client_id", clientId).maybeSingle(), "クライアント設定の読み込み");
   return (row as { require_approval?: boolean } | null)?.require_approval ?? true;
