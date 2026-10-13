@@ -389,6 +389,22 @@ td.heat { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabul
 .policy nav.toc a { display: inline-flex; align-items: center; min-height: 32px; }
 @media (max-width: 600px) { .policy nav.toc ol { columns: 1; } .policy table.kv th { width: auto; } }
 
+/* ---- アカウント設定（MEO と同じ形） ---- */
+.account-card { margin-top: var(--s4); }
+.account-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border); }
+.account-head h2 { margin: 0; font-size: var(--fs-lg); }
+.account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.account-col { padding: var(--s5); min-width: 0; }
+.account-col + .account-col { border-left: 1px solid var(--border); }
+.account-col input { max-width: none; }
+.account-label { margin: 0 0 6px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
+.account-current { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); font-weight: 700; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .account-grid { grid-template-columns: minmax(0, 1fr); }
+  .account-col + .account-col { border-left: 0; border-top: 1px solid var(--border); }
+}
+
 /* ---- Web 版の追加 ---- */
 .app-main { max-width: 1280px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
 .app-main.narrow { max-width: 880px; }
@@ -507,12 +523,17 @@ body:has(.side) .app-drawer { display: none; }
 .drawer-product::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
 .drawer-product[data-to="meo"] { --dot: var(--rw-meo-on-dark); }
 .drawer-product[data-to="wp"] { --dot: var(--rw-wp-on-dark); }
-.drawer-user { display: flex; align-items: center; gap: 10px; padding: var(--s3) var(--s3) 0; margin-top: var(--s2);
-  border-top: 1px solid rgb(255 255 255 / .12); color: #fff; font-size: var(--fs-sm); min-width: 0; }
+.drawer-user { display: flex; align-items: center; gap: 10px; padding: var(--s2) var(--s3); margin-top: var(--s2); min-height: 52px;
+  border-radius: var(--r-sm); color: #fff; font-size: var(--fs-sm); min-width: 0; text-decoration: none; position: relative; margin-top: var(--s3); }
+.drawer-user::before { content: ""; position: absolute; left: var(--s2); right: var(--s2); top: calc(var(--s2) * -1);
+  border-top: 1px solid rgb(255 255 255 / .12); }
+.drawer-user:hover { background: var(--rw-side-hover); }
+.drawer-user-text { display: grid; min-width: 0; line-height: 1.35; flex: 1; }
+.drawer-user-sub { color: var(--rw-side-dim); font-size: var(--fs-sm); }
+.drawer-user-go { width: 16px; height: 16px; flex: none; color: var(--rw-side-dim); }
 .drawer-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
   background: var(--rw-product-on-dark); color: var(--rw-side-bg); font-weight: 800; }
 .drawer-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.drawer-role { flex: none; font-size: var(--fs-sm); font-weight: 700; color: var(--rw-side-dim); }
 .drawer-logout { width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: none;
   color: var(--rw-side-text); font: inherit; font-size: var(--rw-fs-nav); font-weight: 600; text-align: left; cursor: pointer; }
 .drawer-logout:hover { background: var(--rw-side-hover); color: #fff; }
