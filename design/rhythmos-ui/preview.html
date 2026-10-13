@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja" data-product="sns">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rhythmos UI 見本</title>
+<link rel="stylesheet" href="rhythmos-ui.css">
+<style>
+  /* 見本ページだけの操作パネル */
+  .demo-bar { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 10px 12px; border-radius: 14px; background: var(--rw-surface); border: 1px solid var(--rw-border-strong); box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
+  .demo-bar span { font-size: 14px; font-weight: 700; color: var(--rw-text-2); }
+  .grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .stack { display: grid; gap: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+  .chip i { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body class="rw">
+<a class="rw-sr-only" href="#main">本文へ移動</a>
+
+<header class="rw-topbar">
+  <a class="rw-brand" href="#"><span class="rw-brand-mark" id="mark" aria-hidden="true">S</span><span id="pname">SNS分析</span><span class="rw-brand-sub">Rhythmos Works</span></a>
+  <nav class="rw-nav" aria-label="メインメニュー" id="mainnav"></nav>
+  <nav class="rw-switcher" aria-label="製品の切り替え">
+    <a href="#" data-to="meo">MEO</a><a href="#" data-to="sns">SNS分析</a><a href="#" data-to="wp">WordPress</a>
+  </nav>
+  <div class="rw-account"><span>西 <span class="rw-badge">管理者</span></span><a href="#">ログアウト</a></div>
+</header>
+
+<div class="rw-shell">
+  <aside class="rw-side" aria-label="クライアントの画面">
+    <p class="rw-side-title"><small id="sidesmall">SNS分析レポート</small><strong>Flat7</strong></p>
+    <nav class="rw-side-nav" id="sidenav"></nav>
+    <div class="rw-side-foot"><button class="rw-btn sm" style="width:100%">PDFで保存・印刷</button></div>
+  </aside>
+
+  <main class="rw-main" id="main" tabindex="-1">
+    <p class="rw-eyebrow">Flat7 ・ 2026/09/14〜2026/10/13（30日間）</p>
+    <h1 class="rw-h1" id="ptitle">ダッシュボード</h1>
+    <p class="rw-lead">期間全体の結果と、まず押さえるべきポイントです。</p>
+
+    <div class="row" style="margin-top:16px">
+      <div class="rw-tabs" role="group" aria-label="SNSの切り替え">
+        <a class="rw-tab" href="#" aria-current="true">すべて</a><a class="rw-tab" href="#">Instagram</a><a class="rw-tab" href="#">Facebook</a>
+      </div>
+    </div>
+
+    <h2 class="rw-h2">主要な数字</h2>
+    <div class="rw-stats">
+      <div class="rw-stat"><div class="rw-stat-label">エンゲージメント</div><div class="rw-stat-value">1,284</div><div class="rw-delta up">▲ 12.4%（前期間比）</div></div>
+      <div class="rw-stat"><div class="rw-stat-label">表示回数</div><div class="rw-stat-value">28,310</div><div class="rw-delta down">▼ 3.1%（前期間比）</div></div>
+      <div class="rw-stat"><div class="rw-stat-label">投稿数</div><div class="rw-stat-value">18</div><div class="rw-delta up">▲ 2件</div></div>
+      <div class="rw-stat"><div class="rw-stat-label">フォロワー合計</div><div class="rw-stat-value">331</div><div class="rw-delta">± 0人</div></div>
+    </div>
+
+    <h2 class="rw-h2">部品</h2>
+    <div class="grid2">
+      <section class="rw-card stack" aria-labelledby="h-btn">
+        <h3 class="rw-h3" id="h-btn">ボタン・バッジ・メッセージ</h3>
+        <div class="row"><button class="rw-btn primary">保存する</button><button class="rw-btn">キャンセル</button><button class="rw-btn danger">削除</button><button class="rw-btn sm">小さいボタン</button></div>
+        <div class="row"><span class="rw-badge good">✓ 連携中</span><span class="rw-badge warn">要注意</span><span class="rw-badge crit">! エラー</span><span class="rw-badge info">承認待ち</span><span class="rw-badge">下書き</span></div>
+        <div class="rw-msg ok" role="status">設定を保存しました。</div>
+        <div class="rw-msg error" role="alert">メールアドレスまたはパスワードが正しくありません。</div>
+        <div class="rw-msg info">自動収集は1日1回です。</div>
+      </section>
+
+      <section class="rw-card" aria-labelledby="h-form">
+        <h3 class="rw-h3" id="h-form">入力フォーム</h3>
+        <div class="rw-field"><label class="rw-label" for="f1">クライアント名<span class="rw-req">必須</span></label><input class="rw-input" id="f1" value="Flat7"></div>
+        <div class="rw-field"><label class="rw-label" for="f2">期間</label><select class="rw-select" id="f2"><option>30日間</option><option>90日間</option></select></div>
+        <div class="rw-field"><label class="rw-label" for="f3">メモ</label><textarea class="rw-textarea" id="f3" aria-describedby="f3h"></textarea><span class="rw-hint" id="f3h">500文字まで。</span></div>
+        <button class="rw-btn primary">記録する</button>
+      </section>
+    </div>
+
+    <h2 class="rw-h2">表</h2>
+    <div class="rw-card flush" style="overflow-x:auto">
+      <table class="rw-table">
+        <thead><tr><th scope="col">投稿日</th><th scope="col">SNS</th><th scope="col">タイトル</th><th scope="col">状態</th><th scope="col" class="num">表示回数</th><th scope="col" class="num">クリック数</th></tr></thead>
+        <tbody>
+          <tr><td>2026/10/09 21:20</td><td><span class="chip"><i style="background:var(--rw-c-instagram)"></i>Instagram</span></td><td>カスタマイズQ&amp;A</td><td><span class="rw-badge good">✓ 投稿済み</span></td><td class="num">1,463</td><td class="num">—</td></tr>
+          <tr><td>2026/10/08 13:46</td><td><span class="chip"><i style="background:var(--rw-c-facebook)"></i>Facebook</span></td><td>納車事例のご紹介</td><td><span class="rw-badge info">承認待ち</span></td><td class="num">1,031</td><td class="num">10</td></tr>
+          <tr><td>2026/10/07 20:59</td><td><span class="chip"><i style="background:var(--rw-c-threads)"></i>Threads</span></td><td>7年後の選択肢</td><td><span class="rw-badge crit">! 失敗</span></td><td class="num">2,292</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="demo-bar" role="group" aria-label="見本の切り替え">
+  <span>見本：</span>
+  <button class="rw-btn sm" data-p="meo">MEO</button><button class="rw-btn sm" data-p="sns">SNS分析</button><button class="rw-btn sm" data-p="wp">WordPress</button>
+  <button class="rw-btn sm" id="theme">ダーク／ライト</button>
+</div>
+
+<script>
+  const P = {
+    meo: { name: "MEO", mark: "M", small: "MEOレポート", top: ["クライアント", "口コミ", "全体設定", "操作ログ"],
+      side: ["ダッシュボード", "順位", "口コミ", "投稿", "インサイト", "設定"] },
+    sns: { name: "SNS分析", mark: "S", small: "SNS分析レポート", top: ["クライアント", "全体設定", "操作ログ"],
+      side: ["ダッシュボード", "投稿", "AI分析", "SNS比較", "競合比較", "投稿時間", "形式・タグ", "ダウンロード", "設定・連携"] },
+    wp: { name: "WordPress", mark: "W", small: "記事の自動生成", top: ["クライアント", "記事案", "生成の進捗", "設定"],
+      side: ["記事案", "テーマを選ぶ", "クライアント設定", "接続テスト"] },
+  };
+  const html = document.documentElement;
+  function show(p) {
+    const d = P[p];
+    html.dataset.product = p;
+    document.getElementById("pname").textContent = d.name;
+    document.getElementById("mark").textContent = d.mark;
+    document.getElementById("sidesmall").textContent = d.small;
+    document.getElementById("ptitle").textContent = d.side[0];
+    document.getElementById("mainnav").innerHTML = d.top.map((t, i) => `<a href="#"${i === 0 ? ' aria-current="page"' : ""}>${t}</a>`).join("");
+    document.getElementById("sidenav").innerHTML = d.side.map((t, i) => `<a href="#"${i === 0 ? ' aria-current="page"' : ""}>${t}</a>`).join("");
+    document.querySelectorAll(".rw-switcher a").forEach((a) => a.setAttribute("aria-current", String(a.dataset.to === p)));
+  }
+  document.querySelectorAll("[data-p],[data-to]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); show(b.dataset.p || b.dataset.to); }));
+  document.getElementById("theme").addEventListener("click", () => {
+    const dark = html.dataset.theme ? html.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    html.dataset.theme = dark ? "light" : "dark";
+  });
+  show("sns");
+</script>
+</body>
+</html>

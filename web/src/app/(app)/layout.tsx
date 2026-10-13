@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { logout } from "../login/actions";
 import { AppNav } from "@/components/app-nav";
+import { PRODUCTS } from "@/lib/products";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const v = await requireViewer();
@@ -15,8 +16,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <>
       <header className="app-bar">
         <div className="app-bar-in">
-          <Link className="app-brand" href="/">SNS分析</Link>
+          <Link className="app-brand" href="/"><span className="app-mark" aria-hidden="true">S</span>SNS分析</Link>
           <AppNav items={items} />
+          {/* 製品の切り替えはスタッフのみ（クライアントは SNS分析 だけを使う） */}
+          {v.kind === "staff" && (
+            <nav className="rw-switcher" aria-label="製品の切り替え">
+              {PRODUCTS.map((p) => p.key === "sns"
+                ? <Link key={p.key} href={p.url} data-to={p.key} aria-current="true">{p.label}</Link>
+                : <a key={p.key} href={p.url} data-to={p.key}>{p.label}</a>)}
+            </nav>
+          )}
           <div className="app-right">
             <span className="who"><span className="acct-name">{v.name || v.email}</span>{v.kind === "staff" && v.isAdmin && <span className="badge" style={{ marginLeft: 6 }}>管理者</span>}</span>
             <Link className="btn ghost sm" href="/account">アカウント</Link>

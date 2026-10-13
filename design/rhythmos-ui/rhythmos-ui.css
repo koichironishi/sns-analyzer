@@ -1,0 +1,228 @@
+/*
+ * Rhythmos UI — MEO・SNS分析・WordPress ツール共通のデザインの決まり（v0.1）
+ * 原本は SNS/design/rhythmos-ui/rhythmos-ui.css。各製品へはコピーして使い、変更は原本に入れてから配る
+ *
+ * 方針（案2：共通の骨組み＋製品ごとの目印色）
+ * - 色・文字・余白・部品は全製品で共通。ボタンやリンクの「押せる色」も共通の青
+ * - 製品ごとの目印色（--rw-product）は、ロゴのマーク・選択中のメニュー・上バーの線だけに使う
+ * - 左メニューは全製品とも黒（濃紺）。目印色は暗い面用の明るい色（--rw-product-on-dark）を使う
+ * - 製品は <html data-product="meo|sns|wp"> で切り替える
+ * - 既存の変数（--bg など）とぶつからないよう、すべて --rw- / .rw- で始める
+ *
+ * 守る条件：本文16px以上／文字のコントラスト4.5:1以上・枠や目印3:1以上（白・ダーク面の両方で確認済み）／
+ * 色だけで状態を伝えない（文字・記号を添える）／押せる部分は44px以上
+ */
+
+/* ---------- 色（ライト） ---------- */
+:root {
+  --rw-bg: #f5f6f8;
+  --rw-surface: #ffffff;
+  --rw-surface-2: #f0f1f4;
+  --rw-border: #e2e4e9;          /* 仕切り・カードの縁（装飾） */
+  --rw-border-strong: #7d8494;   /* 入力欄・ボタンの輪郭（3:1以上） */
+  --rw-text: #14161b;
+  --rw-text-2: #4b5260;
+  --rw-muted: #636a78;
+  --rw-accent: #1a64bd;          /* 押せる色（全製品共通） */
+  --rw-accent-bg: #e8f1fc;
+  --rw-on-accent: #ffffff;
+  --rw-good: #0f7b3f; --rw-good-bg: #e5f4eb;
+  --rw-warn: #a84e08; --rw-warn-bg: #fbeed9;
+  --rw-crit: #b3261e; --rw-crit-bg: #fcebe8;
+  --rw-focus: #14161b; --rw-focus-halo: #ffd43b;
+  /* 製品の目印色 */
+  --rw-meo: #4338ca; --rw-sns: #0f766e; --rw-wp: #c2410c;
+  --rw-product: var(--rw-accent);
+  /* 黒い左メニュー（ライト・ダークとも暗い面。目印色は暗い面用の明るい色を使う） */
+  --rw-side-bg: #1c1f2e; --rw-side-text: #c4c9d6; --rw-side-dim: #9aa1b5; --rw-side-hover: #2d3350; --rw-side-active-text: #ffffff;
+  --rw-side-border: #6b7391;   /* 黒い面の上のボタンの輪郭（3:1以上） */
+  --rw-meo-on-dark: #a5b4fc; --rw-sns-on-dark: #5eead4; --rw-wp-on-dark: #fdba74;
+  --rw-product-on-dark: var(--rw-side-text);
+  /* SNSの系列色（グラフ・チップ） */
+  --rw-c-instagram: #eb6834; --rw-c-facebook: #2a78d6; --rw-c-threads: #1baf7a; --rw-c-x: #eda100;
+  --rw-shadow: 0 1px 2px rgb(20 22 27 / .06), 0 2px 8px rgb(20 22 27 / .04);
+
+  /* ---------- 文字 ---------- */
+  --rw-font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  --rw-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --rw-fs-sm: 14px;   /* 補足・表・バッジ（これ未満は使わない） */
+  --rw-fs-base: 16px; /* 本文 */
+  --rw-fs-lg: 19px;   /* 見出し3 */
+  --rw-fs-xl: 23px;   /* 見出し2 */
+  --rw-fs-2xl: 28px;  /* ページ見出し */
+  --rw-fs-num: 34px;  /* 主要な数字 */
+  --rw-lh: 1.7;
+
+  /* ---------- 余白・角丸 ---------- */
+  --rw-s1: 4px; --rw-s2: 8px; --rw-s3: 12px; --rw-s4: 16px; --rw-s5: 24px; --rw-s6: 32px; --rw-s7: 48px;
+  --rw-r-sm: 6px; --rw-r-md: 10px; --rw-r-lg: 14px;
+  --rw-topbar-h: 60px;
+  --rw-side-w: 240px;
+  --rw-content-max: 1200px;
+}
+
+/* ---------- 色（ダーク）：OS の設定に従い、data-theme で上書きできる ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --rw-bg: #0f1115; --rw-surface: #16181d; --rw-surface-2: #1e2127; --rw-border: #2b2f37; --rw-border-strong: #6f7685;
+    --rw-text: #f2f3f5; --rw-text-2: #c3c7d0; --rw-muted: #9aa0ab;
+    --rw-accent: #6da7ec; --rw-accent-bg: #172a42; --rw-on-accent: #0b0d10;
+    --rw-good: #6fd39a; --rw-good-bg: #15301f; --rw-warn: #f5b84a; --rw-warn-bg: #35280f; --rw-crit: #ff8a80; --rw-crit-bg: #3a1a17;
+    --rw-focus: #ffffff; --rw-focus-halo: #b88a00;
+    --rw-meo: #a5b4fc; --rw-sns: #5eead4; --rw-wp: #fdba74;
+    --rw-side-bg: #12141c; --rw-side-hover: #23283a;
+    --rw-shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --rw-bg: #0f1115; --rw-surface: #16181d; --rw-surface-2: #1e2127; --rw-border: #2b2f37; --rw-border-strong: #6f7685;
+  --rw-text: #f2f3f5; --rw-text-2: #c3c7d0; --rw-muted: #9aa0ab;
+  --rw-accent: #6da7ec; --rw-accent-bg: #172a42; --rw-on-accent: #0b0d10;
+  --rw-good: #6fd39a; --rw-good-bg: #15301f; --rw-warn: #f5b84a; --rw-warn-bg: #35280f; --rw-crit: #ff8a80; --rw-crit-bg: #3a1a17;
+  --rw-focus: #ffffff; --rw-focus-halo: #b88a00;
+  --rw-meo: #a5b4fc; --rw-sns: #5eead4; --rw-wp: #fdba74;
+  --rw-side-bg: #12141c; --rw-side-hover: #23283a;
+  --rw-shadow: none;
+}
+
+/* 製品の目印色 */
+[data-product="meo"] { --rw-product: var(--rw-meo); --rw-product-on-dark: var(--rw-meo-on-dark); }
+[data-product="sns"] { --rw-product: var(--rw-sns); --rw-product-on-dark: var(--rw-sns-on-dark); }
+[data-product="wp"] { --rw-product: var(--rw-wp); --rw-product-on-dark: var(--rw-wp-on-dark); }
+
+/* ---------- 土台 ---------- */
+.rw { margin: 0; background: var(--rw-bg); color: var(--rw-text); font: var(--rw-fs-base)/var(--rw-lh) var(--rw-font);
+  -webkit-text-size-adjust: 100%; }
+.rw *, .rw *::before, .rw *::after { box-sizing: border-box; }
+/* :where で強さを0にし、部品側の色指定（ブランド名・タブなど）を優先させる */
+:where(.rw) a { color: var(--rw-accent); text-underline-offset: 3px; }
+.rw :focus-visible { outline: 3px solid var(--rw-focus); outline-offset: 2px; box-shadow: 0 0 0 6px var(--rw-focus-halo); }
+.rw-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- 骨組み：上バー ---------- */
+.rw-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--rw-s4); min-height: var(--rw-topbar-h);
+  padding: 0 var(--rw-s5); background: var(--rw-surface); border-bottom: 1px solid var(--rw-border);
+  box-shadow: inset 0 3px 0 var(--rw-product); }   /* 製品の目印：上端の細い線 */
+.rw-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: var(--rw-fs-base); color: var(--rw-text); text-decoration: none; white-space: nowrap; }
+.rw-brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--rw-product); display: grid; place-items: center;
+  color: var(--rw-surface); font-size: 13px; font-weight: 800; }
+.rw-brand-sub { font-weight: 600; color: var(--rw-muted); font-size: var(--rw-fs-sm); }
+.rw-nav { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; }
+.rw-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: var(--rw-r-sm);
+  color: var(--rw-text-2); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.rw-nav a:hover { background: var(--rw-surface-2); color: var(--rw-text); }
+.rw-nav a[aria-current="page"] { color: var(--rw-text); background: var(--rw-surface-2); }
+.rw-account { display: flex; align-items: center; gap: var(--rw-s3); font-size: var(--rw-fs-sm); color: var(--rw-text-2); white-space: nowrap; }
+
+/* 製品の切り替え（MEO｜SNS分析｜WordPress） */
+.rw-switcher { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--rw-r-md); background: var(--rw-surface-2); }
+.rw-switcher a { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border-radius: 8px;
+  font-size: var(--rw-fs-sm); font-weight: 700; color: var(--rw-text-2); text-decoration: none; white-space: nowrap; }
+.rw-switcher a::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--rw-dot); }
+.rw-switcher a[data-to="meo"] { --rw-dot: var(--rw-meo); }
+.rw-switcher a[data-to="sns"] { --rw-dot: var(--rw-sns); }
+.rw-switcher a[data-to="wp"] { --rw-dot: var(--rw-wp); }
+.rw-switcher a[aria-current="true"] { background: var(--rw-surface); color: var(--rw-text); box-shadow: var(--rw-shadow), 0 0 0 1px var(--rw-border); }
+
+/* ---------- 骨組み：左メニュー＋本文 ---------- */
+.rw-shell { display: grid; grid-template-columns: var(--rw-side-w) minmax(0, 1fr); min-height: calc(100vh - var(--rw-topbar-h)); }
+/* PCでは左メニューを固定し、本文だけがスクロールする（メニューが長いときはメニューの中でスクロール） */
+.rw-side { background: var(--rw-side-bg); color: var(--rw-side-text); padding: var(--rw-s5) var(--rw-s3);
+  position: sticky; top: var(--rw-topbar-h); align-self: start; height: calc(100vh - var(--rw-topbar-h)); overflow-y: auto;
+  display: flex; flex-direction: column; }
+.rw-side-foot { margin-top: auto; padding-top: var(--rw-s4); }
+.rw-side-title { margin: 0 var(--rw-s3) var(--rw-s4); }
+.rw-side-title small { display: block; font-size: var(--rw-fs-sm); color: var(--rw-side-dim); font-weight: 600; }
+.rw-side-title strong { font-size: var(--rw-fs-lg); color: var(--rw-side-active-text); }
+.rw-side :focus-visible { outline-color: #ffffff; }
+.rw-side-nav { display: grid; gap: 2px; }
+.rw-side-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 var(--rw-s3); border-radius: var(--rw-r-sm);
+  color: var(--rw-side-text); text-decoration: none; font-weight: 600; position: relative; }
+.rw-side-nav a:hover { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
+.rw-side-nav a[aria-current="page"] { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
+.rw-side-nav a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
+  border-radius: 4px; background: var(--rw-product-on-dark); }   /* 製品の目印：選択中のメニュー */
+.rw-main { padding: var(--rw-s6) var(--rw-s6) var(--rw-s7); max-width: var(--rw-content-max); width: 100%; }
+
+/* ---------- 見出し ---------- */
+.rw-eyebrow { margin: 0 0 4px; font-size: var(--rw-fs-sm); font-weight: 700; color: var(--rw-muted); letter-spacing: .02em; }
+.rw-h1 { margin: 0 0 6px; font-size: var(--rw-fs-2xl); line-height: 1.35; }
+.rw-h2 { margin: var(--rw-s6) 0 var(--rw-s3); font-size: var(--rw-fs-xl); line-height: 1.4; }
+.rw-h3 { margin: 0 0 var(--rw-s2); font-size: var(--rw-fs-lg); line-height: 1.5; }
+.rw-lead { margin: 0; color: var(--rw-text-2); }
+
+/* ---------- 部品 ---------- */
+.rw-card { background: var(--rw-surface); border: 1px solid var(--rw-border); border-radius: var(--rw-r-lg); padding: var(--rw-s5); box-shadow: var(--rw-shadow); }
+.rw-card.flush { padding: 0; overflow: hidden; }
+
+.rw-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 18px;
+  border-radius: var(--rw-r-md); border: 1px solid var(--rw-border-strong); background: var(--rw-surface); color: var(--rw-text);
+  font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+.rw-btn:hover { background: var(--rw-surface-2); }
+.rw-btn.primary { background: var(--rw-accent); border-color: var(--rw-accent); color: var(--rw-on-accent); }
+.rw-btn.primary:hover { filter: brightness(1.08); }
+.rw-btn.danger { color: var(--rw-crit); border-color: var(--rw-crit); }
+.rw-btn.sm { min-height: 36px; padding: 0 12px; font-size: var(--rw-fs-sm); }
+.rw-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.rw-field { display: grid; gap: 6px; margin-bottom: var(--rw-s4); }
+.rw-label { font-weight: 700; font-size: var(--rw-fs-sm); }
+.rw-req { margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--rw-crit); background: var(--rw-crit-bg); padding: 1px 6px; border-radius: 4px; }
+.rw-input, .rw-select, .rw-textarea { width: 100%; max-width: 440px; min-height: 44px; padding: 10px 12px; font: inherit;
+  color: var(--rw-text); background: var(--rw-surface); border: 1px solid var(--rw-border-strong); border-radius: var(--rw-r-md); }
+.rw-textarea { max-width: none; min-height: 120px; resize: vertical; }
+.rw-hint { font-size: var(--rw-fs-sm); color: var(--rw-muted); }
+
+.rw-table { width: 100%; border-collapse: collapse; font-size: var(--rw-fs-sm); }
+.rw-table th, .rw-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--rw-border); vertical-align: top; }
+.rw-table thead th { color: var(--rw-text-2); font-weight: 700; background: var(--rw-surface-2); white-space: nowrap; }
+.rw-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rw-table tbody tr:last-child td { border-bottom: 0; }
+
+.rw-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: var(--rw-fs-sm); font-weight: 700;
+  background: var(--rw-surface-2); color: var(--rw-text-2); white-space: nowrap; }
+.rw-badge.good { background: var(--rw-good-bg); color: var(--rw-good); }
+.rw-badge.warn { background: var(--rw-warn-bg); color: var(--rw-warn); }
+.rw-badge.crit { background: var(--rw-crit-bg); color: var(--rw-crit); }
+.rw-badge.info { background: var(--rw-accent-bg); color: var(--rw-accent); }
+
+.rw-msg { display: flex; gap: 8px; padding: var(--rw-s3) var(--rw-s4); border-radius: var(--rw-r-md); background: var(--rw-accent-bg); color: var(--rw-text); }
+.rw-msg::before { font-weight: 800; flex: none; }
+.rw-msg.ok { background: var(--rw-good-bg); } .rw-msg.ok::before { content: "✓"; color: var(--rw-good); }
+.rw-msg.error { background: var(--rw-crit-bg); } .rw-msg.error::before { content: "!"; color: var(--rw-crit); }
+.rw-msg.info::before { content: "i"; color: var(--rw-accent); }
+
+.rw-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: var(--rw-r-md); background: var(--rw-surface-2); }
+.rw-tab { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 8px; font-size: var(--rw-fs-sm);
+  font-weight: 700; color: var(--rw-text-2); text-decoration: none; border: 0; background: none; cursor: pointer; font-family: inherit; }
+.rw-tab[aria-current="true"], .rw-tab[aria-pressed="true"] { background: var(--rw-surface); color: var(--rw-text); box-shadow: var(--rw-shadow), 0 0 0 1px var(--rw-border); }
+
+.rw-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rw-border);
+  border: 1px solid var(--rw-border); border-radius: var(--rw-r-lg); overflow: hidden; }
+.rw-stat { background: var(--rw-surface); padding: var(--rw-s5); }
+.rw-stat-label { font-size: var(--rw-fs-sm); font-weight: 700; color: var(--rw-text-2); }
+.rw-stat-value { font-size: var(--rw-fs-num); font-weight: 800; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.rw-delta { font-size: var(--rw-fs-sm); font-weight: 700; }
+.rw-delta.up { color: var(--rw-good); } .rw-delta.down { color: var(--rw-crit); }
+
+/* ---------- スマホ ---------- */
+@media (max-width: 1100px) {
+  .rw-brand-sub { display: none; }
+  .rw-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .rw-topbar { flex-wrap: wrap; padding: var(--rw-s2) var(--rw-s4); gap: var(--rw-s2); }
+  .rw-shell { grid-template-columns: minmax(0, 1fr); }   /* 横に流れるメニューで画面幅が広がらないよう 0 から */
+  .rw-side { padding: var(--rw-s3) var(--rw-s4); position: static; height: auto; overflow: visible; }
+  .rw-side-foot { display: none; }
+  .rw-side-nav { display: flex; overflow-x: auto; min-width: 0; }
+  .rw-side-nav a { white-space: nowrap; }
+  .rw-side-nav a[aria-current="page"]::before { left: 10px; right: 10px; top: auto; bottom: 4px; width: auto; height: 3px; }
+  .rw-main { padding: var(--rw-s5) var(--rw-s4) var(--rw-s6); }
+  .rw-h1 { font-size: var(--rw-fs-xl); }
+}
+
+@media print {
+  .rw-topbar, .rw-side, .rw-switcher { display: none !important; }
+  .rw-shell { display: block; }
+}

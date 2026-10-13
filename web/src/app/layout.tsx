@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { ScrollRegions } from "@/components/scroll-regions";
+import "./rhythmos-ui.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ja">
+    <html lang="ja" data-product="sns">
       <body>
         <a className="skip" href="#main">本文へスキップ</a>
         {children}
