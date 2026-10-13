@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { reportFromSearch } from "@/lib/report";
+import { Suspense } from "react";
 import { ReportPage } from "@/components/report-shell";
+import { AnalysisTabs } from "@/components/analysis-tabs";
 import { SLOTS, WEEKDAYS } from "@/lib/sns/analysis";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
 
@@ -22,7 +24,8 @@ export default async function TimingPage({ params, searchParams }: PageProps<"/c
   const h = d.heatmap[key];
   const name = key === "all" ? "全体" : PLATFORM_LABELS[key];
   return (
-    <ReportPage report={r} title="投稿時間" lead="どの曜日・時間帯の投稿が反応を得ているか。">
+    <ReportPage report={r} title="比較・分析" lead="どの曜日・時間帯の投稿が反応を得ているか。">
+      <Suspense><AnalysisTabs base={`/clients/${id}`} /></Suspense>
       <section aria-labelledby="h-heat">
         <h2 id="h-heat">曜日 × 時間帯</h2>
         <p className="sub">パフォーマンス指数の平均（100＝そのSNSの普段の投稿、200＝2倍の反応）。空欄は投稿なし。</p>

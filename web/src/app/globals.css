@@ -389,6 +389,9 @@ td.heat { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabul
 .policy nav.toc a { display: inline-flex; align-items: center; min-height: 32px; }
 @media (max-width: 600px) { .policy nav.toc ol { columns: 1; } .policy table.kv th { width: auto; } }
 
+/* 「比較・分析」の画面切り替え（下線のタブ） */
+.analysis-tabs { margin: 0 0 var(--s5); }
+
 /* ---- アカウント設定（MEO と同じ形） ---- */
 .account-card { margin-top: var(--s4); }
 .account-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap;

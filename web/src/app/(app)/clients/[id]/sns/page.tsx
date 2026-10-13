@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { reportFromSearch } from "@/lib/report";
+import { Suspense } from "react";
 import { ReportPage } from "@/components/report-shell";
+import { AnalysisTabs } from "@/components/analysis-tabs";
 import { Bar, Chip } from "@/components/report-ui";
 import { fmtNum, fmtPct } from "@/lib/format";
 
@@ -13,7 +15,8 @@ export default async function SnsComparePage({ params, searchParams }: PageProps
   const rows = d.platforms.map((p) => [p, d.summary[p]!] as const);
   const mx = Math.max(0, ...rows.map(([, s]) => s.erFollowers ?? 0)) || 1;
   return (
-    <ReportPage report={r} title="SNS比較" lead="規模の違うSNSを、フォロワーあたり・表示あたりの反応でそろえて比べます。">
+    <ReportPage report={r} title="比較・分析" lead="規模の違うSNSを、フォロワーあたり・表示あたりの反応でそろえて比べます。">
+      <Suspense><AnalysisTabs base={`/clients/${id}`} /></Suspense>
       <section>
         <div className="card flush scroll">
           <table>
