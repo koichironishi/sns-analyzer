@@ -227,6 +227,11 @@
 .rw-auth-card .rw-input { max-width: none; }
 .rw-auth-card .rw-msg { margin-bottom: var(--rw-s4); }
 .rw-btn.block { width: 100%; }
+/* 完了したときの丸いチェック（メール送信・パスワード変更など） */
+.rw-auth-done { width: 48px; height: 48px; border-radius: 50%; margin: 0 auto var(--rw-s3); display: grid; place-items: center;
+  background: var(--rw-good-bg); color: var(--rw-good); }
+.rw-auth-done svg { width: 24px; height: 24px; }
+.rw-auth-card .rw-btn + .rw-btn, .rw-auth-card .rw-btn.mt { margin-top: var(--rw-s3); }
 .rw-auth-links { margin: var(--rw-s4) 0 0; text-align: center; font-size: var(--rw-fs-sm); font-weight: 600; }
 .rw-auth-note { margin: var(--rw-s4) 0 0; font-size: var(--rw-fs-sm); color: var(--rw-muted); line-height: 1.7; }
 .rw-auth-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--rw-s4); margin: var(--rw-s5) 0 0;
