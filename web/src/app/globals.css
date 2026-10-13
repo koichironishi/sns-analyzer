@@ -186,7 +186,7 @@ td a:not(.btn) { display: inline-block; padding: 4px 0; }  /* 表内リンクの
 .side-meta { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--rw-side-dim); line-height: 1.6; }
 .side-nav { display: grid; gap: 2px; }
 .side-nav a { position: relative; display: flex; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: var(--r-sm);
-  color: var(--rw-side-text); text-decoration: none; font-size: var(--fs-md); font-weight: 600; }
+  color: var(--rw-side-text); text-decoration: none; font-size: var(--rw-fs-nav); font-weight: 600; }
 .side-nav a:hover { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
 .side-nav a[aria-current="page"] { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
 .side-nav a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
@@ -499,7 +499,7 @@ body:has(.side) .app-drawer { display: none; }
 .drawer-label { margin: var(--s2) var(--s3) 0; font-size: var(--fs-sm); font-weight: 700; color: var(--rw-side-dim); }
 .drawer-nav { display: grid; gap: 2px; }
 .drawer-nav a { position: relative; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: var(--r-sm);
-  color: var(--rw-side-text); text-decoration: none; font-weight: 600; }
+  color: var(--rw-side-text); text-decoration: none; font-weight: 600; font-size: var(--rw-fs-nav); }
 .drawer-nav a:hover { background: var(--rw-side-hover); color: #fff; }
 .drawer-nav a[aria-current="page"] { background: var(--rw-side-hover); color: #fff; }
 .drawer-nav a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
@@ -514,7 +514,7 @@ body:has(.side) .app-drawer { display: none; }
 .drawer-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-role { flex: none; font-size: var(--fs-sm); font-weight: 700; color: var(--rw-side-dim); }
 .drawer-logout { width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: none;
-  color: var(--rw-side-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+  color: var(--rw-side-text); font: inherit; font-size: var(--rw-fs-nav); font-weight: 600; text-align: left; cursor: pointer; }
 .drawer-logout:hover { background: var(--rw-side-hover); color: #fff; }
 
 /* スマホ・タブレット：左メニューは ☰ で左から出るドロワー（MEO と同じ形） */

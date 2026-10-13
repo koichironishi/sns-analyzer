@@ -47,6 +47,7 @@
   --rw-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --rw-fs-sm: 14px;   /* 補足・表・バッジ（これ未満は使わない） */
   --rw-fs-base: 16px; /* 本文 */
+  --rw-fs-nav: 15px;  /* 左メニューの項目（本文より一段小さく） */
   --rw-fs-lg: 19px;   /* 見出し3 */
   --rw-fs-xl: 23px;   /* 見出し2 */
   --rw-fs-2xl: 28px;  /* ページ見出し */
@@ -137,7 +138,7 @@
 .rw-side :focus-visible { outline-color: #ffffff; }
 .rw-side-nav { display: grid; gap: 2px; }
 .rw-side-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 var(--rw-s3); border-radius: var(--rw-r-sm);
-  color: var(--rw-side-text); text-decoration: none; font-weight: 600; position: relative; }
+  color: var(--rw-side-text); text-decoration: none; font-weight: 600; font-size: var(--rw-fs-nav); position: relative; }
 .rw-side-nav a:hover { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
 .rw-side-nav a[aria-current="page"] { background: var(--rw-side-hover); color: var(--rw-side-active-text); }
 .rw-side-nav a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
@@ -167,6 +168,8 @@
 
 .rw-field { display: grid; gap: 6px; margin-bottom: var(--rw-s4); }
 .rw-label { font-weight: 700; font-size: var(--rw-fs-sm); }
+/* 製品側の label・input の余白指定に左右されないよう、入力欄の組の中では余白を打ち消す */
+.rw-field > .rw-label, .rw-field > .rw-input, .rw-field > .rw-select, .rw-field > .rw-textarea, .rw-field > .rw-hint { margin: 0; }
 .rw-req { margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--rw-crit); background: var(--rw-crit-bg); padding: 1px 6px; border-radius: 4px; }
 .rw-input, .rw-select, .rw-textarea { width: 100%; max-width: 440px; min-height: 44px; padding: 10px 12px; font: inherit;
   color: var(--rw-text); background: var(--rw-surface); border: 1px solid var(--rw-border-strong); border-radius: var(--rw-r-md); }
@@ -204,6 +207,31 @@
 .rw-stat-value { font-size: var(--rw-fs-num); font-weight: 800; line-height: 1.3; font-variant-numeric: tabular-nums; }
 .rw-delta { font-size: var(--rw-fs-sm); font-weight: 700; }
 .rw-delta.up { color: var(--rw-good); } .rw-delta.down { color: var(--rw-crit); }
+
+/* ---------- ログイン画面（全製品共通） ----------
+   <body class="rw-auth"> または <main class="rw-auth"> の中に
+   .rw-auth-box > .rw-auth-brand ＋ .rw-auth-card（.rw-auth-title / .rw-auth-lead / フォーム）＋ .rw-auth-foot */
+.rw-auth { min-height: 100vh; display: grid; place-items: center; padding: var(--rw-s7) var(--rw-s4); margin: 0;
+  background: var(--rw-bg); color: var(--rw-text); font: var(--rw-fs-base)/var(--rw-lh) var(--rw-font); }
+.rw-auth a { color: var(--rw-accent); text-underline-offset: 3px; }
+.rw-auth-box { width: 100%; max-width: 400px; padding: 0; margin: 0; }
+.rw-auth-brand { display: flex; align-items: center; gap: 12px; margin: 0 0 var(--rw-s5); }
+.rw-auth-mark { width: 40px; height: 40px; border-radius: 10px; background: var(--rw-product); color: var(--rw-surface);
+  display: grid; place-items: center; font-size: 18px; font-weight: 800; flex: none; }
+.rw-auth-name { display: block; font-size: var(--rw-fs-lg); font-weight: 800; line-height: 1.3; }
+.rw-auth-sub { display: block; font-size: var(--rw-fs-sm); color: var(--rw-muted); }
+.rw-auth-card { background: var(--rw-surface); border: 1px solid var(--rw-border); border-top: 4px solid var(--rw-product);
+  border-radius: var(--rw-r-lg); padding: var(--rw-s6) var(--rw-s5); box-shadow: var(--rw-shadow); }
+.rw-auth-title { margin: 0 0 4px; font-size: var(--rw-fs-xl); font-weight: 800; line-height: 1.4; }
+.rw-auth-lead { margin: 0 0 var(--rw-s5); font-size: var(--rw-fs-sm); color: var(--rw-text-2); line-height: 1.7; }
+.rw-auth-card .rw-input { max-width: none; }
+.rw-auth-card .rw-msg { margin-bottom: var(--rw-s4); }
+.rw-btn.block { width: 100%; }
+.rw-auth-links { margin: var(--rw-s4) 0 0; text-align: center; font-size: var(--rw-fs-sm); font-weight: 600; }
+.rw-auth-note { margin: var(--rw-s4) 0 0; font-size: var(--rw-fs-sm); color: var(--rw-muted); line-height: 1.7; }
+.rw-auth-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--rw-s4); margin: var(--rw-s5) 0 0;
+  font-size: var(--rw-fs-sm); }
+.rw-auth-foot a { color: var(--rw-text-2); display: inline-flex; align-items: center; min-height: 44px; }
 
 /* ---------- スマホ ---------- */
 @media (max-width: 1100px) {
