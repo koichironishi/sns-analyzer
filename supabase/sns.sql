@@ -173,6 +173,8 @@ create table if not exists sns_posts (
   unique (account_id, external_id)
 );
 create index if not exists idx_sns_posts_client_posted on sns_posts(client_id, posted_at);
+-- コンテンツの種類（通常の投稿／ストーリーズ）。ストーリーズは24時間で消えるため、削除の同期の対象外
+alter table sns_posts add column if not exists content_type text not null default 'post' check (content_type in ('post', 'story'));
 
 -- ---------- 投稿ごとの指標（取得日ごとの履歴） ----------
 create table if not exists sns_post_metrics (
@@ -190,12 +192,15 @@ create table if not exists sns_post_metrics (
   primary key (post_id, fetched_date)
 );
 create index if not exists idx_sns_post_metrics_client on sns_post_metrics(client_id);
+-- フォロワーによる閲覧数（取得できるSNSのみ。Facebook）
+alter table sns_post_metrics add column if not exists follower_views integer;
 
 -- 各投稿の最新の指標（呼び出した人の権限で読む）
 create or replace view sns_posts_latest with (security_invoker = true) as
   select p.id, p.account_id, p.client_id, p.platform, p.external_id, p.posted_at, p.text,
          p.media_type, p.permalink,
-         m.fetched_date, m.views, m.reach, m.likes, m.comments, m.shares, m.saves, m.quotes, m.clicks
+         m.fetched_date, m.views, m.reach, m.likes, m.comments, m.shares, m.saves, m.quotes, m.clicks,
+         p.content_type, m.follower_views
   from sns_posts p
   join lateral (
     select * from sns_post_metrics pm

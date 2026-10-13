@@ -49,6 +49,10 @@ export const emptyMetrics = (): Metrics => ({
 /** SNS横断で比較できるエンゲージメント合計 */
 export const engagementsOf = (m: Metrics): number => m.likes + m.comments + m.shares + m.saves + m.quotes;
 
+/** コンテンツの種類（通常の投稿／ストーリーズ） */
+export type ContentType = "post" | "story";
+export const CONTENT_LABELS: Record<ContentType, string> = { post: "投稿", story: "ストーリーズ" };
+
 export type Post = {
   id: string; // DB上のID（取り込み前は外部IDでよい）
   accountId: string;
@@ -59,6 +63,10 @@ export type Post = {
   mediaType: MediaType;
   permalink: string | null;
   metrics: Metrics;
+  /** 省略時は通常の投稿 */
+  contentType?: ContentType;
+  /** フォロワーによる閲覧数（取得できるSNSのみ） */
+  followerViews?: number | null;
 };
 
 /** 日付（YYYY-MM-DD）→ フォロワー数 の昇順リスト */

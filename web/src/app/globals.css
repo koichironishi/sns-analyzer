@@ -313,6 +313,7 @@ td.heat { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabul
 .ai-rec-why div { border-top: 1px solid var(--grid); padding-top: var(--s3); }
 .ai-rec-why dt { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); margin-bottom: 4px; }
 .ai-rec-why dd { margin: 0; font-size: var(--fs-md); line-height: 1.8; color: var(--text-2); }
+.tag.story { background: var(--accent-bg); color: var(--accent); }
 .tag { font-size: var(--fs-xs); font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); }
 .ai-kpi td { line-height: 1.7; vertical-align: top; }
 .pri { display: inline-block; min-width: 32px; text-align: center; font-size: var(--fs-xs); font-weight: 800; padding: 3px 10px; border-radius: 6px; }

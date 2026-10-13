@@ -3,12 +3,15 @@
  * 必要な権限：instagram_basic, instagram_manage_insights, pages_show_list, pages_read_engagement, business_management
  */
 import type { MediaType } from "../models.ts";
-import { HttpClient, InsightsFetcher, graphPaginate, metrics, num, parseTime, str, type CollectedPost, type CollectResult } from "./http.ts";
+import { ApiError, HttpClient, InsightsFetcher, graphPaginate, metrics, num, parseTime, str, type CollectedPost, type CollectResult } from "./http.ts";
 import { DEADLINE_WARNING, cleanHandle, overDeadline, type CollectOptions, type Collector, type CollectorDeps, type ConnectionConfig } from "./types.ts";
 
 const MEDIA_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count";
 const BD_MEDIA_FIELDS = "id,caption,like_count,comments_count,timestamp,media_type,media_product_type,permalink";
 export const DEFAULT_METRICS = ["views", "reach", "saved", "shares", "total_interactions"];
+const STORY_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp";
+// ストーリーズの指標（公開中の24時間だけ取得できる）
+export const STORY_METRICS = ["views", "reach", "replies", "shares"];
 
 export function mediaType(m: Record<string, unknown>): MediaType {
   if (m.media_product_type === "REELS") return "reel";
@@ -18,12 +21,14 @@ export function mediaType(m: Record<string, unknown>): MediaType {
 export class InstagramCollector implements Collector {
   private http: HttpClient;
   private insights: InsightsFetcher;
+  private storyInsights: InsightsFetcher;
   private cfg: ConnectionConfig;
   constructor(cfg: ConnectionConfig, deps: CollectorDeps = {}) {
     this.cfg = cfg;
     this.http = new HttpClient(`https://graph.facebook.com/${deps.graphVersion ?? "v26.0"}`,
       { ...deps.http, queryAuth: { access_token: cfg.accessToken } });
     this.insights = new InsightsFetcher(this.http, DEFAULT_METRICS);
+    this.storyInsights = new InsightsFetcher(this.http, STORY_METRICS);
   }
 
   async collect(opts: CollectOptions): Promise<CollectResult> {
@@ -51,7 +56,23 @@ export class InstagramCollector implements Collector {
       });
       if (posts.length >= opts.maxPosts) break;
     }
-    return { account, posts, warnings: [...warnings, ...this.insights.warnings] };
+
+    // ストーリーズ（公開中のものだけ返るため、毎日の収集で消える前に記録する）
+    try {
+      for await (const m of graphPaginate(this.http, `${uid}/stories`, { fields: STORY_FIELDS, limit: 50 })) {
+        if (overDeadline(opts)) { warnings.push(DEADLINE_WARNING); break; }
+        const ins = await this.storyInsights.fetch(str(m.id), "story");
+        posts.push({
+          externalId: str(m.id), postedAt: parseTime(str(m.timestamp)), text: str(m.caption), mediaType: mediaType(m),
+          permalink: str(m.permalink) || null, contentType: "story",
+          metrics: metrics({ views: ins.views ?? null, reach: ins.reach ?? null, comments: ins.replies ?? 0, shares: ins.shares ?? 0 }),
+        });
+      }
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
+      warnings.push(`ストーリーズを取得できませんでした（${e.message}）`);
+    }
+    return { account, posts, warnings: [...warnings, ...this.insights.warnings, ...this.storyInsights.warnings] };
   }
 
   /**

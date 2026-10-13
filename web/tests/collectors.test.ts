@@ -71,6 +71,36 @@ test("Instagram: 期間内の投稿だけ、インサイトは非対応指標を
   assert.equal(insightCalls, 12);
 });
 
+test("Instagram: ストーリーズを種類「story」として取得する", async () => {
+  const { fn } = fakeFetch([
+    (u) => u.pathname.endsWith("/ig1") ? { body: { id: "ig1", username: "shop", followers_count: 1000 } } : undefined,
+    (u) => u.pathname.endsWith("/ig1/media") ? { body: { data: [] } } : undefined,
+    (u) => u.pathname.endsWith("/ig1/stories") ? { body: { data: [
+      { id: "s1", media_type: "IMAGE", media_product_type: "STORY", timestamp: "2026-10-12T03:00:00+0000" }] } } : undefined,
+    (u) => u.pathname.endsWith("/s1/insights") ? { body: { data: [
+      { name: "views", values: [{ value: 120 }] }, { name: "reach", values: [{ value: 90 }] }, { name: "replies", values: [{ value: 2 }] }] } } : undefined,
+  ]);
+  const r = await createCollector({ platform: "instagram", externalId: "ig1", username: "", accessToken: "t" }, deps(fn)).collect(opts);
+  assert.equal(r.posts.length, 1);
+  assert.equal(r.posts[0].contentType, "story");
+  assert.equal(r.posts[0].metrics.views, 120);
+  assert.equal(r.posts[0].metrics.reach, 90);
+  assert.equal(r.posts[0].metrics.comments, 2);
+});
+
+test("Facebook: フォロワーによる閲覧数（is_from_followers）", async () => {
+  const { fn } = fakeFetch([
+    (u) => u.pathname.endsWith("/p1") ? { body: { id: "p1", name: "店", fan_count: 50 } } : undefined,
+    (u) => u.pathname.endsWith("/p1/posts") ? { body: { data: [{ id: "p1_1", created_time: "2026-09-05T00:00:00+0000" }] } } : undefined,
+    (u) => u.pathname.endsWith("/insights") && u.searchParams.get("breakdown") === "is_from_followers"
+      ? { body: { data: [{ name: "post_media_view", values: [{ value: 16, is_from_followers: "1" }, { value: 3, is_from_followers: "0" }] }] } } : undefined,
+    (u) => u.pathname.endsWith("/insights") ? { body: { data: [{ name: "post_media_view", values: [{ value: 19 }] }] } } : undefined,
+  ]);
+  const r = await createCollector({ platform: "facebook", externalId: "p1", username: "", accessToken: "t" }, deps(fn)).collect(opts);
+  assert.equal(r.posts[0].followerViews, 16);
+  assert.equal(r.posts[0].metrics.views, 19);
+});
+
 test("Instagram 競合：Business Discovery", async () => {
   const { fn, calls } = fakeFetch([(u) => u.pathname.endsWith("/ig1") ? { body: { business_discovery: {
     id: "c1", username: "rival", followers_count: 500,

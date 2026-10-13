@@ -131,16 +131,19 @@ test("SNSの絞り込み：選んだSNSの投稿・フォロワー・競合だ�
   });
   const data = {
     ownPosts: [post("1", "instagram", "2026-10-01T00:00:00Z"), post("2", "facebook", "2026-10-02T00:00:00Z")],
+    ownStories: [{ ...post("s1", "x", "2026-10-03T00:00:00Z"), contentType: "story" as const }],
     ownFollowers: { instagram: [["2026-10-01", 100]], facebook: [["2026-10-01", 50]] } as never,
     ownNames: { instagram: "ig", facebook: "fb", threads: "th" },
     competitors: [{ id: "c1", platform: "instagram" as const, competitorName: "A", username: "a", series: [], posts: [] },
       { id: "c2", platform: "x" as const, competitorName: "B", username: "b", series: [], posts: [] }],
     competitorList: [], hasData: true, lastPostDate: "2026-10-02",
   };
-  assert.deepEqual(reportPlatforms(data), ["instagram", "facebook", "threads"]);
+  assert.deepEqual(reportPlatforms(data), ["instagram", "facebook", "threads", "x"]);
   assert.equal(filterReportData(data, null), data);
   const ig = filterReportData(data, "instagram");
   assert.deepEqual(ig.ownPosts.map((p) => p.id), ["1"]);
+  assert.deepEqual(ig.ownStories, []);
+  assert.equal(filterReportData(data, "x").hasData, true);
   assert.deepEqual(Object.keys(ig.ownFollowers), ["instagram"]);
   assert.deepEqual(ig.ownNames, { instagram: "ig" });
   assert.deepEqual(ig.competitors.map((c) => c.id), ["c1"]);

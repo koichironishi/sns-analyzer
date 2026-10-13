@@ -144,6 +144,7 @@ type PostRow = {
   id: string; account_id: string; platform: string; external_id: string; posted_at: string; text: string;
   media_type: string; permalink: string | null; views: number | null; reach: number | null; likes: number;
   comments: number; shares: number; saves: number; quotes: number; clicks: number | null;
+  content_type: string | null; follower_views: number | null;
 };
 type AccountRow = { id: string; platform: string; external_id: string; username: string | null; competitor_id: string | null; source: string; updated_at: string };
 type SnapshotRow = { account_id: string; date: string; followers: number | null };
@@ -153,10 +154,14 @@ const toPost = (r: PostRow): Post => ({
   id: r.id, accountId: r.account_id, platform: r.platform as Platform, externalId: r.external_id,
   postedAt: new Date(r.posted_at).toISOString(), text: r.text ?? "", mediaType: r.media_type as MediaType, permalink: r.permalink,
   metrics: { views: r.views, reach: r.reach, likes: r.likes, comments: r.comments, shares: r.shares, saves: r.saves, quotes: r.quotes, clicks: r.clicks },
+  contentType: r.content_type === "story" ? "story" : "post", followerViews: r.follower_views ?? null,
 });
 
 export type ReportData = {
+  /** 分析に使う通常の投稿（ストーリーズは反応の性質が違うため含めない） */
   ownPosts: Post[];
+  /** ストーリーズ（投稿一覧にだけ表示する） */
+  ownStories: Post[];
   ownFollowers: FollowerSeries;
   ownNames: Partial<Record<Platform, string>>;
   competitors: CompetitorAccount[];
@@ -167,18 +172,19 @@ export type ReportData = {
 
 /** 自社のデータがあるSNS（絞り込みの選択肢） */
 export const reportPlatforms = (d: ReportData): Platform[] =>
-  PLATFORMS.filter((p) => d.ownNames[p] || d.ownFollowers[p] || d.ownPosts.some((x) => x.platform === p));
+  PLATFORMS.filter((p) => d.ownNames[p] || d.ownFollowers[p] || [...d.ownPosts, ...d.ownStories].some((x) => x.platform === p));
 
 /** 1つのSNSに絞り込む（null ならそのまま） */
 export function filterReportData(d: ReportData, sns: Platform | null): ReportData {
   if (!sns) return d;
   const ownPosts = d.ownPosts.filter((p) => p.platform === sns);
+  const ownStories = d.ownStories.filter((p) => p.platform === sns);
   const ownFollowers: FollowerSeries = d.ownFollowers[sns] ? { [sns]: d.ownFollowers[sns] } : {};
   return {
-    ...d, ownPosts, ownFollowers,
+    ...d, ownPosts, ownStories, ownFollowers,
     ownNames: d.ownNames[sns] ? { [sns]: d.ownNames[sns] } : {},
     competitors: d.competitors.filter((c) => c.platform === sns),
-    hasData: ownPosts.length > 0 || Object.keys(ownFollowers).length > 0,
+    hasData: ownPosts.length > 0 || ownStories.length > 0 || Object.keys(ownFollowers).length > 0,
     lastPostDate: ownPosts.length ? ownPosts[ownPosts.length - 1].postedAt.slice(0, 10) : null,
   };
 }
@@ -191,7 +197,7 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
     selectAll<AccountRow>((a, b) => db.from("sns_accounts").select("id,platform,external_id,username,competitor_id,source,updated_at").eq("client_id", clientId).order("id").range(a, b), "アカウントの読み込み"),
     selectAll<CompetitorRow>((a, b) => db.from("sns_competitors").select("id,name,handles,created_at").eq("client_id", clientId).order("name").range(a, b), "競合の読み込み"),
     selectAll<PostRow>((a, b) => db.from("sns_posts_latest")
-      .select("id,account_id,platform,external_id,posted_at,text,media_type,permalink,views,reach,likes,comments,shares,saves,quotes,clicks")
+      .select("id,account_id,platform,external_id,posted_at,text,media_type,permalink,views,reach,likes,comments,shares,saves,quotes,clicks,content_type,follower_views")
       .eq("client_id", clientId).gte("posted_at", from).lt("posted_at", to).order("posted_at").order("id").range(a, b), "投稿の読み込み"),
     selectAll<SnapshotRow>((a, b) => db.from("sns_snapshots").select("account_id,date,followers").eq("client_id", clientId)
       .lte("date", opts.end).not("followers", "is", null).order("date").order("account_id").range(a, b), "フォロワー数の読み込み"),
@@ -206,6 +212,7 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
   }
 
   const ownPosts: Post[] = [];
+  const ownStories: Post[] = [];
   const compPosts = new Map<string, Post[]>();
   for (const r of posts) {
     const acc = byAccount.get(r.account_id);
@@ -214,7 +221,10 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
       const list = compPosts.get(acc.id) ?? [];
       list.push(toPost(r));
       compPosts.set(acc.id, list);
-    } else ownPosts.push(toPost(r));
+    } else {
+      const post = toPost(r);
+      (post.contentType === "story" ? ownStories : ownPosts).push(post);
+    }
   }
 
   // 自社：SNSごとにフォロワー推移を1本にまとめる（接続し直したアカウントは新しいものを優先）
@@ -239,8 +249,8 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
     }));
 
   return {
-    ownPosts, ownFollowers, ownNames, competitors, competitorList,
-    hasData: ownPosts.length > 0 || Object.keys(ownFollowers).length > 0,
+    ownPosts, ownStories, ownFollowers, ownNames, competitors, competitorList,
+    hasData: ownPosts.length > 0 || ownStories.length > 0 || Object.keys(ownFollowers).length > 0,
     lastPostDate: ownPosts.length ? ownPosts[ownPosts.length - 1].postedAt.slice(0, 10) : null,
   };
 }
@@ -276,11 +286,11 @@ export async function saveCollected(admin: Db, clientId: string, result: Collect
   for (const batch of chunks(result.posts, 500)) {
     const rows = check(await admin.from("sns_posts").upsert(batch.map((p) => ({
       account_id: acc.id, client_id: clientId, platform: account.platform, external_id: p.externalId,
-      posted_at: p.postedAt, text: p.text, media_type: p.mediaType, permalink: p.permalink,
+      posted_at: p.postedAt, text: p.text, media_type: p.mediaType, permalink: p.permalink, content_type: p.contentType ?? "post",
     })), { onConflict: "account_id,external_id" }).select("id,external_id"), "投稿の保存") as { id: string; external_id: string }[];
     const idOf = new Map(rows.map((r) => [r.external_id, r.id]));
     check(await admin.from("sns_post_metrics").upsert(batch.filter((p) => idOf.has(p.externalId)).map((p) => ({
-      post_id: idOf.get(p.externalId), client_id: clientId, fetched_date: today, ...p.metrics,
+      post_id: idOf.get(p.externalId), client_id: clientId, fetched_date: today, ...p.metrics, follower_views: p.followerViews ?? null,
     })), { onConflict: "post_id,fetched_date" }), "指標の保存");
     saved += rows.length;
   }
@@ -289,7 +299,8 @@ export async function saveCollected(admin: Db, clientId: string, result: Collect
   if (opts.reconcileSince) {
     const keep = new Set(result.posts.map((p) => p.externalId));
     const existing = await selectAll<{ id: string; external_id: string }>((a, b) => admin.from("sns_posts").select("id,external_id")
-      .eq("account_id", acc.id).gte("posted_at", opts.reconcileSince!).order("id").range(a, b), "投稿の照合");
+      // ストーリーズは24時間で一覧から消えるため、削除の同期の対象外
+      .eq("account_id", acc.id).eq("content_type", "post").gte("posted_at", opts.reconcileSince!).order("id").range(a, b), "投稿の照合");
     const gone = existing.filter((r) => !keep.has(r.external_id)).map((r) => r.id);
     for (const ids of chunks(gone, 100)) {
       check(await admin.from("sns_posts").delete().in("id", ids), "削除された投稿の同期");

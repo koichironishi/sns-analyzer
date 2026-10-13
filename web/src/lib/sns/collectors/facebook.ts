@@ -66,6 +66,7 @@ export class FacebookCollector implements Collector {
       if (overDeadline(opts)) { warnings.push(DEADLINE_WARNING); break; }
       const kind = mediaType(p);
       const ins = await this.insights.fetch(str(p.id), kind);
+      const followerViews = await this.followerViews(str(p.id));
       posts.push({
         externalId: str(p.id), postedAt, text: str(p.message), mediaType: kind, permalink: str(p.permalink_url) || null,
         metrics: metrics({
@@ -73,10 +74,27 @@ export class FacebookCollector implements Collector {
           likes: limited ? (ins.post_reactions_by_type_total ?? 0) : summaryCount(p.reactions), comments: summaryCount(p.comments),
           shares: num(((p.shares ?? {}) as { count?: unknown }).count) ?? 0,
         }),
+        followerViews,
       });
       if (posts.length >= opts.maxPosts) break;
     }
     return { account, posts, warnings: [...warnings, ...this.insights.warnings] };
+  }
+
+  private followerViewsUnsupported = false;
+  /** フォロワーによる閲覧数（post_media_view をフォロワーかどうかで分けた値）。取得できなければ null */
+  private async followerViews(postId: string): Promise<number | null> {
+    if (this.followerViewsUnsupported) return null;
+    try {
+      const r = await this.http.get<{ data?: { values?: { value?: unknown; is_from_followers?: unknown }[] }[] }>(
+        `${postId}/insights`, { metric: "post_media_view", breakdown: "is_from_followers" });
+      const v = r.data?.[0]?.values?.find((x) => String(x.is_from_followers) === "1");
+      return v ? num(v.value) ?? 0 : null;
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 400) throw e;
+      this.followerViewsUnsupported = true; // 対応していなければ以後は問い合わせない
+      return null;
+    }
   }
 
   /** 他社ページのデータは「Page Public Content Access」の審査が必要。未通過ならエラーになる */

@@ -2,12 +2,13 @@ import Link from "next/link";
 import type { Report } from "@/lib/report";
 import { Chip } from "./report-ui";
 import { fmtNum, slash, truncate } from "@/lib/format";
-import { MEDIA_LABELS, toLocal, type Post } from "@/lib/sns/models";
+import { CONTENT_LABELS, MEDIA_LABELS, toLocal, type Post } from "@/lib/sns/models";
 
 const SORTS = {
   date: { label: "投稿日", value: (p: Post) => p.postedAt },
   reach: { label: "アクセス数", value: (p: Post) => p.metrics.reach },
   views: { label: "インプレッション数", value: (p: Post) => p.metrics.views },
+  followers: { label: "フォロワーの閲覧数", value: (p: Post) => p.followerViews ?? null },
   clicks: { label: "クリック数", value: (p: Post) => p.metrics.clicks },
 } as const;
 type SortKey = keyof typeof SORTS;
@@ -17,13 +18,13 @@ const titleOf = (text: string) => truncate(text.split("\n").map((l) => l.trim())
 
 type SP = Record<string, string | string[] | undefined>;
 
-/** 投稿一覧（投稿日・タイトル・種類・アクセス数・インプレッション数・クリック数）。見出しのリンクで並べ替える */
+/** 投稿一覧（投稿日・タイトル・コンテンツ・種類・アクセス数・インプレッション数・フォロワーの閲覧数・クリック数）。見出しのリンクで並べ替える */
 export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; anchor: string }) {
   const { start, end } = r.analysis.period;
   const sort: SortKey = typeof sp.sort === "string" && sp.sort in SORTS ? (sp.sort as SortKey) : "date";
   const value = SORTS[sort].value;
   // 期間内の投稿を、選んだ列の大きい順（新しい順）に並べる。値がないものは最後
-  const posts = r.data.ownPosts
+  const posts = [...r.data.ownPosts, ...r.data.ownStories]
     .map((p) => ({ p, date: toLocal(p.postedAt) }))
     .filter((x) => x.date.date >= start && x.date.date <= end)
     .sort((a, b) => {
@@ -53,7 +54,7 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
 
   return (
     <>
-        <p className="sub">{posts.length}件。見出しを押すと並べ替えられます。アクセス数＝投稿を見たアカウント数（リーチ）、インプレッション数＝表示された回数。「—」はそのSNSでは取得できない数値です。</p>
+        <p className="sub">{posts.length}件。見出しを押すと並べ替えられます。アクセス数＝投稿を見たアカウント数（リーチ）、インプレッション数＝表示された回数、フォロワーの閲覧数＝そのうちフォロワーによる表示（Facebook のみ）。ストーリーズは公開中の24時間に収集できたものを表示します（分析の集計には含めません）。「—」はそのSNSでは取得できない数値です。</p>
         {posts.length === 0 ? (
           <div className="card empty"><p>この期間の投稿はありません。</p></div>
         ) : (
@@ -63,8 +64,8 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
               <thead><tr>
                 {th("date")}
                 {showSns && <th scope="col">SNS</th>}
-                <th scope="col">タイトル</th><th scope="col">投稿の種類</th>
-                {th("reach", true)}{th("views", true)}{th("clicks", true)}
+                <th scope="col">タイトル</th><th scope="col">コンテンツ</th><th scope="col">投稿の種類</th>
+                {th("reach", true)}{th("views", true)}{th("followers", true)}{th("clicks", true)}
               </tr></thead>
               <tbody>
                 {posts.map(({ p, date }) => {
@@ -76,9 +77,11 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
                       <td className="post-text">{p.permalink
                         ? <a href={p.permalink} target="_blank" rel="noopener noreferrer">{title}<span className="sr-only">（新しいタブで開きます）</span></a>
                         : title}</td>
+                      <td className="nowrap"><span className={`tag${p.contentType === "story" ? " story" : ""}`}>{CONTENT_LABELS[p.contentType ?? "post"]}</span></td>
                       <td className="nowrap">{MEDIA_LABELS[p.mediaType] ?? p.mediaType}</td>
                       <td className="num">{fmtNum(p.metrics.reach)}</td>
                       <td className="num">{fmtNum(p.metrics.views)}</td>
+                      <td className="num">{fmtNum(p.followerViews)}</td>
                       <td className="num">{fmtNum(p.metrics.clicks)}</td>
                     </tr>
                   );

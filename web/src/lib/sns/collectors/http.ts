@@ -2,7 +2,7 @@
  * API クライアントの共通部品（Python 版 collectors/base.py の移植）。
  * エラーメッセージには URL を含めない（アクセストークンがクエリに入るため）。
  */
-import { emptyMetrics, type MediaType, type Metrics, type Platform } from "../models.ts";
+import { emptyMetrics, type ContentType, type MediaType, type Metrics, type Platform } from "../models.ts";
 
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 
@@ -260,6 +260,10 @@ export type CollectedPost = {
   mediaType: MediaType;
   permalink: string | null;
   metrics: Metrics;
+  /** 省略時は通常の投稿 */
+  contentType?: ContentType;
+  /** フォロワーによる閲覧数（取得できるSNSのみ） */
+  followerViews?: number | null;
 };
 
 export type CollectResult = { account: AccountSnapshot; posts: CollectedPost[]; warnings: string[] };
