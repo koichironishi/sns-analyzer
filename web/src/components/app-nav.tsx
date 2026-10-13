@@ -2,14 +2,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function AppNav({ items }: { items: { href: string; label: string }[] }) {
+/** 全体のメニュー（左メニューの下部）。今いる画面に aria-current を付ける */
+export function AppNav({ items, className = "drawer-nav", label = "全体のメニュー" }: {
+  items: { href: string; label: string }[]; className?: string; label?: string;
+}) {
   const path = usePathname();
   return (
-    <nav className="app-nav" aria-label="メイン">
-      {items.map((it) => {
-        const current = it.href === "/" ? path === "/" || path.startsWith("/clients") : path === it.href;
-        return <Link key={it.href} href={it.href} aria-current={current ? "page" : undefined}>{it.label}</Link>;
-      })}
+    <nav className={className} aria-label={label}>
+      {items.map((it) => (
+        <Link key={it.href} href={it.href} aria-current={path === it.href ? "page" : undefined}>{it.label}</Link>
+      ))}
     </nav>
   );
 }

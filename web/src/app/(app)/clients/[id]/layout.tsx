@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { UUID_RE, requireClientAccess } from "@/lib/auth";
 import { SideNav } from "@/components/side-nav";
 import { PrintButton } from "@/components/print-button";
+import { DrawerFoot, DrawerHead } from "@/components/drawer-parts";
 
 /** タブを並べても区別できるよう、ページ名にクライアント名を添える */
 export async function generateMetadata({ params }: LayoutProps<"/clients/[id]">): Promise<Metadata> {
@@ -32,6 +33,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   return (
     <div className="shell">
       <aside className="side no-print" aria-label="レポートの目次">
+        <DrawerHead />
         <div className="side-head">
           <p className="eyebrow">SNS分析レポート</p>
           <p className="side-title">{name}</p>
@@ -40,6 +42,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
           <SideNav base={`/clients/${id}`} items={items} />
         </Suspense>
         <div className="side-actions"><PrintButton /></div>
+        <DrawerFoot v={v} />
       </aside>
       <main className="content" id="main" tabIndex={-1}>{children}</main>
     </div>
