@@ -55,6 +55,15 @@
         "design/rhythmos-ui"
       ],
       "port": 3200
+    },
+    {
+      "name": "meo-web-demo",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd '/Users/koichiro/Documents/Claude Code/MEO/web' && NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev -- --port 3300"
+      ],
+      "port": 3300
     }
   ]
 }
