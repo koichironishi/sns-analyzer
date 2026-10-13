@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Viewer } from "@/lib/auth";
 import { PRODUCTS } from "@/lib/products";
 import { MenuBackdrop, MenuButton } from "./mobile-menu";
-import { DrawerFoot, DrawerHead } from "./drawer-parts";
+import { DrawerHead, DrawerNav, DrawerUser } from "./drawer-parts";
 
 /** 上バー・左メニュー（全体）・フッターの外枠。(app) のレイアウトとアカウント設定で共通 */
 export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNode }) {
@@ -29,7 +29,7 @@ export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNod
         スマホではどちらも ☰ で開くドロワーになる。
       */}
       <div className="frame">
-        <aside className="app-drawer no-print" aria-label="メニュー"><DrawerHead /><DrawerFoot v={v} /></aside>
+        <aside className="app-drawer no-print" aria-label="メニュー"><DrawerHead /><DrawerNav v={v} /><DrawerUser v={v} /></aside>
         <div className="frame-main">
           {children}
           <footer className="footer no-print">

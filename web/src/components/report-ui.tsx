@@ -24,7 +24,8 @@ export function Delta({ value, label = "" }: { value: number | null | undefined;
   );
 }
 
-const KIND = { good: ["✓", "好調"], warn: ["!", "要注意"], info: ["i", "示唆"] } as const;
+// 状態の言葉は MEO とそろえる（要対応・良好）。示唆は「ヒント」
+const KIND = { good: ["✓", "良好"], warn: ["!", "要対応"], info: ["i", "ヒント"] } as const;
 const ORDER = { warn: 0, good: 1, info: 2 } as const;
 
 function InsightItem({ i }: { i: Insight }) {
@@ -37,7 +38,7 @@ function InsightItem({ i }: { i: Insight }) {
   );
 }
 
-/** 自動コメント。注意 → 好調 → 示唆 の順に並べ、先頭だけ見せる */
+/** 自動コメント。要対応 → 良好 → ヒント の順に並べ、先頭だけ見せる */
 export function Insights({ items, visible = 4 }: { items: Insight[]; visible?: number }) {
   if (!items.length) return <p className="muted">データが不足しています。</p>;
   const sorted = [...items].sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
@@ -64,11 +65,12 @@ export function Bar({ value, max, color, label }: { value: number; max: number; 
   );
 }
 
-export function PageHead({ eyebrow, title, lead, children }: { eyebrow: string; title: string; lead?: string; children?: React.ReactNode }) {
+/** ページの見出し。クライアントの画面では見出し（h1）は共通の ClientHead が出すので、title を省いて説明だけにする */
+export function PageHead({ eyebrow, title, lead, children }: { eyebrow?: string; title?: string; lead?: string; children?: React.ReactNode }) {
   return (
     <header className="page-head">
-      <p className="eyebrow">{eyebrow}</p>
-      <h1>{title}</h1>
+      {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+      {title && <h1>{title}</h1>}
       {lead && <p className="lead">{lead}</p>}
       {children}
     </header>

@@ -10,19 +10,23 @@ import { PLATFORM_LABELS } from "@/lib/sns/models";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
-export async function ReportPage({ report, title, lead, children, needsData = true, platformSwitch = true }: {
-  report: Report; title: string; lead: string; children: React.ReactNode; needsData?: boolean;
+export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true }: {
+  report: Report;
+  /** 画面の名前（見出しはレイアウトの ClientHead が出すため、ここでは表示しない） */
+  title?: string;
+  lead: string; children: React.ReactNode; needsData?: boolean;
   /** SNSごとの切り替えを出すか（AI分析など、SNSで絞り込まないページは false） */
   platformSwitch?: boolean;
 }) {
   const { start, end, days } = report.analysis.period;
   const sns = platformSwitch ? report.period.sns : null;
-  const eyebrow = `${report.client.name}${sns ? ` ・ ${PLATFORM_LABELS[sns]}` : ""} ・ ${slash(start)}〜${slash(end)}（${days}日間）`;
+  const eyebrow = `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
   return (
     <>
-      <PageHead eyebrow={eyebrow} title={title} lead={lead}>
+      {/* 見出し（クライアント名 / 画面名）はレイアウトの ClientHead が出す。title は画面の名前としてだけ受け取る */}
+      <PageHead eyebrow={eyebrow} lead={lead}>
         <div className="page-period no-print">
           <Suspense><PeriodForm today={todayIn()} /></Suspense>
           {platformSwitch && report.platforms.length > 1 && <Suspense><PlatformSwitch platforms={report.platforms} current={sns} /></Suspense>}

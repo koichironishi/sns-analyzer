@@ -6,6 +6,13 @@ import { logout } from "@/app/login/actions";
 import { MenuClose } from "./mobile-menu";
 import { AppNav } from "./app-nav";
 
+/*
+ * 左メニューの部品（MEO と同じ並び）
+ *   上：全体のメニュー（DrawerNav）
+ *   中：選択中のクライアント（クライアントの画面のときだけ。レイアウト側で入れる）
+ *   下：製品の切り替え（スマホのみ）・名前（アカウント設定へ）・ログアウト（DrawerUser）
+ */
+
 /** ドロワーの上部（スマホのみ）：ロゴと閉じるボタン */
 export function DrawerHead() {
   return (
@@ -16,12 +23,20 @@ export function DrawerHead() {
   );
 }
 
-/** 左メニューの下部：全体のメニュー・アカウント・ログアウト（製品の切り替えはスマホのみ） */
-export function DrawerFoot({ v }: { v: Viewer }) {
+/** 全体のメニュー */
+export function DrawerNav({ v }: { v: Viewer }) {
   return (
-    <div className="drawer-foot">
+    <div className="drawer-section">
       <p className="drawer-label">メニュー</p>
       <AppNav items={appNavItems(v)} />
+    </div>
+  );
+}
+
+/** 左メニューの一番下：製品の切り替え（スマホのみ）・名前・ログアウト */
+export function DrawerUser({ v }: { v: Viewer }) {
+  return (
+    <div className="drawer-foot">
       {v.kind === "staff" && (
         <div className="drawer-products">
           <p className="drawer-label">製品</p>

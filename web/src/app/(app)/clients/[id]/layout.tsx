@@ -4,8 +4,8 @@ import { clientName } from "@/lib/report";
 import { notFound } from "next/navigation";
 import { UUID_RE, requireClientAccess } from "@/lib/auth";
 import { SideNav } from "@/components/side-nav";
-import { PrintButton } from "@/components/print-button";
-import { DrawerFoot, DrawerHead } from "@/components/drawer-parts";
+import { ClientHead } from "@/components/client-head";
+import { DrawerHead, DrawerNav, DrawerUser } from "@/components/drawer-parts";
 
 /** タブを並べても区別できるよう、ページ名にクライアント名を添える */
 export async function generateMetadata({ params }: LayoutProps<"/clients/[id]">): Promise<Metadata> {
@@ -19,31 +19,28 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   const v = await requireClientAccess(id);
   const name = await clientName(id);
   if (!name) notFound();
-  const items = [
-    { href: "", label: "ダッシュボード" },
-    { href: "/publish", label: "投稿", keepQuery: false },
-    { href: "/ai", label: "AI分析" },
-    { href: "/sns", label: "比較・分析", match: ["/timing"] },
-    { href: "/competitors", label: "競合比較" },
-    { href: "/content", label: "形式・タグ" },
-    { href: "/downloads", label: "ダウンロード" },
-    ...(v.kind === "staff" ? [{ href: "/settings", label: "設定・連携", keepQuery: false }] : []),
-  ];
+  // 左メニュー：全体のメニュー／選択中のクライアント（設定・連携）／名前とログアウト（MEO と同じ並び）
+  const clientItems = v.kind === "staff" ? [{ href: "/settings", label: "設定・連携", keepQuery: false, match: ["/settings/meta-pages"] }] : [];
   return (
     <div className="shell">
-      <aside className="side no-print" aria-label="レポートの目次">
+      <aside className="side no-print" aria-label="メニュー">
         <DrawerHead />
-        <div className="side-head">
-          <p className="eyebrow">SNS分析レポート</p>
+        <DrawerNav v={v} />
+        <div className="drawer-section">
+          <p className="drawer-label">選択中のクライアント</p>
           <p className="side-title">{name}</p>
+          {clientItems.length > 0 && (
+            <Suspense>
+              <SideNav base={`/clients/${id}`} items={clientItems} />
+            </Suspense>
+          )}
         </div>
-        <Suspense>
-          <SideNav base={`/clients/${id}`} items={items} />
-        </Suspense>
-        <div className="side-actions"><PrintButton /></div>
-        <DrawerFoot v={v} />
+        <DrawerUser v={v} />
       </aside>
-      <main className="content" id="main" tabIndex={-1}>{children}</main>
+      <main className="content" id="main" tabIndex={-1}>
+        <Suspense><ClientHead clientId={id} clientName={name} /></Suspense>
+        {children}
+      </main>
     </div>
   );
 }

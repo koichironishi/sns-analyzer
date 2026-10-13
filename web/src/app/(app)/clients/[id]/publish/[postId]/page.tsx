@@ -17,13 +17,13 @@ function toLocal(iso: string | null): string | null {
 export default async function EditPostPage({ params }: PageProps<"/clients/[id]/publish/[postId]">) {
   const { id, postId } = await params;
   if (!UUID_RE.test(postId)) notFound();
-  const { admin, client, connections, needsApproval } = await publishContext(id);
+  const { admin, connections, needsApproval } = await publishContext(id);
   const post = await getScheduledPost(admin, postId);
   if (!post || post.client_id !== id) notFound();
   if (!["draft", "pending", "rejected", "scheduled", "canceled"].includes(post.status)) notFound();
   return (
     <>
-      <PageHead eyebrow={`${client.name} ・ 投稿`} title="投稿の編集" lead="投稿済み・処理中の投稿は編集できません。" />
+      <PageHead lead="投稿済み・処理中の投稿は編集できません。" />
       {post.status === "rejected" && post.review_note && (
         <div className="msg error" role="alert">差し戻されました（{post.reviewed_by_name ?? "担当者"}）：{post.review_note}</div>
       )}

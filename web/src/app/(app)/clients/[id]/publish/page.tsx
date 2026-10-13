@@ -65,7 +65,7 @@ function PostCard({ post, clientId, isStaff }: { post: ScheduledPost; clientId: 
 export default async function PublishPage({ params, searchParams }: PageProps<"/clients/[id]/publish">) {
   const { id } = await params;
   const sp = await searchParams;
-  const { v, admin, client, connections, needsApproval } = await publishContext(id);
+  const { v, admin, connections, needsApproval } = await publishContext(id);
   const isStaff = v.kind === "staff";
   const posts = await listScheduledPosts(admin, id);
   const ok = typeof sp.ok === "string" ? OK[sp.ok] : undefined;
@@ -76,7 +76,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
   const canPost = connections.some((c) => c.canPublish);
   return (
     <>
-      <PageHead eyebrow={client.name} title="投稿" lead="Instagram・Facebook・Threads・X への投稿を作成し、今すぐ投稿または予約できます。" />
+      <PageHead lead="Instagram・Facebook・Threads・X への投稿を作成し、今すぐ投稿または予約できます。" />
       {ok && <Flash kind={ok[0]}>{ok[1]}</Flash>}
       <div className="row" style={{ marginBottom: 16 }}>
         {canPost ? <Link className="btn primary" href={`/clients/${id}/publish/new`}>新しい投稿を作成</Link>

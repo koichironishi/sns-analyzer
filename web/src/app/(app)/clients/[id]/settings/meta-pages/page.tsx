@@ -25,7 +25,7 @@ export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]
   if (!pages) redirect(`/clients/${id}/settings?e=exchange&r=listpages#connections`);
   return (
     <>
-      <PageHead eyebrow="SNS連携" title="連携するページを選んでください" lead="選んだ Facebook ページと、そのページに紐づく Instagram アカウントを連携します。" />
+      <PageHead lead="選んだ Facebook ページと、そのページに紐づく Instagram アカウントを連携します。" />
       <form action={selectMetaPage} className="card">
         <input type="hidden" name="client_id" value={id} />
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>

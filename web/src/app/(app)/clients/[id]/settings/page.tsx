@@ -76,7 +76,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps<"
 
   return (
     <>
-      <PageHead eyebrow={client.name} title="設定・連携" lead="SNSの連携、競合の登録、AI分析の同意、クライアント情報と利用者、データの取り込みと削除を管理します（スタッフのみ）。" />
+      <PageHead lead="SNSの連携、競合の登録、AI分析の同意、クライアント情報と利用者、データの取り込みと削除を管理します（スタッフのみ）。" />
 
       <section id="connections" aria-labelledby="h-conn">
         <h2 id="h-conn">SNS連携</h2>

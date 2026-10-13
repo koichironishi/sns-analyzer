@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getViewer, UUID_RE } from "@/lib/auth";
 import { clientIp, json, sameOrigin } from "@/lib/http";
-import { DAY_OPTIONS, parsePeriod } from "@/lib/report";
+import { MAX_DAYS, parsePeriod } from "@/lib/report";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { AIError, runAiAnalysis } from "@/lib/sns/ai";
@@ -14,7 +14,7 @@ import { audit, getAppSettings, getBrandContext, getConsentRow, loadReportData, 
 export const maxDuration = 300;
 
 const Body = z.object({
-  days: z.number().int().refine((d) => (DAY_OPTIONS as readonly number[]).includes(d)),
+  days: z.number().int().min(1).max(MAX_DAYS),
   end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   question: z.string().max(500).default(""),
 });

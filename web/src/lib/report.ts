@@ -9,7 +9,8 @@ import { compare, type CompareResult } from "@/lib/sns/compare";
 import { addDays, isPlatform, todayIn, type Platform } from "@/lib/sns/models";
 import { filterReportData, getClient, latestAiResult, loadReportData, reportPlatforms, type ReportData, type StoredAi } from "@/lib/sns/store";
 
-export const DAY_OPTIONS = [7, 14, 30, 60, 90] as const;
+/** 期間の日数の上限（今月・先月・日付指定で任意の日数を受け付ける。1年＋α） */
+export const MAX_DAYS = 400;
 /** sns：1つのSNSに絞り込む（null はすべて） */
 export type Period = { days: number; end: string; sns: Platform | null };
 
@@ -19,7 +20,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 export function parsePeriod(sp: SP): Period {
   const today = todayIn();
   const d = Number(one(sp.days));
-  const days = (DAY_OPTIONS as readonly number[]).includes(d) ? d : 30;
+  const days = Number.isInteger(d) && d >= 1 && d <= MAX_DAYS ? d : 30;
   const e = one(sp.end) ?? "";
   const end = /^\d{4}-\d{2}-\d{2}$/.test(e) && !Number.isNaN(Date.parse(e)) && e <= today && e >= addDays(today, -730) ? e : today;
   const s = one(sp.sns);
