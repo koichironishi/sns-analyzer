@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="rw-auth-box">
         <div className="rw-auth-brand">
           <span className="rw-auth-mark" aria-hidden="true">S</span>
-          <span><span className="rw-auth-name">SNS分析</span><span className="rw-auth-sub">Rhythmos Works</span></span>
+          <span><span className="rw-auth-name">SNS分析</span><span className="rw-auth-sub">Rhythmos</span></span>
         </div>
         <div className="rw-auth-card">
           <h1 className="rw-auth-title">ログイン</h1>
