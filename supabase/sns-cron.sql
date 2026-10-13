@@ -19,7 +19,7 @@ select cron.schedule(
   '10 19,20,21,22 * * *',   -- 日本時間 4:10〜7:10 に1時間おき（UTC 表記）
   $$
   select net.http_post(
-    url     := 'https://sns-analyzer.rhythmos-works.jp/api/cron/collect',
+    url     := 'https://sns.rhythmos-works.jp/api/cron/collect',
     headers := jsonb_build_object('Authorization', 'Bearer ' || 'REPLACE_WITH_CRON_SECRET', 'Content-Type', 'application/json'),
     body    := '{}'::jsonb,
     timeout_milliseconds := 300000
@@ -35,7 +35,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$
   select net.http_post(
-    url     := 'https://sns-analyzer.rhythmos-works.jp/api/cron/publish',
+    url     := 'https://sns.rhythmos-works.jp/api/cron/publish',
     headers := jsonb_build_object('Authorization', 'Bearer ' || 'REPLACE_WITH_CRON_SECRET', 'Content-Type', 'application/json'),
     body    := '{}'::jsonb,
     timeout_milliseconds := 300000
