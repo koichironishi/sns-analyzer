@@ -83,10 +83,13 @@ async function alertTokens(admin: Admin, name: Map<string, string>) {
   if (ok) for (const d of due) await markAlerted(admin, "token", d.key);
 }
 
-/** 月次レポートの送り忘れ：月の1日と5日に、先月分をまだ送っていないクライアントを知らせる */
+/** 月次レポートの送り忘れ：5日に、先月分をまだ送っていないクライアントを知らせる（1回目は月初の準備が終わったとき） */
 async function alertMonthly(admin: Admin, name: Map<string, string>) {
-  const plan = monthlyReminder(todayIn());
+  const today = todayIn();
+  const plan = monthlyReminder(today);
   if (!plan) return;
+  // 1回目の知らせは、月初の準備（AI分析）が終わったときに送る。準備が進まなかったときのために、3日からはこちらでも送る
+  if (plan.round === "first" && Number(today.slice(8, 10)) < 3) return;
   const key = `${plan.month}:${plan.round}`;
   if ((await alertedKeys(admin, "monthly", 40)).has(key)) return;
   // 対象は、SNS を連携しているクライアント

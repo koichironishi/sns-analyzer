@@ -1,5 +1,7 @@
 import "server-only";
 import { getReport, type Report } from "@/lib/report";
+import { createClient } from "@/lib/supabase/server";
+import type { StoredAi } from "@/lib/sns/store";
 import { addDays, todayIn, PLATFORM_LABELS } from "@/lib/sns/models";
 import { PRIORITY_LABELS, platformLabel } from "@/lib/sns/ai";
 import { fmtNum, fmtPct, fmtSigned, slash, truncate } from "@/lib/format";
@@ -36,9 +38,17 @@ export function monthRange(month: string): { start: string; end: string; days: n
   return { start, end, days, partial: end !== last };
 }
 
+/**
+ * 月次レポートのデータ。AI分析は「最新の1件」ではなく、この月を対象に実行したもの（期間の終わりがこの月の中）を載せる
+ * （月初に自動で実行したあと、別の期間で画面から実行しても、月次レポートの内容が変わらないように）
+ */
 export async function monthlyReport(clientId: string, month: string): Promise<Report> {
-  const { days, end } = monthRange(month);
-  return getReport(clientId, days, end);
+  const { start, end, days } = monthRange(month);
+  const r = await getReport(clientId, days, end);
+  const q = (await createClient()).from("sns_ai_results").select("id,period_end,days,result,model,created_at")
+    .eq("client_id", clientId).gte("period_end", start).lte("period_end", end).order("created_at", { ascending: false }).limit(1);
+  const { data } = await q.maybeSingle();
+  return { ...r, ai: (data as StoredAi | null) ?? null };
 }
 
 /** 主要な数字（画面とメールで同じものを出す） */

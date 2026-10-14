@@ -658,7 +658,7 @@ export async function latestAiResult(db: Db, clientId: string): Promise<StoredAi
     .order("created_at", { ascending: false }).limit(1).maybeSingle(), "AI分析結果の読み込み") as StoredAi | null;
 }
 
-export async function saveAiResult(admin: Db, clientId: string, periodEnd: string, days: number, result: AiResult, createdBy: string) {
+export async function saveAiResult(admin: Db, clientId: string, periodEnd: string, days: number, result: AiResult, createdBy: string | null) {
   check(await admin.from("sns_ai_results").upsert({
     client_id: clientId, period_end: periodEnd, days, result, model: result._meta.model, created_by: createdBy, created_at: new Date().toISOString(),
   }, { onConflict: "client_id,period_end,days" }), "AI分析結果の保存");

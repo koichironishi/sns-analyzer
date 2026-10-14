@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { analyze, bestTimes } from "../src/lib/sns/analysis.ts";
-import { monthlyReminder, tokenStage, tokenWindowDays } from "../src/lib/sns/alert-rules.ts";
+import { monthlyReminder, prepWindow, tokenStage, tokenWindowDays } from "../src/lib/sns/alert-rules.ts";
 import { checkConnection, isTokenError, metaExchangeCode, needsRefresh, threadsExchangeCode, xVerify } from "../src/lib/sns/connect.ts";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { aiMarkdown, crc32, downloads, toCsv, zip, type DownloadName } from "../src/lib/sns/export.ts";
@@ -230,4 +230,12 @@ test("知らせのメール：期限の段階と、月次レポートの送り�
   assert.deepEqual(monthlyReminder("2026-11-05"), { month: "2026-10", round: "second" });
   assert.deepEqual(monthlyReminder("2027-01-03"), { month: "2026-12", round: "first" });
   assert.equal(monthlyReminder("2026-10-14"), null);
+});
+
+test("月初の準備：1日は朝の収集のあと（8時から）、5日まで先月分を進める", () => {
+  assert.equal(prepWindow("2026-11-01", 7), null);
+  assert.deepEqual(prepWindow("2026-11-01", 8), { month: "2026-10" });
+  assert.deepEqual(prepWindow("2026-11-03", 2), { month: "2026-10" });
+  assert.deepEqual(prepWindow("2027-01-05", 23), { month: "2026-12" });
+  assert.equal(prepWindow("2026-11-06", 9), null);
 });

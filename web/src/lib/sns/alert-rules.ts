@@ -35,3 +35,19 @@ export function monthlyReminder(today: string): { month: string; round: "first" 
   const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
   return { month: prev, round: day >= 5 ? "second" : "first" };
 }
+
+/**
+ * 月初の準備（先月を対象にしたAI分析の自動実行）をする時間か。
+ * 1日の朝の収集（日本時間 4〜7時）で先月分のデータがそろってから始め、5日まで続きを進める
+ */
+export function prepWindow(today: string, hour: number): { month: string } | null {
+  const day = Number(today.slice(8, 10));
+  if (day > 5 || (day === 1 && hour < 8)) return null;
+  const [y, m] = today.split("-").map(Number);
+  return { month: new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7) };
+}
+
+/** 自動のAI分析を同じクライアントで試す回数の上限（失敗が続くときに費用をかけ続けないため） */
+export const PREP_MAX_TRIES = 2;
+/** 実行中とみなす時間（分）。この間は同じクライアントを重ねて始めない */
+export const PREP_RUNNING_MIN = 15;
