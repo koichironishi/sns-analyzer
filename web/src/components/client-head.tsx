@@ -12,8 +12,6 @@ import { PrintButton } from "./print-button";
 const TABS = [
   { seg: "", label: "ダッシュボード" },
   { seg: "insights", label: "インサイト" },
-  { seg: "publish", label: "投稿", keepQuery: false },
-  { seg: "ai", label: "AI分析" },
   { seg: "sns", label: "比較・分析", also: ["timing"] },
   { seg: "competitors", label: "競合比較" },
   { seg: "content", label: "形式・タグ" },
@@ -24,6 +22,9 @@ const TABS = [
 function pageLabel(rest: string): string {
   if (rest === "publish/new") return "新しい投稿";
   if (rest.startsWith("publish/")) return "投稿の編集";
+  // 左メニューに置いた作業の画面（レポートのタブには出さない）
+  if (rest === "publish") return "投稿";
+  if (rest === "ai") return "AI分析";
   if (rest === "settings/meta-pages") return "連携するページの選択";
   if (rest === "settings/connections") return "SNS連携";
   if (rest === "settings/users") return "利用者管理";
@@ -40,10 +41,10 @@ export function ClientHead({ clientId, clientName }: { clientId: string; clientN
   const rest = path.startsWith(base) ? path.slice(base.length).replace(/^\//, "") : "";
   const seg = rest.split("/")[0];
   const page = pageLabel(rest);
-  // 設定の画面ではタブを出さない（MEO のクライアント情報と同じ）
-  const showTabs = !rest.startsWith("settings");
-  // レポートの画面（期間を選ぶ画面）だけ印刷ボタンを出す
-  const printable = showTabs && seg !== "publish";
+  // 設定の画面と、左メニューに置いた作業の画面（投稿・AI分析）ではタブを出さない
+  const showTabs = !rest.startsWith("settings") && seg !== "publish" && seg !== "ai";
+  // レポートの画面（期間を選ぶ画面）と AI分析だけ印刷ボタンを出す
+  const printable = !rest.startsWith("settings") && seg !== "publish";
 
   const q = new URLSearchParams();
   for (const k of ["days", "end", "sns"]) {

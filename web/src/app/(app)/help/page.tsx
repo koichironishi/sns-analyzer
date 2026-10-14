@@ -44,7 +44,7 @@ export default async function HelpPage() {
 
       <section id="screens" aria-labelledby="h-screens">
         <h2 id="h-screens">画面の見方</h2>
-        <p className="sub">画面の上のタブで切り替えます。</p>
+        <p className="sub">レポートは画面の上のタブで、「投稿」と「AI分析」は左のメニューで切り替えます。</p>
         <div className="card flush">
           <Row title="ダッシュボード" summary="期間全体の結果と、まず押さえるべきポイント">
             <p>エンゲージメント・表示回数・投稿数・フォロワーを前の期間と比べます。「この期間のポイント」には、要対応（下がっている点）・良好（伸びている点）・ヒント（試す価値のある点）を自動でまとめます。下の方に、すべての投稿の一覧があります。見出しを押すと、パフォーマンス指数（反応の良さ）・エンゲージメント・閲覧数などで並べ替えられ、もう一度押すと逆順になります。</p>
