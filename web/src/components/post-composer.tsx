@@ -110,6 +110,12 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
     const bad = images.filter((i) => !i.path);
     if (bad.length) return setErrors(["アップロードに失敗した画像を削除してから、もう一度お試しください"]);
     setErrors([]);
+    // 予約済み・承認待ちの投稿の日時を変えるときは、変更前と変更後を見せて確かめる（誤って当日に変えたまま予約される事故を防ぐ。2026-10-14）
+    const fmt = (v: string) => v.replace("T", " ").replace(/-/g, "/");
+    if (initial?.scheduledLocal && mode === "schedule" && when !== initial.scheduledLocal
+      && !window.confirm(`予約日時を ${fmt(initial.scheduledLocal)} から ${fmt(when)} に変更します。よろしいですか？`)) return;
+    if (initial?.scheduledLocal && mode === "now"
+      && !window.confirm(`この投稿は ${fmt(initial.scheduledLocal)} に予約されていました。今すぐ投稿します。よろしいですか？`)) return;
     setBusy("保存しています…");
     const r = await savePost({
       clientId, id: initial?.id, text, platformTexts: perText, platforms, mediaPaths: images.map((i) => i.path!), mode, scheduledLocal: when,
