@@ -4,6 +4,7 @@ import { Bar } from "@/components/report-ui";
 import { EmptyState } from "@/components/empty-state";
 import { AGE_ORDER, GENDER_LABELS, audienceView, countryName, insightsBase, topShare } from "@/lib/insights-view";
 import { fmtNum, fmtPct, slash } from "@/lib/format";
+import { PLATFORM_LABELS } from "@/lib/sns/models";
 
 export const metadata: Metadata = { title: "インサイト" };
 
@@ -30,10 +31,12 @@ export default async function InsightsAudiencePage({ params, searchParams }: Pag
     : "フォロワーが100人未満のアカウントは、Meta が属性を提供しないため表示されません。";
 
   return (
-    <InsightsShell base={base} lead="フォロワーの性別・年齢・地域です（期間に関係なく、最新の集計を表示します）。">
+    <InsightsShell base={base} period={false}
+      eyebrow={`${base.platform ? `${PLATFORM_LABELS[base.platform]} ・ ` : ""}${a ? `${slash(a.date)} 時点` : "集計前"}`}
+      lead="フォロワー全体の性別・年齢・地域です。Meta が通算の値として提供するため、期間では変わりません（毎日の収集で最新の集計に更新します）。">
       {!a ? <EmptyState title="フォロワーの属性はまだありません" body={why} /> : (
         <>
-          <p className="note-top">{slash(a.date)} 時点の集計。{why}</p>
+          <p className="note-top">{why}</p>
           {all > 0 && (
             <section aria-labelledby="h-ga">
               <h2 id="h-ga">性別・年齢</h2>

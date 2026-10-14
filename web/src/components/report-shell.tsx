@@ -14,7 +14,7 @@ import { listConnections } from "@/lib/sns/store";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
-export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true, sns: snsOverride, switchPlatforms, empty: emptyOverride }: {
+export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true, sns: snsOverride, switchPlatforms, empty: emptyOverride, period = true, eyebrow: eyebrowOverride }: {
   report: Report;
   /** 画面の名前（見出しはレイアウトの ClientHead が出すため、ここでは表示しない） */
   title?: string;
@@ -26,11 +26,15 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
   switchPlatforms?: Platform[];
   /** データがないときの案内を差し替える */
   empty?: React.ReactNode;
+  /** 期間の選択を出すか（期間に関係しない画面＝オーディエンスなどは false） */
+  period?: boolean;
+  /** 見出しの上の小さな文字（既定は「SNS ・ 期間」） */
+  eyebrow?: string;
 }) {
   const { start, end, days } = report.analysis.period;
   const sns = platformSwitch ? (snsOverride !== undefined ? snsOverride : report.period.sns) : null;
   const choices = switchPlatforms ?? report.platforms;
-  const eyebrow = `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
+  const eyebrow = eyebrowOverride ?? `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
   // 連携済みなのにデータがない＝まだ収集が終わっていない。その場で収集できるようにする（スタッフのみ）
@@ -40,7 +44,7 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
       {/* 見出し（クライアント名 / 画面名）はレイアウトの ClientHead が出す。title は画面の名前としてだけ受け取る */}
       <PageHead eyebrow={eyebrow} lead={lead}>
         <div className="page-period no-print">
-          <Suspense><PeriodForm today={todayIn()} /></Suspense>
+          {period && <Suspense><PeriodForm today={todayIn()} /></Suspense>}
           {platformSwitch && choices.length > (switchPlatforms ? 0 : 1) && (
             <Suspense><PlatformSwitch platforms={choices} current={sns} allowAll={!switchPlatforms} /></Suspense>
           )}
