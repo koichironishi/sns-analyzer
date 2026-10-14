@@ -5,7 +5,8 @@ import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@
 import { LIMITS, textLength } from "@/lib/sns/publish/rules";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 
-export type ComposerConnection = { platform: Platform; connected: boolean; canPublish: boolean; username: string | null };
+/** 投稿先の候補。1アカウント＝1件（同じSNSに複数ある）。未連携のSNSは key が null の1件で表す */
+export type ComposerConnection = { key: string | null; platform: Platform; connected: boolean; canPublish: boolean; username: string | null };
 type Img = { key: string; path: string | null; previewUrl: string; width: number; height: number; uploading: boolean; error?: string };
 
 const MAX_SIDE = 1440;
@@ -40,11 +41,12 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
   clientId: string;
   connections: ComposerConnection[];
   needsApproval?: boolean;
-  initial?: { id: string; text: string; platformTexts: Partial<Record<Platform, string>>; platforms: Platform[]; media: { path: string; url: string }[]; scheduledLocal: string | null };
+  initial?: { id: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null };
 }) {
   const router = useRouter();
-  const usable = (p: Platform) => connections.find((c) => c.platform === p);
-  const [platforms, setPlatforms] = useState<Platform[]>(initial?.platforms ?? connections.filter((c) => c.canPublish).map((c) => c.platform));
+  // 投稿先はアカウント単位（"instagram:<id>"）。新しい投稿では、投稿できるアカウントをすべて選んだ状態で始める
+  const [targets, setTargets] = useState<string[]>(initial?.targets ?? connections.filter((c) => c.canPublish && c.key).map((c) => c.key!));
+  const platforms: Platform[] = PLATFORMS.filter((p) => connections.some((c) => c.platform === p && c.key && targets.includes(c.key)));
   const [text, setText] = useState(initial?.text ?? "");
   const [perText, setPerText] = useState<Partial<Record<Platform, string>>>(initial?.platformTexts ?? {});
   const [images, setImages] = useState<Img[]>(initial?.media.map((m, i) => ({ key: `i${i}`, path: m.path, previewUrl: m.url, width: 0, height: 0, uploading: false })) ?? []);
@@ -118,7 +120,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
       && !window.confirm(`この投稿は ${fmt(initial.scheduledLocal)} に予約されていました。今すぐ投稿します。よろしいですか？`)) return;
     setBusy("保存しています…");
     const r = await savePost({
-      clientId, id: initial?.id, text, platformTexts: perText, platforms, mediaPaths: images.map((i) => i.path!), mode, scheduledLocal: when,
+      clientId, id: initial?.id, text, platformTexts: perText, targets, mediaPaths: images.map((i) => i.path!), mode, scheduledLocal: when,
     });
     if (!r.ok) { setBusy(null); return setErrors(r.errors); }
     if (r.pending) {
@@ -146,16 +148,17 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
 
       <fieldset className="card" style={{ margin: 0 }}>
         <legend>投稿先</legend>
+        <p className="hint" style={{ marginTop: 0 }}>同じSNSに複数のアカウントがあるときは、出したいアカウントをそれぞれ選びます。</p>
         <div className="checks">
-          {PLATFORMS.map((p) => {
-            const c = usable(p);
-            const disabled = !c?.connected || !c.canPublish;
-            const note = !c?.connected ? "未連携" : !c.canPublish ? "投稿の許可なし（再連携が必要）" : c.username ? `@${c.username}` : "";
+          {connections.map((c) => {
+            const disabled = !c.connected || !c.canPublish || !c.key;
+            const name = c.username ? `${c.platform === "facebook" ? "" : "@"}${c.username}` : "";
+            const note = !c.connected ? "未連携" : !c.canPublish ? "投稿の許可なし（再連携が必要）" : "";
             return (
-              <label key={p} className="check" style={{ opacity: disabled ? 0.7 : 1 }}>
-                <input type="checkbox" checked={platforms.includes(p)} disabled={disabled}
-                  onChange={(e) => setPlatforms((cur) => (e.target.checked ? [...cur, p] : cur.filter((x) => x !== p)))} />
-                {PLATFORM_LABELS[p]}<span className="small muted">{note && `（${note}）`}</span>
+              <label key={c.key ?? c.platform} className="check" style={{ opacity: disabled ? 0.7 : 1 }}>
+                <input type="checkbox" checked={Boolean(c.key && targets.includes(c.key))} disabled={disabled}
+                  onChange={(e) => setTargets((cur) => (e.target.checked ? [...cur, c.key!] : cur.filter((x) => x !== c.key)))} />
+                {PLATFORM_LABELS[c.platform]}{name && <span className="small">（{name}）</span>}<span className="small muted">{note && `（${note}）`}</span>
               </label>
             );
           })}

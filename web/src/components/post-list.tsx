@@ -48,7 +48,10 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
       if (b.v === null) return -1;
       return (a.v < b.v ? 1 : -1) * (asc ? -1 : 1);
     });
-  const showSns = !r.period.sns;
+  // 同じSNSに複数のアカウントがあるときは、どのアカウントの投稿かも出す（1つのアカウントに絞り込んでいるときは不要）
+  const multi = new Set(r.accounts.filter((a, _, all) => all.filter((b) => b.platform === a.platform).length > 1).map((a) => a.id));
+  const accountName = (id: string) => (multi.has(id) && !r.period.acct ? r.accounts.find((a) => a.id === id)?.name : undefined);
+  const showSns = !r.period.sns || (multi.size > 0 && !r.period.acct);
 
   const sortHref = (k: SortKey) => {
     const q = new URLSearchParams();
@@ -99,7 +102,7 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
                     <td className="nowrap">{slash(date.date)}<br /><span className="muted">{String(date.hour).padStart(2, "0")}:{String(date.minute).padStart(2, "0")}</span></td>
                     {/* SNS は列を分けずタイトルの上に置く（列が多く、表が横にはみ出すため） */}
                     <td className="post-text">
-                      {showSns && <div className="post-sns"><Chip platform={p.platform} /></div>}
+                      {showSns && <div className="post-sns"><Chip platform={p.platform} />{accountName(p.accountId) && <span className="muted">（{accountName(p.accountId)}）</span>}</div>}
                       {p.permalink
                         ? <a href={p.permalink} target="_blank" rel="noopener noreferrer">{title}<span className="sr-only">（新しいタブで開きます）</span></a>
                         : title}

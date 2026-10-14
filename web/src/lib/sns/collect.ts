@@ -13,15 +13,21 @@ import {
   updateConnection, type ConnectionSecret,
 } from "./store.ts";
 
-export type CollectLog = { clientId: string; platform: Platform; ok: boolean; message: string };
+export type CollectLog = { clientId: string; platform: Platform; externalId: string; ok: boolean; message: string };
 
 /** 1接続あたりに確保したい残り時間（ms）。これを切ったら次回へ回す */
 const MIN_TIME_PER_CONNECTION = 25_000;
 
-async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, deadline: number): Promise<CollectLog> {
+/**
+ * 1つの接続（アカウント）を収集する。
+ * withCompetitors：競合の取得はクライアント・SNSごとに1回でよいため、そのSNSの代表の接続だけ true にする
+ */
+async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, deadline: number, withCompetitors = true): Promise<CollectLog> {
   const settings = await getAppSettings(admin);
   const platform = conn.platform;
-  const label = PLATFORM_LABELS[platform];
+  const ext = conn.external_id;
+  // 同じSNSに複数のアカウントがあっても見分けられるよう、アカウント名を添える
+  const label = `${PLATFORM_LABELS[platform]}${conn.username ? `（${conn.username}）` : ""}`;
   let token = conn.access_token;
   const warnings: string[] = [];
 
@@ -30,7 +36,7 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
     try {
       const r = await threadsRefresh(token);
       token = r.accessToken;
-      await updateConnection(admin, conn.client_id, platform, { access_token: r.accessToken, token_expires_at: r.expiresAt });
+      await updateConnection(admin, conn.client_id, platform, ext, { access_token: r.accessToken, token_expires_at: r.expiresAt });
     } catch (e) {
       warnings.push(`トークンを延長できませんでした（${e instanceof Error ? e.message : "不明なエラー"}）`);
     }
@@ -43,7 +49,7 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
       if (!app) throw new Error("X_CLIENT_ID / X_CLIENT_SECRET が設定されていません");
       const t = await xRefresh(app, conn.refresh_token);
       token = t.accessToken;
-      await updateConnection(admin, conn.client_id, "x", { access_token: t.accessToken, refresh_token: t.refreshToken || conn.refresh_token, token_expires_at: t.expiresAt });
+      await updateConnection(admin, conn.client_id, "x", ext, { access_token: t.accessToken, refresh_token: t.refreshToken || conn.refresh_token, token_expires_at: t.expiresAt });
     } catch (e) {
       warnings.push(`X のトークンを延長できませんでした（${e instanceof Error ? e.message : "不明なエラー"}）`);
     }
@@ -59,26 +65,28 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
   let saved = 0;
   let removed = 0;
   let insightsSaved = 0;
+  let accountId = "";
   try {
     const own = await collector.collect(opts);
     // 取得が途中で打ち切られていなければ、SNS上で削除された投稿を同期して消す
     const complete = !own.warnings.some((w) => w.includes("次回")) && own.posts.length < opts.maxPosts;
     const r = await saveCollected(admin, conn.client_id, own, { reconcileSince: complete ? since : null });
+    accountId = r.accountId;
     saved += r.posts;
     removed += r.removed;
     warnings.push(...own.warnings);
     insightsSaved = await collectInsights(admin, collector, conn, r.accountId, deadline, warnings);
-    await updateConnection(admin, conn.client_id, platform, { status: "connected", last_error: null });
+    await updateConnection(admin, conn.client_id, platform, ext, { status: "connected", last_error: null });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "不明なエラー";
     const full = isTokenError(e) ? `${msg}（トークンが無効です。もう一度連携してください）` : msg;
-    await updateConnection(admin, conn.client_id, platform, { status: isTokenError(e) ? "error" : "connected", last_error: full.slice(0, 500) });
-    await setCollectState(admin, conn.client_id, platform, false, full.slice(0, 500), null);
-    return { clientId: conn.client_id, platform, ok: false, message: `${label}：${full}` };
+    await updateConnection(admin, conn.client_id, platform, ext, { status: isTokenError(e) ? "error" : "connected", last_error: full.slice(0, 500) });
+    await setCollectState(admin, conn.client_id, platform, ext, false, full.slice(0, 500), null);
+    return { clientId: conn.client_id, platform, externalId: ext, ok: false, message: `${label}：${full}` };
   }
 
   // 競合（自社の接続を使って公開データを取得）
-  const competitors = await listCompetitors(admin, conn.client_id);
+  const competitors = withCompetitors ? await listCompetitors(admin, conn.client_id) : [];
   for (const c of competitors) {
     const handle = cleanHandle(c.handles?.[platform] ?? "");
     if (!handle) continue;
@@ -96,7 +104,7 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
   // X：対象期間より前の保存済み投稿も少しずつ照会し、X上で削除・非公開化されたものを削除する（X の開発者ポリシー）
   if (collector instanceof XCollector && Date.now() < deadline - 10_000) {
     try {
-      const olds = await xPostsToVerify(admin, conn.client_id, since);
+      const olds = await xPostsToVerify(admin, accountId, since);
       if (olds.length) {
         const missing = await collector.missingIds(olds.map((o) => o.external_id));
         const ids = olds.filter((o) => missing.has(o.external_id)).map((o) => o.id);
@@ -111,8 +119,8 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
 
   const summary = `${label}：投稿 ${saved}件を保存${insightsSaved ? `・インサイト ${insightsSaved}件を保存` : ""}${removed ? `・SNS上で削除された ${removed}件を削除` : ""}`;
   const note = warnings.length ? `${summary}（注意：${warnings.join(" / ")}）` : summary;
-  await setCollectState(admin, conn.client_id, platform, true, warnings.length ? warnings.join(" / ").slice(0, 500) : null, saved);
-  return { clientId: conn.client_id, platform, ok: true, message: note };
+  await setCollectState(admin, conn.client_id, platform, ext, true, warnings.length ? warnings.join(" / ").slice(0, 500) : null, saved);
+  return { clientId: conn.client_id, platform, externalId: ext, ok: true, message: note };
 }
 
 /** インサイトをさかのぼって取る日数（初回はこの日数分。以後は直近の数日を取り直す） */
@@ -142,24 +150,41 @@ async function collectInsights(admin: SupabaseClient, collector: ReturnType<type
   }
 }
 
+/**
+ * クライアント・SNSごとの代表の接続（最初に連携したもの）。競合の取得はこの接続だけで行う
+ * （同じSNSの複数アカウントそれぞれで取ると、同じ競合を何度も取得して API の利用枠を無駄にするため）
+ */
+export function leadConnections(conns: { client_id: string; platform: string; external_id: string; connected_at: string }[]): Set<string> {
+  const first = new Map<string, { external_id: string; connected_at: string }>();
+  for (const c of conns) {
+    const k = `${c.client_id}:${c.platform}`;
+    const cur = first.get(k);
+    if (!cur || c.connected_at < cur.connected_at || (c.connected_at === cur.connected_at && c.external_id < cur.external_id)) first.set(k, c);
+  }
+  return new Set([...first.entries()].map(([k, c]) => `${k}:${c.external_id}`));
+}
+
 /** すべての接続を、前回の実行が古い順に締め切りまで処理する（cron 用） */
 export async function runScheduledCollection(admin: SupabaseClient, deadline: number): Promise<{ logs: CollectLog[]; remaining: number; purge: string | null }> {
   const settings = await getAppSettings(admin);
   const purge = await purgeExpired(admin, settings.retention_days);
   const conns = await getConnectionSecrets(admin);
-  const state = new Map((await listCollectState(admin)).map((s) => [`${s.client_id}:${s.platform}`, s.last_run_at ?? ""]));
+  // 収集状況はアカウントごと（同じSNSに複数のアカウントがあるため）
+  const key = (c: { client_id: string; platform: string; external_id: string }) => `${c.client_id}:${c.platform}:${c.external_id}`;
+  const state = new Map((await listCollectState(admin)).map((s) => [key(s), s.last_run_at ?? ""]));
+  const leads = leadConnections(conns);
   // 今日すでに成功しているものは後回し（1日1回以上は取り直さない）
-  conns.sort((a, b) => (state.get(`${a.client_id}:${a.platform}`) ?? "").localeCompare(state.get(`${b.client_id}:${b.platform}`) ?? ""));
+  conns.sort((a, b) => (state.get(key(a)) ?? "").localeCompare(state.get(key(b)) ?? ""));
   const today = todayIn();
   const todo = conns.filter((c) => {
-    const last = state.get(`${c.client_id}:${c.platform}`);
+    const last = state.get(key(c));
     return !last || toLocal(last).date !== today;
   });
   const logs: CollectLog[] = [];
   let i = 0;
   for (; i < todo.length; i++) {
     if (deadline - Date.now() < MIN_TIME_PER_CONNECTION) break;
-    logs.push(await collectConnection(admin, todo[i], deadline));
+    logs.push(await collectConnection(admin, todo[i], deadline, leads.has(key(todo[i]))));
   }
   return { logs, remaining: todo.length - i, purge };
 }
@@ -167,11 +192,12 @@ export async function runScheduledCollection(admin: SupabaseClient, deadline: nu
 /** 1クライアントのすべての接続を収集する（「今すぐ収集」用） */
 export async function collectClient(admin: SupabaseClient, clientId: string, deadline: number, platform?: Platform): Promise<{ logs: CollectLog[]; skipped: Platform[] }> {
   const conns = (await getConnectionSecrets(admin, clientId)).filter((c) => !platform || c.platform === platform);
+  const leads = leadConnections(conns);
   const logs: CollectLog[] = [];
   const skipped: Platform[] = [];
   for (const c of conns) {
     if (deadline - Date.now() < MIN_TIME_PER_CONNECTION) { skipped.push(c.platform); continue; }
-    logs.push(await collectConnection(admin, c, deadline));
+    logs.push(await collectConnection(admin, c, deadline, leads.has(`${c.client_id}:${c.platform}:${c.external_id}`)));
   }
   return { logs, skipped };
 }

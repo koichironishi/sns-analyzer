@@ -14,7 +14,7 @@ import { listConnections } from "@/lib/sns/store";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
-export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true, sns: snsOverride, switchPlatforms, empty: emptyOverride, period = true, eyebrow: eyebrowOverride }: {
+export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true, sns: snsOverride, switchPlatforms, empty: emptyOverride, period = true, eyebrow: eyebrowOverride, acct: acctOverride, totals = true }: {
   report: Report;
   /** 画面の名前（見出しはレイアウトの ClientHead が出すため、ここでは表示しない） */
   title?: string;
@@ -30,11 +30,19 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
   period?: boolean;
   /** 見出しの上の小さな文字（既定は「SNS ・ 期間」） */
   eyebrow?: string;
+  /** 表示中のアカウント（同じSNSに複数あるとき。既定は URL の acct） */
+  acct?: string | null;
+  /** 複数アカウントのSNSで「合計」を選べるか */
+  totals?: boolean;
 }) {
   const { start, end, days } = report.analysis.period;
   const sns = platformSwitch ? (snsOverride !== undefined ? snsOverride : report.period.sns) : null;
   const choices = switchPlatforms ?? report.platforms;
-  const eyebrow = eyebrowOverride ?? `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
+  const acct = platformSwitch ? (acctOverride !== undefined ? acctOverride : report.period.acct) : null;
+  const acctName = acct ? report.accounts.find((a) => a.id === acct)?.name : undefined;
+  // 同じSNSに複数のアカウントがあれば、SNSが1つでも切り替えを出す
+  const multi = choices.some((p) => report.accounts.filter((a) => a.platform === p).length > 1);
+  const eyebrow = eyebrowOverride ?? `${sns ? `${PLATFORM_LABELS[sns]}${acctName ? `（${acctName}）` : ""} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
   // 連携済みなのにデータがない＝まだ収集が終わっていない。その場で収集できるようにする（スタッフのみ）
@@ -45,8 +53,8 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
       <PageHead eyebrow={eyebrow} lead={lead}>
         <div className="page-period no-print">
           {period && <Suspense><PeriodForm today={todayIn()} /></Suspense>}
-          {platformSwitch && choices.length > (switchPlatforms ? 0 : 1) && (
-            <Suspense><PlatformSwitch platforms={choices} current={sns} allowAll={!switchPlatforms} /></Suspense>
+          {platformSwitch && (choices.length > (switchPlatforms ? 0 : 1) || multi) && (
+            <Suspense><PlatformSwitch platforms={choices} current={sns} allowAll={!switchPlatforms} accounts={report.accounts} currentAcct={acct} totals={totals} /></Suspense>
           )}
         </div>
       </PageHead>

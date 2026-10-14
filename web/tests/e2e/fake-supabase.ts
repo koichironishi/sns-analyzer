@@ -132,6 +132,15 @@ async function seed() {
     await series(acc, fx.followers[platform] ?? []);
     if (platform === "instagram" || platform === "facebook") await insights(acc, platform);
   }
+  // 同じSNSの2つめのアカウント（複数アカウントの確認用）：Instagram の投稿の一部を別アカウントの投稿として入れる
+  {
+    const acc2 = await account("instagram", "demo_instagram_2", "demo_shop_2", null);
+    const igPosts = fx.posts.filter((p) => p.platform === "instagram").slice(0, 12)
+      .map((p) => ({ ...p, externalId: `${p.externalId}-2`, metrics: { ...p.metrics, likes: Math.round((p.metrics.likes ?? 0) / 3) } }));
+    await posts(acc2, igPosts);
+    await series(acc2, (fx.followers.instagram ?? []).map(([d, f]) => [d, Math.round(f / 4)] as [string, number]));
+    await insights(acc2, "instagram");
+  }
   const compIds = new Map<string, string>();
   for (const c of fx.competitors) {
     let cid = compIds.get(c.competitorName);
@@ -144,7 +153,7 @@ async function seed() {
     await posts(acc, c.posts);
     await series(acc, c.series);
   }
-  await db.query("insert into sns_connections (client_id, platform, external_id, username, access_token, token_expires_at, can_publish, auth_kind) values ($1,'threads','th1','demo_shop','FAKE-TOKEN', now() + interval '50 days', true, 'oauth'), ($1,'facebook','fb1','デモ株式会社','FAKE-TOKEN', null, false, 'oauth')", [CLIENT_A]);
+  await db.query("insert into sns_connections (client_id, platform, external_id, username, access_token, token_expires_at, can_publish, auth_kind) values ($1,'threads','th1','demo_shop','FAKE-TOKEN', now() + interval '50 days', true, 'oauth'), ($1,'facebook','fb1','デモ株式会社','FAKE-TOKEN', null, false, 'oauth'), ($1,'instagram','demo_instagram','demo_shop','FAKE-TOKEN', null, true, 'oauth'), ($1,'instagram','demo_instagram_2','demo_shop_2','FAKE-TOKEN', null, true, 'oauth')", [CLIENT_A]);
   await db.query("insert into sns_collect_state (client_id, platform, last_run_at, last_success_at, posts_saved) values ($1,'threads', now(), now(), 42)", [CLIENT_A]);
 }
 

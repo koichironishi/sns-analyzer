@@ -110,6 +110,18 @@ create table if not exists sns_connections (
 -- 投稿用：X のリフレッシュトークン、投稿の権限があるか、連携の方式
 alter table sns_connections add column if not exists refresh_token text;
 alter table sns_connections add column if not exists can_publish boolean not null default false;
+
+-- 同じSNSで複数のアカウントを連携できるよう、主キーにアカウント（external_id）を含める（2026-10-14）
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint c
+    where c.conrelid = 'sns_connections'::regclass and c.contype = 'p' and array_length(c.conkey, 1) = 2
+  ) then
+    alter table sns_connections drop constraint sns_connections_pkey;
+    alter table sns_connections add primary key (client_id, platform, external_id);
+  end if;
+end $$;
 alter table sns_connections add column if not exists auth_kind text not null default 'token';
 
 drop trigger if exists trg_sns_connections_updated on sns_connections;
@@ -278,6 +290,21 @@ create table if not exists sns_collect_state (
   posts_saved     integer,
   primary key (client_id, platform)
 );
+-- 収集の状況もアカウントごとに持つ（同じSNSの複数アカウント。2026-10-14）
+alter table sns_collect_state add column if not exists external_id text not null default '';
+update sns_collect_state s set external_id = c.external_id
+  from sns_connections c
+  where s.external_id = '' and c.client_id = s.client_id and c.platform = s.platform;
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint c
+    where c.conrelid = 'sns_collect_state'::regclass and c.contype = 'p' and array_length(c.conkey, 1) = 2
+  ) then
+    alter table sns_collect_state drop constraint sns_collect_state_pkey;
+    alter table sns_collect_state add primary key (client_id, platform, external_id);
+  end if;
+end $$;
 
 -- ---------- SNSへの投稿（予約・即時） ----------
 create table if not exists sns_scheduled_posts (
@@ -319,6 +346,10 @@ create index if not exists idx_sns_scheduled_posts_client on sns_scheduled_posts
 drop trigger if exists trg_sns_scheduled_posts_updated on sns_scheduled_posts;
 create trigger trg_sns_scheduled_posts_updated before update on sns_scheduled_posts
   for each row execute function set_updated_at();
+
+-- 投稿先のアカウント [{"platform": "instagram", "external_id": "..."}]。同じSNSの複数アカウントに出すため（2026-10-14）。
+-- 空のとき（以前の投稿）は、platforms の各SNSの連携アカウントに出す。結果（results）は "instagram:<external_id>" のキーで持つ
+alter table sns_scheduled_posts add column if not exists targets jsonb not null default '[]';
 
 -- 外部ツール（Rhythmos AI など）から登録した投稿の識別子。同じ投稿を登録し直したときに重複させない
 alter table sns_scheduled_posts add column if not exists import_ref text check (import_ref is null or length(import_ref) between 1 and 200);

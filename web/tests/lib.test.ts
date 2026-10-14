@@ -137,6 +137,8 @@ test("SNSの絞り込み：選んだSNSの投稿・フォロワー・競合だ�
     competitors: [{ id: "c1", platform: "instagram" as const, competitorName: "A", username: "a", series: [], posts: [] },
       { id: "c2", platform: "x" as const, competitorName: "B", username: "b", series: [], posts: [] }],
     competitorList: [], hasData: true, lastPostDate: "2026-10-02",
+    ownAccounts: [{ id: "a-instagram", platform: "instagram" as const, name: "ig" }, { id: "a-facebook", platform: "facebook" as const, name: "fb" }],
+    ownFollowersByAccount: { "a-instagram": [["2026-10-01", 100]], "a-facebook": [["2026-10-01", 50]] } as never,
   };
   assert.deepEqual(reportPlatforms(data), ["instagram", "facebook", "threads", "x"]);
   assert.equal(filterReportData(data, null), data);
@@ -150,4 +152,34 @@ test("SNSの絞り込み：選んだSNSの投稿・フォロワー・競合だ�
   assert.equal(ig.lastPostDate, "2026-10-01");
   const th = filterReportData(data, "threads");
   assert.equal(th.hasData, false);
+});
+
+test("複数アカウント：アカウントで絞り込むと、そのアカウントの投稿とフォロワーだけ残す", async () => {
+  const { filterReportData } = await import("../src/lib/sns/store.ts");
+  const post = (id: string, accountId: string): Post => ({
+    id, accountId, platform: "instagram", externalId: id, postedAt: "2026-10-01T00:00:00Z", text: "", mediaType: "image", permalink: null, metrics: emptyMetrics(),
+  });
+  const data = {
+    ownPosts: [post("1", "A"), post("2", "B"), post("3", "A")], ownStories: [],
+    ownFollowers: { instagram: [["2026-10-01", 300]] } as never, ownNames: { instagram: "2アカウント" },
+    ownAccounts: [{ id: "A", platform: "instagram" as const, name: "shop_a" }, { id: "B", platform: "instagram" as const, name: "shop_b" }],
+    ownFollowersByAccount: { A: [["2026-10-01", 100]], B: [["2026-10-01", 200]] } as never,
+    competitors: [], competitorList: [], hasData: true, lastPostDate: "2026-10-01",
+  };
+  const all = filterReportData(data, "instagram");
+  assert.equal(all.ownPosts.length, 3);
+  assert.deepEqual(all.ownFollowers.instagram, [["2026-10-01", 300]]);
+  const b = filterReportData(data, "instagram", "B");
+  assert.deepEqual(b.ownPosts.map((p) => p.id), ["2"]);
+  assert.deepEqual(b.ownFollowers.instagram, [["2026-10-01", 200]]);
+  assert.deepEqual(b.ownNames, { instagram: "shop_b" });
+  // 別のSNSのアカウントを指定されたら、SNS全体として扱う
+  assert.equal(filterReportData(data, "instagram", "nope").ownPosts.length, 3);
+});
+
+test("複数アカウント：フォロワー推移の合計は、収集日のずれを前の値で埋めて足す", async () => {
+  const { sumSeries } = await import("../src/lib/sns/store.ts");
+  assert.deepEqual(sumSeries([[["2026-10-01", 100], ["2026-10-03", 110]], [["2026-10-02", 50], ["2026-10-03", 60]]]),
+    [["2026-10-01", 100], ["2026-10-02", 150], ["2026-10-03", 170]]);
+  assert.deepEqual(sumSeries([[["2026-10-01", 5]]]), [["2026-10-01", 5]]);
 });

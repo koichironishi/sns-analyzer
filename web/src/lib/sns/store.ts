@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CompetitorAccount } from "./compare.ts";
 import type { CollectResult } from "./collectors/http.ts";
 import type { Audience, InsightMetric, InsightsResult } from "./collectors/insights.ts";
+import type { Target } from "./publish/targets.ts";
 import { DEFAULT_TZ, PLATFORMS, addDays, isPlatform, todayIn, type FollowerSeries, type MediaType, type Platform, type Post, type Series } from "./models.ts";
 import type { ConsentRow, DeletionService } from "./privacy.ts";
 import { DELETION_PLATFORMS } from "./privacy.ts";
@@ -166,6 +167,10 @@ export type ReportData = {
   ownStories: Post[];
   ownFollowers: FollowerSeries;
   ownNames: Partial<Record<Platform, string>>;
+  /** 自社のアカウント（同じSNSに複数あることがある）。画面のアカウントの切り替えに使う */
+  ownAccounts: OwnAccount[];
+  /** アカウントごとのフォロワー推移（ownFollowers は SNS ごとの合計） */
+  ownFollowersByAccount: Record<string, Series>;
   competitors: CompetitorAccount[];
   competitorList: CompetitorRow[];
   hasData: boolean;
@@ -176,19 +181,41 @@ export type ReportData = {
 export const reportPlatforms = (d: ReportData): Platform[] =>
   PLATFORMS.filter((p) => d.ownNames[p] || d.ownFollowers[p] || [...d.ownPosts, ...d.ownStories].some((x) => x.platform === p));
 
-/** 1つのSNSに絞り込む（null ならそのまま） */
-export function filterReportData(d: ReportData, sns: Platform | null): ReportData {
+export type OwnAccount = { id: string; platform: Platform; name: string };
+
+/** 1つのSNS（acct があればその1アカウント）に絞り込む（null ならそのまま） */
+export function filterReportData(d: ReportData, sns: Platform | null, acct: string | null = null): ReportData {
   if (!sns) return d;
-  const ownPosts = d.ownPosts.filter((p) => p.platform === sns);
-  const ownStories = d.ownStories.filter((p) => p.platform === sns);
-  const ownFollowers: FollowerSeries = d.ownFollowers[sns] ? { [sns]: d.ownFollowers[sns] } : {};
+  const account = acct ? d.ownAccounts.find((a) => a.id === acct && a.platform === sns) : undefined;
+  const mine = (p: Post) => p.platform === sns && (!account || p.accountId === account.id);
+  const ownPosts = d.ownPosts.filter(mine);
+  const ownStories = d.ownStories.filter(mine);
+  const series = account ? d.ownFollowersByAccount[account.id] : d.ownFollowers[sns];
+  const ownFollowers: FollowerSeries = series?.length ? { [sns]: series } : {};
+  const name = account ? account.name : d.ownNames[sns];
   return {
     ...d, ownPosts, ownStories, ownFollowers,
-    ownNames: d.ownNames[sns] ? { [sns]: d.ownNames[sns] } : {},
+    ownNames: name ? { [sns]: name } : {},
+    ownAccounts: d.ownAccounts.filter((a) => a.platform === sns && (!account || a.id === account.id)),
     competitors: d.competitors.filter((c) => c.platform === sns),
     hasData: ownPosts.length > 0 || ownStories.length > 0 || Object.keys(ownFollowers).length > 0,
     lastPostDate: ownPosts.length ? ownPosts[ownPosts.length - 1].postedAt.slice(0, 10) : null,
   };
+}
+
+/**
+ * 複数アカウントのフォロワー推移を合計する。収集した日がアカウントごとに違うため、
+ * 各アカウントの値を、その最初の記録の日から最後の記録の日まで前の値で埋めてから足す
+ */
+export function sumSeries(list: Series[]): Series {
+  if (list.length <= 1) return list[0] ?? [];
+  const dates = [...new Set(list.flatMap((s) => s.map(([d]) => d)))].sort();
+  return dates.map((d): [string, number] => [d, list.reduce((sum, s) => {
+    if (!s.length || d < s[0][0] || d > s[s.length - 1][0]) return sum;
+    let v = s[0][1];
+    for (const [sd, f] of s) { if (sd <= d) v = f; else break; }
+    return sum + v;
+  }, 0)]);
 }
 
 export async function loadReportData(db: Db, clientId: string, opts: { days: number; end: string; tz?: string }): Promise<ReportData> {
@@ -229,17 +256,27 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
     }
   }
 
-  // 自社：SNSごとにフォロワー推移を1本にまとめる（接続し直したアカウントは新しいものを優先）
+  // 自社：アカウントごとのフォロワー推移と、SNSごとの合計（同じSNSに複数のアカウントがあるとき）
   const ownFollowers: FollowerSeries = {};
   const ownNames: Partial<Record<Platform, string>> = {};
+  const ownFollowersByAccount: Record<string, Series> = {};
   const own = accounts.filter((a) => !a.competitor_id && isPlatform(a.platform)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  const postAccounts = new Set([...ownPosts, ...ownStories].map((p) => p.accountId));
+  const ownAccounts: OwnAccount[] = own
+    .filter((a) => postAccounts.has(a.id) || (seriesOf.get(a.id)?.length ?? 0) > 0)
+    .map((a) => ({ id: a.id, platform: a.platform as Platform, name: a.username || a.external_id }));
+  for (const a of own) {
+    const s = seriesOf.get(a.id);
+    if (s?.length) ownFollowersByAccount[a.id] = s;
+  }
   for (const p of PLATFORMS) {
-    const merged = new Map<string, number>();
-    for (const a of own.filter((x) => x.platform === p)) {
-      for (const [d, f] of seriesOf.get(a.id) ?? []) merged.set(d, f);
-      if (a.username) ownNames[p] = a.username;
-    }
-    if (merged.size) ownFollowers[p] = [...merged.entries()].sort((x, y) => x[0].localeCompare(y[0]));
+    const list = own.filter((x) => x.platform === p);
+    const summed = sumSeries(list.map((a) => seriesOf.get(a.id) ?? []).filter((s) => s.length));
+    if (summed.length) ownFollowers[p] = summed;
+    const named = list.filter((a) => a.username);
+    // 1アカウントならその名前。複数ならアカウントの数（画面で「2アカウント」のように出す）
+    if (named.length === 1) ownNames[p] = named[0].username!;
+    else if (named.length > 1) ownNames[p] = `${new Set(ownAccounts.filter((x) => x.platform === p).map((x) => x.id)).size || named.length}アカウント`;
   }
 
   const compName = new Map(competitorList.map((c) => [c.id, c.name]));
@@ -251,7 +288,7 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
     }));
 
   return {
-    ownPosts, ownStories, ownFollowers, ownNames, competitors, competitorList,
+    ownPosts, ownStories, ownFollowers, ownNames, ownAccounts, ownFollowersByAccount, competitors, competitorList,
     hasData: ownPosts.length > 0 || ownStories.length > 0 || Object.keys(ownFollowers).length > 0,
     lastPostDate: ownPosts.length ? ownPosts[ownPosts.length - 1].postedAt.slice(0, 10) : null,
   };
@@ -335,19 +372,20 @@ export async function saveInsights(admin: Db, clientId: string, accountId: strin
   return r.daily.length;
 }
 
-export type InsightRow = { platform: Platform; date: string; metric: InsightMetric; value: number };
+export type InsightRow = { account_id: string; platform: Platform; date: string; metric: InsightMetric; value: number };
 
 /** 自社アカウントの日別の指標（呼び出した人の権限で読む） */
 export async function loadInsights(db: Db, clientId: string, platform: Platform, start: string, end: string): Promise<InsightRow[]> {
-  return selectAll<InsightRow>((a, b) => db.from("sns_daily_insights").select("platform,date,metric,value")
+  return selectAll<InsightRow>((a, b) => db.from("sns_daily_insights").select("account_id,platform,date,metric,value")
     .eq("client_id", clientId).eq("platform", platform).gte("date", start).lte("date", end)
     .order("date").order("metric").range(a, b), "インサイトの読み込み");
 }
 
-/** フォロワーの属性の最新の記録 */
-export async function latestAudience(db: Db, clientId: string, platform: Platform): Promise<{ date: string; data: Audience } | null> {
-  const rows = check(await db.from("sns_audience").select("fetched_date,data").eq("client_id", clientId).eq("platform", platform)
-    .order("fetched_date", { ascending: false }).limit(1), "フォロワーの属性の読み込み") as { fetched_date: string; data: Audience }[];
+/** フォロワーの属性の最新の記録（同じSNSに複数アカウントがあるときは accountId で選ぶ） */
+export async function latestAudience(db: Db, clientId: string, platform: Platform, accountId?: string | null): Promise<{ date: string; data: Audience } | null> {
+  let q = db.from("sns_audience").select("fetched_date,data").eq("client_id", clientId).eq("platform", platform);
+  if (accountId) q = q.eq("account_id", accountId);
+  const rows = check(await q.order("fetched_date", { ascending: false }).limit(1), "フォロワーの属性の読み込み") as { fetched_date: string; data: Audience }[];
   return rows[0] ? { date: rows[0].fetched_date, data: rows[0].data } : null;
 }
 
@@ -404,24 +442,26 @@ export async function saveConnection(admin: Db, clientId: string, platform: Plat
     token_expires_at: c.expiresAt, connected_user_id: c.connectedUserId, status: "connected", last_error: null,
     connected_at: new Date().toISOString(), refresh_token: c.refreshToken ?? null, can_publish: c.canPublish ?? false,
     auth_kind: c.authKind ?? "token",
-  }, { onConflict: "client_id,platform" }), "接続情報の保存");
+  }, { onConflict: "client_id,platform,external_id" }), "接続情報の保存");
 }
 
-export async function updateConnection(admin: Db, clientId: string, platform: Platform, patch: Partial<{
+// 接続は「クライアント・SNS・アカウント（external_id）」で1件（同じSNSで複数のアカウントを連携できる）
+export async function updateConnection(admin: Db, clientId: string, platform: Platform, externalId: string, patch: Partial<{
   access_token: string; token_expires_at: string | null; status: "connected" | "error"; last_error: string | null;
   refresh_token: string | null;
 }>): Promise<void> {
-  check(await admin.from("sns_connections").update(patch).eq("client_id", clientId).eq("platform", platform), "接続情報の更新");
+  check(await admin.from("sns_connections").update(patch).eq("client_id", clientId).eq("platform", platform).eq("external_id", externalId), "接続情報の更新");
 }
 
-export async function deleteConnection(admin: Db, clientId: string, platform: Platform): Promise<void> {
-  check(await admin.from("sns_connections").delete().eq("client_id", clientId).eq("platform", platform), "接続の解除");
-  check(await admin.from("sns_collect_state").delete().eq("client_id", clientId).eq("platform", platform), "収集状況の削除");
+export async function deleteConnection(admin: Db, clientId: string, platform: Platform, externalId: string): Promise<void> {
+  check(await admin.from("sns_connections").delete().eq("client_id", clientId).eq("platform", platform).eq("external_id", externalId), "接続の解除");
+  check(await admin.from("sns_collect_state").delete().eq("client_id", clientId).eq("platform", platform).eq("external_id", externalId), "収集状況の削除");
 }
+
 
 // ---- 収集の実行状況 -----------------------------------------------------------------
 
-export type CollectState = { client_id: string; platform: Platform; last_run_at: string | null; last_success_at: string | null; last_error: string | null; posts_saved: number | null };
+export type CollectState = { client_id: string; platform: Platform; external_id: string; last_run_at: string | null; last_success_at: string | null; last_error: string | null; posts_saved: number | null };
 
 export async function listCollectState(db: Db, clientId?: string): Promise<CollectState[]> {
   let q = db.from("sns_collect_state").select("*");
@@ -429,12 +469,12 @@ export async function listCollectState(db: Db, clientId?: string): Promise<Colle
   return check(await q, "収集状況の読み込み") as CollectState[];
 }
 
-export async function setCollectState(admin: Db, clientId: string, platform: Platform, ok: boolean, error: string | null, postsSaved: number | null) {
+export async function setCollectState(admin: Db, clientId: string, platform: Platform, externalId: string, ok: boolean, error: string | null, postsSaved: number | null) {
   const now = new Date().toISOString();
   check(await admin.from("sns_collect_state").upsert({
-    client_id: clientId, platform, last_run_at: now, last_error: error, posts_saved: postsSaved,
+    client_id: clientId, platform, external_id: externalId, last_run_at: now, last_error: error, posts_saved: postsSaved,
     ...(ok ? { last_success_at: now } : {}),
-  }, { onConflict: "client_id,platform" }), "収集状況の保存");
+  }, { onConflict: "client_id,platform,external_id" }), "収集状況の保存");
 }
 
 // ---- 競合 ------------------------------------------------------------------------
@@ -475,6 +515,17 @@ async function invalidateAi(admin: Db, clientId: string) {
   check(await admin.from("sns_ai_results").delete().eq("client_id", clientId), "AI分析結果の削除");
 }
 
+/** 自社の1アカウントのデータを消す（接続の解除・Meta などのデータ削除リクエスト）。同じSNSのほかのアカウントと競合は残す */
+export async function deleteAccountData(admin: Db, clientId: string, platform: Platform, externalId: string, disconnect: boolean): Promise<string> {
+  const ids = (check(await admin.from("sns_accounts").select("id").eq("client_id", clientId).eq("platform", platform)
+    .eq("external_id", externalId).is("competitor_id", null), "アカウントの検索") as { id: string }[]).map((r) => r.id);
+  const counts = await countFor(admin, ids);
+  for (const batch of chunks(ids, 100)) check(await admin.from("sns_accounts").delete().in("id", batch), "データの削除");
+  if (disconnect) await deleteConnection(admin, clientId, platform, externalId);
+  await invalidateAi(admin, clientId);
+  return `アカウントのデータを削除しました：${fmtCounts(counts)}`;
+}
+
 export async function deletePlatformData(admin: Db, clientId: string, platform: Platform, scope: "own" | "competitor" | "all", disconnect: boolean): Promise<string> {
   let q = admin.from("sns_accounts").select("id").eq("client_id", clientId).eq("platform", platform);
   if (scope === "own") q = q.is("competitor_id", null);
@@ -482,7 +533,10 @@ export async function deletePlatformData(admin: Db, clientId: string, platform: 
   const ids = (check(await q, "アカウントの検索") as { id: string }[]).map((r) => r.id);
   const counts = await countFor(admin, ids);
   for (const batch of chunks(ids, 100)) check(await admin.from("sns_accounts").delete().in("id", batch), "データの削除");
-  if (disconnect) await deleteConnection(admin, clientId, platform);
+  if (disconnect) {
+    const conns = check(await admin.from("sns_connections").select("external_id").eq("client_id", clientId).eq("platform", platform), "接続の検索") as { external_id: string }[];
+    for (const c of conns) await deleteConnection(admin, clientId, platform, c.external_id);
+  }
   await invalidateAi(admin, clientId);
   const target = { own: "自社", competitor: "競合", all: "自社・競合" }[scope];
   return `${platform === "x" ? "X" : platform[0].toUpperCase() + platform.slice(1)}（${target}）のデータを削除しました：${fmtCounts(counts)}`;
@@ -531,7 +585,8 @@ export async function handleDeletionRequest(admin: Db, service: DeletionService,
   for (const r of rows) {
     const owner = r.connected_user_id || (r.platform === "threads" ? r.external_id : "");
     if (owner && owner === userId) {
-      await deletePlatformData(admin, r.client_id, r.platform, "all", true);
+      // その人が連携したアカウントだけを消す（同じSNSのほかのアカウントや競合のデータは残す）
+      await deleteAccountData(admin, r.client_id, r.platform, r.external_id, true);
       done.push(`${r.client_id}:${r.platform}`);
     }
   }
@@ -609,14 +664,15 @@ export async function connectionOverview(admin: Db): Promise<{ client_id: string
  * X の投稿のうち収集の対象期間より前のものを、日ごとにずらして最大 limit 件返す
  * （X上で削除・非公開化された投稿を定期的に照会するため）
  */
-export async function xPostsToVerify(admin: Db, clientId: string, before: string, limit = 100): Promise<{ id: string; external_id: string }[]> {
+export async function xPostsToVerify(admin: Db, accountId: string, before: string, limit = 100): Promise<{ id: string; external_id: string }[]> {
+  // アカウントごとに照会する（ほかの X アカウントの投稿を、このアカウントの接続で照会しない）
   const head = await admin.from("sns_posts").select("id", { count: "exact", head: true })
-    .eq("client_id", clientId).eq("platform", "x").lt("posted_at", before);
+    .eq("account_id", accountId).lt("posted_at", before);
   const total = head.count ?? 0;
   if (!total) return [];
   const day = Math.floor(Date.now() / 86_400_000);
   const offset = total <= limit ? 0 : (day * limit) % total;
-  return check(await admin.from("sns_posts").select("id,external_id").eq("client_id", clientId).eq("platform", "x")
+  return check(await admin.from("sns_posts").select("id,external_id").eq("account_id", accountId)
     .lt("posted_at", before).order("posted_at").order("id").range(offset, offset + limit - 1), "X の投稿の照会") as { id: string; external_id: string }[];
 }
 
@@ -633,7 +689,11 @@ export type PostStatus = "draft" | "pending" | "rejected" | "scheduled" | "publi
 
 export type ScheduledPost = {
   id: string; client_id: string; text: string; platform_texts: Partial<Record<Platform, string>>; platforms: Platform[];
-  media: MediaItem[]; status: PostStatus; scheduled_at: string | null; results: Partial<Record<Platform, PlatformResult>>;
+  media: MediaItem[]; status: PostStatus; scheduled_at: string | null;
+  /** 投稿先のアカウント。空なら以前の投稿（platforms の各SNSの最初の連携アカウント） */
+  targets: Target[];
+  /** 結果。キーは "instagram:<external_id>"（以前の投稿は "instagram"） */
+  results: Record<string, PlatformResult>;
   locked_at: string | null; created_by: string | null; created_by_name: string | null; published_at: string | null;
   created_at: string; updated_at: string;
   // 承認

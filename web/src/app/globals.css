@@ -471,6 +471,15 @@ legend { font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); paddin
 .conn:first-of-type { border-top: 0; }
 .conn-name { display: flex; gap: 8px; align-items: center; font-weight: 700; }
 .conn-meta { font-size: var(--fs-sm); color: var(--text-2); margin: 2px 0 0; }
+/* SNSごとのまとまり（同じSNSの複数アカウント） */
+.conn-group { border-top: 1px solid var(--grid); padding-bottom: var(--s3); }
+.conn-group:first-of-type { border-top: 0; }
+.conn-group .conn { border-top: 0; }
+.conn-head { padding-bottom: var(--s2); }
+.conn-account { margin-left: var(--s5); padding: var(--s3) 0 var(--s3) var(--s4); border-left: 3px solid var(--grid); }
+.conn-account .conn-name { font-weight: 400; flex-wrap: wrap; }
+.conn-note { margin: 0 0 var(--s2) var(--s5); }
+@media (max-width: 640px) { .conn-account, .conn-note { margin-left: 0; } }
 .danger-zone { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
 /* ご利用ガイド（MEO と同じ形：章立てと、開いて読む項目） */
 .guide section { margin-top: var(--s6); scroll-margin-top: calc(var(--appbar-h) + 8px); }

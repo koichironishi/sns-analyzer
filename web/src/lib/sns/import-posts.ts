@@ -7,6 +7,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPlatform, PLATFORM_LABELS, type Platform } from "./models.ts";
+import type { Target } from "./publish/targets.ts";
 import { validatePost } from "./publish/rules.ts";
 
 type Db = SupabaseClient;
@@ -66,6 +67,11 @@ export type ImportPostInput = {
   scheduledAt: string;
   /** /uploads で受け取った画像の置き場所（順番どおり） */
   mediaPaths: string[];
+  /**
+   * 投稿先のアカウント（任意）。同じSNSに複数のアカウントがあるクライアントでは必須。
+   * username（@なし）か external_id で指定する。省略時は platforms の各SNSの、ただ1つの連携アカウントに出す
+   */
+  accounts?: { platform: string; username?: string; external_id?: string }[];
 };
 
 export type ImportPostResult = { ok: true; id: string; action: "created" | "updated" | "unchanged"; message: string } | { ok: false; errors: string[] };
@@ -95,17 +101,15 @@ export function checkImportInput(clientId: string, input: ImportPostInput, now =
  */
 export async function importPost(admin: Db, clientId: string, input: ImportPostInput, mediaUrl: (path: string) => string): Promise<ImportPostResult> {
   const { errors, platforms, scheduledAt } = checkImportInput(clientId, input);
-  const { data: conns } = await admin.from("sns_connections").select("platform,can_publish").eq("client_id", clientId);
-  for (const p of platforms) {
-    const c = (conns ?? []).find((x: { platform: string }) => x.platform === p) as { can_publish: boolean } | undefined;
-    if (!c) errors.push(`${PLATFORM_LABELS[p]}：連携されていません`);
-    else if (!c.can_publish) errors.push(`${PLATFORM_LABELS[p]}：投稿の許可がありません（SNS分析の「SNS連携」で連携し直してください）`);
-  }
+  const { data: connRows } = await admin.from("sns_connections").select("platform,external_id,username,can_publish").eq("client_id", clientId);
+  const conns = (connRows ?? []) as { platform: Platform; external_id: string; username: string | null; can_publish: boolean }[];
+  const { targets, errors: targetErrors } = resolveImportTargets(platforms, input.accounts, conns);
+  errors.push(...targetErrors);
   if (errors.length) return { ok: false, errors };
 
   const media = input.mediaPaths.map((path) => ({ path, url: mediaUrl(path) }));
   const row = {
-    text: String(input.text), platform_texts: {}, platforms, media, status: "pending", scheduled_at: scheduledAt,
+    text: String(input.text), platform_texts: {}, platforms, targets, media, status: "pending", scheduled_at: scheduledAt,
     requested_mode: "schedule", results: {}, review_note: null, reviewed_by: null, reviewed_by_name: null, reviewed_at: null,
   };
   const { data: cur } = await admin.from("sns_scheduled_posts").select("id,status,media").eq("client_id", clientId).eq("import_ref", input.ref).maybeSingle();
@@ -127,4 +131,35 @@ export async function importPost(admin: Db, clientId: string, input: ImportPostI
     .insert({ ...row, client_id: clientId, import_ref: input.ref, created_by: null, created_by_name: IMPORT_ACTOR }).select("id").single();
   if (error || !data) return { ok: false, errors: [`投稿の登録に失敗しました：${error?.message ?? "不明なエラー"}`] };
   return { ok: true, id: (data as { id: string }).id, action: "created", message: "承認待ちで登録しました" };
+}
+
+/**
+ * 投稿先のアカウントを決める。accounts の指定があればそれに、なければ platforms の各SNSの連携アカウントに出す。
+ * 同じSNSに複数のアカウントがあるのに指定がないときは、どれに出すか決められないので登録しない。
+ */
+export function resolveImportTargets(platforms: Platform[], accounts: ImportPostInput["accounts"],
+  conns: { platform: Platform; external_id: string; username: string | null; can_publish: boolean }[]): { targets: Target[]; errors: string[] } {
+  const errors: string[] = [];
+  const targets: Target[] = [];
+  const add = (c: (typeof conns)[number]) => {
+    if (!c.can_publish) errors.push(`${PLATFORM_LABELS[c.platform]}（${c.username ?? c.external_id}）：投稿の許可がありません（SNS分析の「SNS連携」で連携し直してください）`);
+    else if (!targets.some((t) => t.platform === c.platform && t.external_id === c.external_id)) targets.push({ platform: c.platform, external_id: c.external_id });
+  };
+  for (const p of platforms) {
+    const list = conns.filter((c) => c.platform === p);
+    const wanted = (accounts ?? []).filter((a) => a.platform === p);
+    if (!list.length) { errors.push(`${PLATFORM_LABELS[p]}：連携されていません`); continue; }
+    if (!wanted.length) {
+      if (list.length > 1) errors.push(`${PLATFORM_LABELS[p]}：アカウントが${list.length}つ連携されています。accounts で投稿先（${list.map((c) => c.username ?? c.external_id).join("／")}）を指定してください`);
+      else add(list[0]);
+      continue;
+    }
+    for (const a of wanted) {
+      const name = String(a.username ?? "").replace(/^@/, "").toLowerCase();
+      const c = list.find((x) => (a.external_id && x.external_id === String(a.external_id)) || (name && (x.username ?? "").toLowerCase() === name));
+      if (!c) errors.push(`${PLATFORM_LABELS[p]}：アカウント「${a.username ?? a.external_id}」は連携されていません`);
+      else add(c);
+    }
+  }
+  return { targets, errors };
 }

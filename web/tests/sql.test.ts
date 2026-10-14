@@ -154,3 +154,13 @@ test("投稿の承認：承認待ち・差し戻しの状態を持てる", async
   await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms, status) values ('${IDS.clientA}', array['x'], 'approved')`));
   await assert.rejects(db.query(`insert into sns_scheduled_posts (client_id, platforms, requested_mode) values ('${IDS.clientA}', array['x'], 'later')`));
 });
+
+test("複数アカウント：同じSNSに別のアカウントの接続と収集状況を持てる（同じアカウントは1件）", async () => {
+  await db.query(`insert into sns_connections (client_id, platform, external_id, access_token) values ($1, 'x', 'u2', 'SECRET2')`, [IDS.clientA]);
+  const n = await db.query<{ n: number }>(`select count(*)::int as n from sns_connections where client_id = $1 and platform = 'x'`, [IDS.clientA]);
+  assert.equal(n.rows[0].n, 2);
+  await assert.rejects(db.query(`insert into sns_connections (client_id, platform, external_id, access_token) values ($1, 'x', 'u2', 'DUP')`, [IDS.clientA]));
+  await db.query(`insert into sns_collect_state (client_id, platform, external_id) values ($1, 'x', 'u'), ($1, 'x', 'u2')`, [IDS.clientA]);
+  const t = await db.query<{ targets: unknown }>(`select targets from sns_scheduled_posts where client_id = $1 limit 1`, [IDS.clientA]);
+  assert.deepEqual(t.rows[0].targets, []);
+});

@@ -23,6 +23,8 @@ export type InsightsBase = {
   /** 表示中の SNS（インサイトに対応する SNS がなければ null） */
   platform: Platform | null;
   platforms: Platform[];
+  /** 表示中のアカウント（同じSNSに複数あるとき。null はそのSNSの合計） */
+  acct: string | null;
 };
 
 /** 期間・SNS の選択。インサイトには「すべて」がないため、指定がなければ Instagram → Facebook の順で選ぶ */
@@ -31,7 +33,7 @@ export const insightsBase = cache(async (clientId: string, sp: SP): Promise<Insi
   const platforms = INSIGHT_PLATFORMS.filter((p) => report.platforms.includes(p));
   const want = Array.isArray(sp.sns) ? sp.sns[0] : sp.sns;
   const platform = isPlatform(want) && platforms.includes(want) ? want : platforms[0] ?? null;
-  return { report, platform, platforms };
+  return { report, platform, platforms, acct: platform && report.period.sns === platform ? report.period.acct : null };
 });
 
 // ---- 結果（日別の指標のカード） --------------------------------------------------------------------
@@ -92,18 +94,20 @@ function clicksByDate(posts: Post[], dates: string[]): (number | null)[] {
 }
 
 export async function resultCards(clientId: string, base: InsightsBase): Promise<{ dates: string[]; cards: MetricCard[]; hasData: boolean }> {
-  const { report, platform } = base;
+  const { report, platform, acct } = base;
   const { start, end, days } = report.analysis.period;
   const dates = datesBetween(start, end);
   if (platform !== "facebook" && platform !== "instagram") return { dates, cards: [], hasData: false };
   const prevStart = addDays(start, -days);
-  const rows = await loadInsights(await createClient(), clientId, platform, prevStart, end);
+  // アカウントを選んでいればそのアカウントだけ、なければそのSNSの全アカウントの合計
+  const rows = (await loadInsights(await createClient(), clientId, platform, prevStart, end)).filter((r) => !acct || r.account_id === acct);
   const series = (metric: InsightMetric, ds: string[]) => {
-    const m = new Map(rows.filter((r: InsightRow) => r.metric === metric).map((r) => [r.date, Number(r.value)]));
+    const m = new Map<string, number>();
+    for (const r of rows.filter((x: InsightRow) => x.metric === metric)) m.set(r.date, (m.get(r.date) ?? 0) + Number(r.value));
     return ds.map((d) => m.get(d) ?? null);
   };
   const prevDates = datesBetween(prevStart, addDays(start, -1));
-  const posts = report.data.ownPosts.filter((p) => p.platform === platform);
+  const posts = report.data.ownPosts.filter((p) => p.platform === platform && (!acct || p.accountId === acct));
   const cards = CARDS[platform].map((c): MetricCard => {
     if (c.metric === "post_clicks") {
       const daily = clicksByDate(posts, dates);
@@ -132,8 +136,8 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 export function contentBreakdown(base: InsightsBase) {
-  const { report, platform } = base;
-  const all = [...report.data.ownPosts, ...report.data.ownStories].filter((p) => p.platform === platform);
+  const { report, platform, acct } = base;
+  const all = [...report.data.ownPosts, ...report.data.ownStories].filter((p) => p.platform === platform && (!acct || p.accountId === acct));
   const rows = new Map<string, FormatRow>();
   for (const p of all) {
     const key = p.contentType === "story" ? "story" : p.mediaType;
@@ -164,9 +168,16 @@ export function contentBreakdown(base: InsightsBase) {
 export const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
 export const GENDER_LABELS: Record<string, string> = { F: "女性", M: "男性", U: "不明" };
 
-export async function audienceView(clientId: string, platform: Platform | null): Promise<{ date: string; data: Audience } | null> {
+/**
+ * フォロワーの属性はアカウントごと（合計できない）。同じSNSに複数アカウントがあり、選ばれていなければ最初のアカウントを出す
+ */
+export async function audienceView(base: InsightsBase): Promise<{ date: string; data: Audience; account: string | null } | null> {
+  const { report, platform } = base;
   if (!platform) return null;
-  return latestAudience(await createClient(), clientId, platform);
+  const list = report.accounts.filter((a) => a.platform === platform);
+  const acct = base.acct ?? (list.length > 1 ? list[0].id : null);
+  const r = await latestAudience(await createClient(), report.client.id, platform, acct);
+  return r ? { ...r, account: acct } : null;
 }
 
 /** 国コード（JP など）を日本語の国名にする */

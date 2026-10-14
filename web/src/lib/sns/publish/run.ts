@@ -12,6 +12,7 @@ import {
   updateScheduledPost, type PlatformResult, type PostStatus, type ScheduledPost,
 } from "../store.ts";
 import { publishErrorMessage, publishTo, type PublishDeps } from "./publishers.ts";
+import { resolveTargets } from "./targets.ts";
 
 export type RunDeps = PublishDeps & { xApp?: XApp | null };
 
@@ -19,35 +20,39 @@ export type RunDeps = PublishDeps & { xApp?: XApp | null };
 export const textFor = (post: Pick<ScheduledPost, "text" | "platform_texts">, p: Platform) =>
   (post.platform_texts?.[p] ?? "").trim() ? post.platform_texts[p]! : post.text;
 
-export function overallStatus(platforms: Platform[], results: Partial<Record<Platform, PlatformResult>>): PostStatus {
-  const ok = platforms.filter((p) => results[p]?.state === "published").length;
-  return ok === platforms.length ? "published" : ok > 0 ? "partial" : "failed";
+/** 全体の状態。keys は投稿先ごとの結果のキー（resolveTargets の key） */
+export function overallStatus(keys: string[], results: Record<string, PlatformResult>): PostStatus {
+  const ok = keys.filter((k) => results[k]?.state === "published").length;
+  return ok === keys.length ? "published" : ok > 0 ? "partial" : "failed";
 }
 
 /** 確保済み（status = publishing）の投稿を、まだ出していないSNSへ投稿する */
 export async function publishClaimedPost(admin: SupabaseClient, post: ScheduledPost, deps: RunDeps = {}): Promise<ScheduledPost> {
   const [conns, settings] = await Promise.all([getConnectionSecrets(admin, post.client_id), getAppSettings(admin)]);
-  const results: Partial<Record<Platform, PlatformResult>> = { ...post.results };
+  const results: Record<string, PlatformResult> = { ...post.results };
   const imageUrls = post.media.map((m) => m.url);
+  // 投稿先はアカウントごと（同じSNSの複数アカウントに出せる）
+  const targets = resolveTargets(post, conns);
 
-  for (const p of post.platforms) {
-    if (results[p]?.state === "published") continue;
+  for (const t of targets) {
+    const p = t.platform;
+    if (results[t.key]?.state === "published") continue;
     const at = new Date().toISOString();
-    const conn = conns.find((c) => c.platform === p);
+    const conn = conns.find((c) => c.platform === p && c.external_id === t.externalId);
     try {
-      if (!conn) throw new Error("このSNSは連携されていません。「設定・連携」で連携してください");
+      if (!conn) throw new Error("このアカウントは連携されていません（解除された可能性があります）。「SNS連携」で連携してください");
       if (!conn.can_publish) throw new Error("投稿の許可がありません。「設定・連携」で、投稿の許可を含めてもう一度連携してください");
       let token = conn.access_token;
       if (p === "x" && conn.refresh_token && xNeedsRefresh(conn.token_expires_at)) {
         if (!deps.xApp) throw new Error("X アプリの設定（X_CLIENT_ID / X_CLIENT_SECRET）がありません");
         const t = await xRefresh(deps.xApp, conn.refresh_token, deps.http);
         token = t.accessToken;
-        await updateConnection(admin, post.client_id, "x", { access_token: t.accessToken, refresh_token: t.refreshToken || conn.refresh_token, token_expires_at: t.expiresAt });
+        await updateConnection(admin, post.client_id, "x", conn.external_id, { access_token: t.accessToken, refresh_token: t.refreshToken || conn.refresh_token, token_expires_at: t.expiresAt });
       } else if (p === "threads" && needsRefresh(conn.token_expires_at)) {
         const t = await threadsRefresh(token, deps.http).catch(() => null);
         if (t) {
           token = t.accessToken;
-          await updateConnection(admin, post.client_id, "threads", { access_token: t.accessToken, token_expires_at: t.expiresAt });
+          await updateConnection(admin, post.client_id, "threads", conn.external_id, { access_token: t.accessToken, token_expires_at: t.expiresAt });
         }
       }
       const r = await publishTo(
@@ -55,15 +60,15 @@ export async function publishClaimedPost(admin: SupabaseClient, post: ScheduledP
         { text: textFor(post, p), imageUrls },
         { ...deps, graphVersion: settings.graph_api_version },
       );
-      results[p] = { state: "published", id: r.externalId, permalink: r.permalink, error: null, at };
+      results[t.key] = { state: "published", id: r.externalId, permalink: r.permalink, error: null, at };
     } catch (e) {
-      results[p] = { state: "failed", id: null, permalink: null, error: publishErrorMessage(e).slice(0, 500), at };
+      results[t.key] = { state: "failed", id: null, permalink: null, error: publishErrorMessage(e).slice(0, 500), at };
     }
     // 1つ終わるごとに保存する（途中で処理が止まっても、出せたSNSに二重に出さない）
     await updateScheduledPost(admin, post.id, { results });
   }
 
-  const status = overallStatus(post.platforms, results);
+  const status = overallStatus(targets.map((t) => t.key), results);
   const publishedAt = Object.values(results).some((r) => r?.state === "published") ? (post.published_at ?? new Date().toISOString()) : post.published_at;
   await updateScheduledPost(admin, post.id, { status, results, locked_at: null, published_at: publishedAt });
   return { ...post, status, results, locked_at: null, published_at: publishedAt };
@@ -80,12 +85,13 @@ export async function closeStalePosts(admin: SupabaseClient): Promise<number> {
   const stale = await stalePublishing(admin);
   for (const post of stale) {
     const results = { ...post.results };
-    for (const p of post.platforms) {
-      if (results[p]?.state !== "published") {
-        results[p] = { state: "failed", error: "処理が途中で止まりました。SNS上で投稿されていないか確認してから、再投稿してください", at: new Date().toISOString() };
+    const keys = resolveTargets(post, await getConnectionSecrets(admin, post.client_id)).map((t) => t.key);
+    for (const k of keys) {
+      if (results[k]?.state !== "published") {
+        results[k] = { state: "failed", error: "処理が途中で止まりました。SNS上で投稿されていないか確認してから、再投稿してください", at: new Date().toISOString() };
       }
     }
-    await updateScheduledPost(admin, post.id, { status: overallStatus(post.platforms, results), results, locked_at: null });
+    await updateScheduledPost(admin, post.id, { status: overallStatus(keys, results), results, locked_at: null });
   }
   return stale.length;
 }

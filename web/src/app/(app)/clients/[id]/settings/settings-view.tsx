@@ -4,7 +4,7 @@ import { metaApp, threadsApp, xApp } from "@/lib/connect-flow";
 import { fmtDateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
-import { PLATFORMS, PLATFORM_LABELS, todayIn, type Platform } from "@/lib/sns/models";
+import { PLATFORMS, PLATFORM_LABELS, todayIn } from "@/lib/sns/models";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
 import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
 import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
@@ -35,6 +35,7 @@ const ERRORS: Record<string, string> = {
   exchange: "連携に失敗しました。アプリの設定（リダイレクトURI・権限）を確認して、もう一度お試しください。",
   nopages: "管理している Facebook ページが見つかりませんでした。Facebook ログインの画面で、対象のページへのアクセスを許可してください。",
   expired: "ページの選択の有効期限が切れました。もう一度連携してください。",
+  nopick: "連携するページが選ばれていませんでした。もう一度「アカウントを追加」から選んでください。",
 };
 const OKS: Record<string, [section: string, text: string]> = {
   meta: ["connections", "Facebook（と紐づく Instagram）を連携しました。"],
@@ -69,8 +70,6 @@ export async function SettingsView({ params, searchParams, part }: {
     part === "connections" ? getImportKey(admin, id).catch(() => null) : null,
   ]);
   const consent = consentState(consentRow);
-  const connOf = (p: Platform) => conns.find((c) => c.platform === p);
-  const stateOf = (p: Platform) => states.find((s) => s.platform === p);
   const hasMeta = Boolean(metaApp());
   const hasThreads = Boolean(threadsApp());
   const hasX = Boolean(xApp());
@@ -198,60 +197,77 @@ export async function SettingsView({ params, searchParams, part }: {
         {notice("connections")}
         <div className="card">
           {PLATFORMS.map((p) => {
-            const c = connOf(p);
-            const st = stateOf(p);
-            const left = daysLeft(c?.token_expires_at ?? null);
+            // 同じSNSで複数のアカウントを連携できる。1アカウント＝1行
+            const list = conns.filter((c) => c.platform === p);
+            const has = list.length > 0;
+            const add = has ? "アカウントを追加" : undefined;
             return (
-              <div className="conn" key={p}>
-                <div>
-                  <div className="conn-name">
-                    <Chip platform={p} />
-                    {c ? (c.status === "error" ? <span className="badge warn">要再連携</span> : <span className="badge good">連携中</span>) : <span className="badge">未連携</span>}
-                    {c && (c.can_publish ? <span className="badge good">投稿できます</span> : <span className="badge">投稿するには再連携が必要</span>)}
+              <div className="conn-group" key={p}>
+                <div className="conn conn-head">
+                  <div>
+                    <div className="conn-name">
+                      <Chip platform={p} />
+                      {has ? <span className="badge good">{list.length}アカウント</span> : <span className="badge">未連携</span>}
+                    </div>
+                    {p === "instagram" && <p className="conn-meta">Instagram は Facebook ページ経由で連携します（ビジネス／クリエイターアカウントを Facebook ページに紐づけてください）。複数のページを一度に選べます。</p>}
                   </div>
-                  {c && <p className="conn-meta">{c.username ? `${p === "facebook" ? "" : "@"}${c.username}` : c.external_id}{left !== null && `・トークンの有効期限まであと${Math.max(0, Math.floor(left))}日`}</p>}
-                  {st && <p className="conn-meta">最終収集：{fmtDateTime(st.last_run_at)}{st.posts_saved !== null && `・投稿 ${st.posts_saved}件`}{st.last_error && <><br /><span style={{ color: "var(--warn)" }}>{st.last_error}</span></>}</p>}
-                  {c?.last_error && !st?.last_error && <p className="conn-meta" style={{ color: "var(--warn)" }}>{c.last_error}</p>}
-                  {p === "instagram" && !c && <p className="conn-meta">Instagram は Facebook ページ経由で連携します（ビジネス／クリエイターアカウントを Facebook ページに紐づけてください）。</p>}
-                </div>
-                <div className="row end">
-                  {(p === "facebook" || p === "instagram") && (hasMeta
-                    ? <a className={`btn ${c ? "" : "primary"}`} href={`/api/connect/meta?client=${id}`}>{c ? "再連携" : "Facebook でログインして連携"}</a>
-                    : <span className="small muted">Meta アプリの設定後に連携できます</span>)}
-                  {p === "threads" && (hasThreads
-                    ? <a className={`btn ${c ? "" : "primary"}`} href={`/api/connect/threads?client=${id}`}>{c ? "再連携" : "Threads でログインして連携"}</a>
-                    : <span className="small muted">Threads アプリの設定後に連携できます</span>)}
-                  {c && (
-                    <ActionForm action={testConnection}><Hidden id={id} /><input type="hidden" name="platform" value={p} />
-                      <SubmitButton className="btn" pendingText="確認しています…">連携を確認</SubmitButton></ActionForm>
-                  )}
-                </div>
-                {p === "x" && hasX && (
-                  <div className="row" style={{ gridColumn: "1 / -1" }}>
-                    <a className={`btn ${c?.auth_kind === "oauth" ? "" : "primary"}`} href={`/api/connect/x?client=${id}`}>{c?.auth_kind === "oauth" ? "X で再連携" : "X でログインして連携（投稿・分析）"}</a>
+                  <div className="row end">
+                    {(p === "facebook" || p === "instagram") && (hasMeta
+                      ? <a className={`btn ${has ? "" : "primary"}`} href={`/api/connect/meta?client=${id}`}>{add ?? "Facebook でログインして連携"}</a>
+                      : <span className="small muted">Meta アプリの設定後に連携できます</span>)}
+                    {p === "threads" && (hasThreads
+                      ? <a className={`btn ${has ? "" : "primary"}`} href={`/api/connect/threads?client=${id}`}>{add ?? "Threads でログインして連携"}</a>
+                      : <span className="small muted">Threads アプリの設定後に連携できます</span>)}
+                    {p === "x" && hasX && (
+                      <a className={`btn ${has ? "" : "primary"}`} href={`/api/connect/x?client=${id}`}>{add ?? "X でログインして連携（投稿・分析）"}</a>
+                    )}
                   </div>
+                </div>
+                {(p === "threads" || p === "x") && has && (
+                  <p className="conn-meta conn-note">別のアカウントを追加するときは、{PLATFORM_LABELS[p]} で連携済みのアカウントからいったんログアウトしてから「アカウントを追加」を押してください（同じアカウントのままだと、そのアカウントの再連携になります）。</p>
                 )}
+                {list.map((c) => {
+                  const st = states.find((x) => x.platform === p && x.external_id === c.external_id);
+                  const left = daysLeft(c.token_expires_at ?? null);
+                  const name = c.username ? `${p === "facebook" ? "" : "@"}${c.username}` : c.external_id;
+                  return (
+                    <div className="conn conn-account" key={c.external_id}>
+                      <div>
+                        <div className="conn-name">
+                          <strong>{name}</strong>
+                          {c.status === "error" ? <span className="badge warn">要再連携</span> : <span className="badge good">連携中</span>}
+                          {c.can_publish ? <span className="badge good">投稿できます</span> : <span className="badge">投稿するには再連携が必要</span>}
+                        </div>
+                        {left !== null && <p className="conn-meta">トークンの有効期限まであと{Math.max(0, Math.floor(left))}日</p>}
+                        {st && <p className="conn-meta">最終収集：{fmtDateTime(st.last_run_at)}{st.posts_saved !== null && `・投稿 ${st.posts_saved}件`}{st.last_error && <><br /><span style={{ color: "var(--warn)" }}>{st.last_error}</span></>}</p>}
+                        {c.last_error && !st?.last_error && <p className="conn-meta" style={{ color: "var(--warn)" }}>{c.last_error}</p>}
+                      </div>
+                      <div className="row end">
+                        <ActionForm action={testConnection}><Hidden id={id} /><input type="hidden" name="platform" value={p} /><input type="hidden" name="external_id" value={c.external_id} />
+                          <SubmitButton className="btn" pendingText="確認しています…">連携を確認</SubmitButton></ActionForm>
+                      </div>
+                      <details className="more" style={{ gridColumn: "1 / -1" }}>
+                        <summary>このアカウントの連携を解除する</summary>
+                        <ActionForm action={disconnect}>
+                          <Hidden id={id} /><input type="hidden" name="platform" value={p} /><input type="hidden" name="external_id" value={c.external_id} />
+                          <label className="check"><input type="checkbox" name="delete_data" />このアカウント（{name}）の収集済みのデータも削除する（ほかのアカウントと競合のデータは残ります）</label>
+                          <div className="form-actions"><SubmitButton className="btn danger" pendingText="解除しています…">連携を解除</SubmitButton></div>
+                        </ActionForm>
+                      </details>
+                    </div>
+                  );
+                })}
                 {p === "x" && (
-                  <details className="more" style={{ gridColumn: "1 / -1" }}>
-                    <summary>{hasX ? "分析だけに使う：Bearer Token で連携する" : c ? "Bearer Token を更新する" : "Bearer Token で連携する"}</summary>
+                  <details className="more conn-note">
+                    <summary>{hasX ? "分析だけに使う：Bearer Token で連携する" : "Bearer Token で連携する（アカウントを追加・更新）"}</summary>
                     <ActionForm action={connectX} resetOnSuccess>
                       <Hidden id={id} />
                       <label htmlFor="x-user">X のユーザー名<span className="req">必須</span></label>
-                      <input id="x-user" name="username" type="text" required aria-required="true" autoComplete="off" defaultValue={c?.username ?? ""} placeholder="例：example" />
+                      <input id="x-user" name="username" type="text" required aria-required="true" autoComplete="off" placeholder="例：example" />
                       <label htmlFor="x-token">Bearer Token<span className="req">必須</span></label>
                       <input id="x-token" name="bearer_token" type="password" required aria-required="true" autoComplete="off" aria-describedby="x-token-hint" />
-                      <p className="hint" id="x-token-hint">X Developer Portal のアプリで発行します。保存後は画面に表示されません。Bearer Token では投稿できません（分析だけ）。X API は従量課金のため、取得件数は全体設定の上限に従います。</p>
+                      <p className="hint" id="x-token-hint">X Developer Portal のアプリで発行します。保存後は画面に表示されません。Bearer Token では投稿できません（分析だけ）。同じユーザー名なら更新、違うユーザー名ならアカウントの追加になります。X API は従量課金のため、取得件数は全体設定の上限に従います。</p>
                       <div className="form-actions"><SubmitButton pendingText="確認しています…">保存して確認</SubmitButton></div>
-                    </ActionForm>
-                  </details>
-                )}
-                {c && (
-                  <details className="more" style={{ gridColumn: "1 / -1" }}>
-                    <summary>連携を解除する</summary>
-                    <ActionForm action={disconnect}>
-                      <Hidden id={id} /><input type="hidden" name="platform" value={p} />
-                      <label className="check"><input type="checkbox" name="delete_data" />収集済みの {PLATFORM_LABELS[p]} のデータ（自社・競合）も削除する</label>
-                      <div className="form-actions"><SubmitButton className="btn danger" pendingText="解除しています…">連携を解除</SubmitButton></div>
                     </ActionForm>
                   </details>
                 )}

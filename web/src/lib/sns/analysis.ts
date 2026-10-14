@@ -109,11 +109,12 @@ export function followerAt(series: Series | undefined, date: string): number | n
 
 // ---- 集計 ---------------------------------------------------------------------
 
-export function buildRows(posts: Post[], followers: FollowerSeries, tz = DEFAULT_TZ): Row[] {
+/** byAccount：アカウントごとのフォロワー推移（同じSNSに複数アカウントがあるとき、投稿のアカウントのフォロワー数で割る） */
+export function buildRows(posts: Post[], followers: FollowerSeries, tz = DEFAULT_TZ, byAccount?: Record<string, Series>): Row[] {
   return posts.map((post) => {
     const local = toLocal(post.postedAt, tz);
     const eng = engagementsOf(post.metrics);
-    const f = followerAt(followers[post.platform], local.date);
+    const f = followerAt(byAccount?.[post.accountId] ?? followers[post.platform], local.date);
     return {
       post, local, engagements: eng, followers: f,
       erFollowers: f ? eng / f : null,
@@ -152,7 +153,7 @@ function periodStats(rows: Row[]): PeriodStats {
 
 const CHANGE_KEYS = ["posts", "engagements", "views", "erFollowers", "erViews"] as const;
 
-export type AnalyzeOptions = { days?: number; end?: string; tz?: string; accountNames?: Partial<Record<Platform, string>> };
+export type AnalyzeOptions = { days?: number; end?: string; tz?: string; accountNames?: Partial<Record<Platform, string>>; followersByAccount?: Record<string, Series> };
 
 export function analyze(posts: Post[], followers: FollowerSeries, opts: AnalyzeOptions = {}): AnalysisResult {
   const tz = opts.tz ?? DEFAULT_TZ;
@@ -161,7 +162,7 @@ export function analyze(posts: Post[], followers: FollowerSeries, opts: AnalyzeO
   const start = addDays(end, -(days - 1));
   const prevStart = addDays(start, -days);
 
-  const rowsAll = buildRows(posts, followers, tz);
+  const rowsAll = buildRows(posts, followers, tz, opts.followersByAccount);
   const cur = rowsAll.filter((r) => r.local.date >= start && r.local.date <= end);
   const prev = rowsAll.filter((r) => r.local.date >= prevStart && r.local.date < start);
   applyScores(cur);

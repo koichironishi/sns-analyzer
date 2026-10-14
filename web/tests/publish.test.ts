@@ -122,3 +122,39 @@ test("Facebook ログイン：構成ID があれば config_id、なければ sco
   const b = new URL(metaAuthorizeUrl({ appId: "1", appSecret: "s", graphVersion: "v26.0" }, "https://app/cb", "st"));
   assert.match(b.searchParams.get("scope")!, /pages_manage_posts/);
 });
+
+test("複数アカウント：投稿先はアカウントごと。以前の投稿は各SNSの最初の連携アカウントに、SNS名のキーで出す", async () => {
+  const { resolveTargets, parseTargetKey, platformsOf, targetKey } = await import("../src/lib/sns/publish/targets.ts");
+  const conns = [
+    { platform: "instagram" as const, external_id: "ig2", connected_at: "2026-10-02" },
+    { platform: "instagram" as const, external_id: "ig1", connected_at: "2026-10-01" },
+    { platform: "x" as const, external_id: "x1", connected_at: "2026-10-01" },
+  ];
+  // 新しい投稿：選んだアカウントだけ。結果のキーは "SNS:アカウント"
+  assert.deepEqual(resolveTargets({ targets: [{ platform: "instagram", external_id: "ig2" }], platforms: ["instagram"] }, conns),
+    [{ key: "instagram:ig2", platform: "instagram", externalId: "ig2" }]);
+  // 以前の投稿：SNS名のキーのまま、最初に連携したアカウントへ
+  assert.deepEqual(resolveTargets({ targets: [], platforms: ["instagram", "threads"] }, conns), [
+    { key: "instagram", platform: "instagram", externalId: "ig1" },
+    { key: "threads", platform: "threads", externalId: null },
+  ]);
+  assert.deepEqual(parseTargetKey(targetKey("instagram", "17841:abc")), { platform: "instagram", external_id: "17841:abc" });
+  assert.equal(parseTargetKey("tiktok:1"), null);
+  assert.deepEqual(platformsOf([{ platform: "instagram", external_id: "a" }, { platform: "instagram", external_id: "b" }, { platform: "x", external_id: "c" }]), ["instagram", "x"]);
+  assert.equal(overallStatus(["instagram:ig1", "instagram:ig2"], { "instagram:ig1": { state: "published" }, "instagram:ig2": { state: "failed" } }), "partial");
+});
+
+test("複数アカウント：外部ツールからの登録は、同じSNSに複数あると accounts の指定が必要", async () => {
+  const { resolveImportTargets } = await import("../src/lib/sns/import-posts.ts");
+  const conns = [
+    { platform: "instagram" as const, external_id: "ig1", username: "shop_a", can_publish: true },
+    { platform: "instagram" as const, external_id: "ig2", username: "shop_b", can_publish: true },
+    { platform: "facebook" as const, external_id: "fb1", username: "Shop", can_publish: true },
+  ];
+  const none = resolveImportTargets(["instagram", "facebook"], undefined, conns);
+  assert.ok(none.errors.some((e) => e.includes("accounts")));
+  const ok = resolveImportTargets(["instagram", "facebook"], [{ platform: "instagram", username: "@Shop_B" }], conns);
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.targets, [{ platform: "instagram", external_id: "ig2" }, { platform: "facebook", external_id: "fb1" }]);
+  assert.ok(resolveImportTargets(["instagram"], [{ platform: "instagram", username: "nope" }], conns).errors[0].includes("nope"));
+});

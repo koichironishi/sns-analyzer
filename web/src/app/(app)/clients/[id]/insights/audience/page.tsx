@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: "インサイト" };
 export default async function InsightsAudiencePage({ params, searchParams }: PageProps<"/clients/[id]/insights/audience">) {
   const { id } = await params;
   const base = await insightsBase(id, await searchParams);
-  const a = await audienceView(id, base.platform);
+  const a = await audienceView(base);
+  const acctName = a?.account ? base.report.accounts.find((x) => x.id === a.account)?.name : undefined;
   const color = base.platform ? `var(--c-${base.platform})` : "var(--seq)";
 
   const ga = a?.data.genderAge ?? {};
@@ -31,8 +32,8 @@ export default async function InsightsAudiencePage({ params, searchParams }: Pag
     : "フォロワーが100人未満のアカウントは、Meta が属性を提供しないため表示されません。";
 
   return (
-    <InsightsShell base={base} period={false}
-      eyebrow={`${base.platform ? `${PLATFORM_LABELS[base.platform]} ・ ` : ""}${a ? `${slash(a.date)} 時点` : "集計前"}`}
+    <InsightsShell base={base} period={false} acct={a?.account ?? null} totals={false}
+      eyebrow={`${base.platform ? `${PLATFORM_LABELS[base.platform]}${acctName ? `（${acctName}）` : ""} ・ ` : ""}${a ? `${slash(a.date)} 時点` : "集計前"}`}
       lead="フォロワー全体の性別・年齢・地域です。Meta が通算の値として提供するため、期間では変わりません（毎日の収集で最新の集計に更新します）。">
       {!a ? <EmptyState title="フォロワーの属性はまだありません" body={why} /> : (
         <>

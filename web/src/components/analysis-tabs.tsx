@@ -12,7 +12,7 @@ export function AnalysisTabs({ base }: { base: string }) {
   const path = usePathname();
   const sp = useSearchParams();
   const q = new URLSearchParams();
-  for (const k of ["days", "end", "sns"]) {
+  for (const k of ["days", "end", "sns", "acct"]) {
     const v = sp.get(k);
     if (v) q.set(k, v);
   }

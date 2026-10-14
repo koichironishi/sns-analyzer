@@ -19,7 +19,7 @@ import { PLATFORMS, PLATFORM_LABELS, isPlatform, todayIn, type Platform } from "
 import { deleteImportKey, newImportKey, saveImportKey } from "@/lib/sns/import-posts";
 import { CONSENT_VERSION } from "@/lib/sns/privacy";
 import {
-  audit, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
+  audit, deleteAccountData, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
   getConnectionSecrets, grantConsent, listCompetitors, recordFollowers, revokeConsent, saveCollected,
   saveCompetitor, saveConnection, setBrandContext,
 } from "@/lib/sns/store";
@@ -69,8 +69,9 @@ export async function testConnection(_: ActionState, form: FormData): Promise<Ac
   try {
     const { clientId, admin } = await staff(form);
     const platform = String(form.get("platform"));
+    const externalId = String(form.get("external_id") ?? "");
     if (!isPlatform(platform)) return { error: "SNSの指定が正しくありません" };
-    const conn = (await getConnectionSecrets(admin, clientId)).find((c) => c.platform === platform);
+    const conn = (await getConnectionSecrets(admin, clientId)).find((c) => c.platform === platform && c.external_id === externalId);
     if (!conn) return { error: "未連携です" };
     const { graph_api_version } = await getAppSettings(admin);
     const r = await checkConnection(platform, {
@@ -89,11 +90,13 @@ export async function disconnect(_: ActionState, form: FormData): Promise<Action
   try {
     const { v, clientId, admin } = await staff(form);
     const platform = String(form.get("platform"));
-    if (!isPlatform(platform)) return { error: "SNSの指定が正しくありません" };
+    const externalId = String(form.get("external_id") ?? "");
+    if (!isPlatform(platform) || !externalId) return { error: "SNSの指定が正しくありません" };
     const withData = form.get("delete_data") === "on";
-    if (withData) await deletePlatformData(admin, clientId, platform, "all", true);
-    else await deleteConnection(admin, clientId, platform);
-    await audit(admin, v, "disconnect", clientId, `${platform}${withData ? "（データも削除）" : ""}`, await clientIp());
+    // 解除するのはこのアカウントだけ（同じSNSのほかのアカウントは残す）。データを消すときも、このアカウントの分だけ
+    if (withData) await deleteAccountData(admin, clientId, platform, externalId, true);
+    else await deleteConnection(admin, clientId, platform, externalId);
+    await audit(admin, v, "disconnect", clientId, `${platform}:${externalId}${withData ? "（データも削除）" : ""}`, await clientIp());
     revalidatePath(`/clients/${clientId}`, "layout");
     to = `/clients/${clientId}/settings/connections?ok=${withData ? "disconnected_data" : "disconnected"}&p=${platform}#connections`;
   } catch (e) {
@@ -113,9 +116,11 @@ export async function selectMetaPage(form: FormData): Promise<void> {
   const pending = chk.pending;
   const { graph_api_version } = await getAppSettings(admin);
   const pages = await listMetaPages({ graphVersion: graph_api_version }, pending.userToken).catch(() => []);
-  const page = pages.find((p) => p.pageId === String(form.get("page_id")));
-  if (!page) redirect(`/clients/${clientId}/settings/connections?e=expired&r=nopage-${pages.length}#connections`);
-  await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
+  // 複数のページを選べる（1ページ＝Facebook と、紐づく Instagram で1組）
+  const ids = new Set(form.getAll("page_id").map(String));
+  const chosen = pages.filter((p) => ids.has(p.pageId));
+  if (!chosen.length) redirect(`/clients/${clientId}/settings/connections?e=nopick#connections`);
+  for (const page of chosen) await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
   collectSoon(clientId, 300);
   revalidatePath(`/clients/${clientId}`, "layout");

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { publishContext } from "@/lib/publish-page";
-import { listScheduledPosts, type ScheduledPost } from "@/lib/sns/store";
+import { listConnections, listScheduledPosts, type ScheduledPost } from "@/lib/sns/store";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
 import { textFor } from "@/lib/sns/publish/run";
+import { resolveTargets } from "@/lib/sns/publish/targets";
+import type { Platform } from "@/lib/sns/models";
 import { fmtDateTime, truncate } from "@/lib/format";
 import { Flash } from "@/components/flash";
 import { PageHead } from "@/components/report-ui";
@@ -22,7 +24,9 @@ const OK: Record<string, [kind: "ok" | "error", text: string]> = {
   pending: ["ok", "担当者に承認を依頼しました。承認されると投稿されます。"],
 };
 
-function PostCard({ post, clientId, isStaff }: { post: ScheduledPost; clientId: string; isStaff: boolean }) {
+type Conn = { platform: Platform; external_id: string; username: string | null; connected_at: string };
+
+function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; clientId: string; isStaff: boolean; conns: Conn[] }) {
   const [label, kind] = STATUS[post.status];
   const when = post.status === "pending"
     ? (post.requested_mode === "now" ? "希望：承認されたらすぐ投稿" : `希望の予約：${fmtDateTime(post.scheduled_at)}`)
@@ -44,12 +48,15 @@ function PostCard({ post, clientId, isStaff }: { post: ScheduledPost; clientId: 
         </ul>
       )}
       <ul className="post-results">
-        {post.platforms.map((p) => {
-          const r = post.results?.[p];
+        {/* 投稿先はアカウントごと（同じSNSの複数アカウントに出せる） */}
+        {resolveTargets(post, conns).map((t) => {
+          const p = t.platform;
+          const r = post.results?.[t.key];
+          const name = conns.find((c) => c.platform === p && c.external_id === t.externalId)?.username;
           return (
-            <li key={p}>
+            <li key={t.key}>
               <i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" />
-              <strong>{PLATFORM_LABELS[p]}</strong>
+              <strong>{PLATFORM_LABELS[p]}</strong>{name && <span className="small">（{name}）</span>}
               {r?.state === "published" ? <> <span className="badge good">投稿済み</span>{r.permalink && <> <a href={r.permalink} target="_blank" rel="noopener noreferrer">SNSで見る<span className="sr-only">（{PLATFORM_LABELS[p]}・新しいタブで開きます）</span></a></>}</>
                 : r?.state === "failed" ? <> <span className="badge warn">失敗</span> <span className="small">{r.error}</span></>
                 : <span className="small muted"> {textFor(post, p) !== post.text ? "（専用の本文あり）" : ""}</span>}
@@ -67,7 +74,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
   const sp = await searchParams;
   const { v, admin, connections, needsApproval } = await publishContext(id);
   const isStaff = v.kind === "staff";
-  const posts = await listScheduledPosts(admin, id);
+  const [posts, conns] = await Promise.all([listScheduledPosts(admin, id), listConnections(admin, id)]);
   const ok = typeof sp.ok === "string" ? OK[sp.ok] : undefined;
   const pending = posts.filter((p) => p.status === "pending");
   const upcoming = posts.filter((p) => ["scheduled", "publishing"].includes(p.status)).sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
@@ -88,7 +95,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
         <section key={title as string} aria-labelledby={`h-${title}`}>
           <h2 id={`h-${title}`}>{title as string}</h2>
           {(list as ScheduledPost[]).length === 0 ? <p className="muted">{empty as string}</p>
-            : <ul className="post-list">{(list as ScheduledPost[]).map((p) => <PostCard key={p.id} post={p} clientId={id} isStaff={isStaff} />)}</ul>}
+            : <ul className="post-list">{(list as ScheduledPost[]).map((p) => <PostCard key={p.id} post={p} clientId={id} isStaff={isStaff} conns={conns} />)}</ul>}
         </section>
       ))}
     </>

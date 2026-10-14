@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedToUtc } from "@/lib/sns/importers";
 import { DEFAULT_TZ, isPlatform, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { validatePost } from "@/lib/sns/publish/rules";
+import { parseTargetKey, platformsOf, resolveTargets, type Target } from "@/lib/sns/publish/targets";
 import { AIError } from "@/lib/sns/ai";
 import { writePerPlatform } from "@/lib/sns/ai-write";
 import { consentState } from "@/lib/sns/privacy";
@@ -55,7 +56,8 @@ export type SavePostInput = {
   id?: string;
   text: string;
   platformTexts: Partial<Record<Platform, string>>;
-  platforms: string[];
+  /** 投稿先のアカウント（"instagram:<external_id>" のキー） */
+  targets: string[];
   mediaPaths: string[];
   mode: "draft" | "schedule" | "now";
   scheduledLocal?: string; // "YYYY-MM-DDTHH:mm"（日本時間）
@@ -66,7 +68,14 @@ export type SavePostInput = {
 export async function savePost(input: SavePostInput): Promise<Result<{ id: string; publishNow: boolean; pending: boolean }>> {
   try {
     const { v, admin } = await poster(input.clientId);
-    const platforms = [...new Set(input.platforms)].filter(isPlatform);
+    // 投稿先はアカウント単位。連携しているアカウントだけを受け付ける
+    const conns = await listConnections(admin, input.clientId);
+    const targets: Target[] = [];
+    for (const k of new Set((input.targets ?? []).map(String))) {
+      const t = parseTargetKey(k);
+      if (t && conns.some((c) => c.platform === t.platform && c.external_id === t.external_id)) targets.push(t);
+    }
+    const platforms = platformsOf(targets);
     const text = String(input.text ?? "");
     const platformTexts: Partial<Record<Platform, string>> = {};
     for (const p of platforms) {
@@ -82,14 +91,12 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     const errors: string[] = [];
     if (input.mode !== "draft") {
       errors.push(...validatePost(platforms, (p) => platformTexts[p] ?? text, media.length));
-      const conns = await listConnections(admin, input.clientId);
-      for (const p of platforms) {
-        const c = conns.find((x) => x.platform === p);
-        if (!c) errors.push(`${PLATFORM_LABELS[p]}：連携されていません`);
-        else if (!c.can_publish) errors.push(`${PLATFORM_LABELS[p]}：投稿の許可がありません（スタッフが「設定・連携」で連携し直す必要があります）`);
+      for (const t of targets) {
+        const c = conns.find((x) => x.platform === t.platform && x.external_id === t.external_id);
+        if (c && !c.can_publish) errors.push(`${PLATFORM_LABELS[t.platform]}（${c.username ?? t.external_id}）：投稿の許可がありません（スタッフが「SNS連携」で連携し直す必要があります）`);
       }
-    } else if (!platforms.length) {
-      errors.push("投稿先のSNSを1つ以上選んでください");
+    } else if (!targets.length) {
+      errors.push("投稿先のアカウントを1つ以上選んでください");
     }
 
     let scheduledAt: string | null = null;
@@ -121,18 +128,18 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
       // 外した画像は削除する
       await removeMedia(admin, cur.media.map((m) => m.path).filter((p) => !mediaPaths.includes(p)));
       await updateScheduledPost(admin, id, {
-        text, platform_texts: platformTexts, platforms, media, status, scheduled_at: scheduledAt, results: {}, requested_mode: requestedMode,
+        text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt, results: {}, requested_mode: requestedMode,
         // 依頼し直したら、前回の差し戻しの記録は消す（下書き保存のときは、理由を見ながら直せるよう残す）
         ...(status !== "draft" ? { review_note: null, reviewed_by: null, reviewed_by_name: null, reviewed_at: null } : {}),
       });
     } else {
       id = await insertScheduledPost(admin, {
-        client_id: input.clientId, text, platform_texts: platformTexts, platforms, media, status, scheduled_at: scheduledAt,
+        client_id: input.clientId, text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt,
         created_by: v.id, created_by_name: v.name || v.email, requested_mode: requestedMode,
       });
     }
     const what = needsApproval ? `承認を依頼（${input.mode === "now" ? "今すぐ" : `予約 ${scheduledAt}`}）` : { draft: "下書き保存", schedule: `予約（${scheduledAt}）`, now: "今すぐ投稿" }[input.mode];
-    await audit(admin, v, "post.save", input.clientId, `${what}・${platforms.join(",")}・画像${media.length}枚`, await clientIp());
+    await audit(admin, v, "post.save", input.clientId, `${what}・${targets.map((t) => `${t.platform}:${t.external_id}`).join(",")}・画像${media.length}枚`, await clientIp());
     revalidatePath(`/clients/${input.clientId}/publish`);
     return { ok: true, id: id!, publishNow: input.mode === "now" && !needsApproval, pending: needsApproval };
   } catch (e) {
@@ -205,8 +212,8 @@ export async function approvePost(clientId: string, postId: string): Promise<Res
     const due = post.requested_mode === "now" || !post.scheduled_at || new Date(post.scheduled_at).getTime() <= Date.now() + 60_000;
     // 承認の時点でも、投稿先の連携と投稿の許可を確かめる
     const conns = await listConnections(admin, clientId);
-    const missing = post.platforms.filter((p) => !conns.find((c) => c.platform === p)?.can_publish);
-    if (missing.length) return { ok: false, errors: [`${missing.map((p) => PLATFORM_LABELS[p]).join("・")}：連携されていないか、投稿の許可がありません`] };
+    const missing = resolveTargets(post, conns).filter((t) => !conns.find((c) => c.platform === t.platform && c.external_id === t.externalId)?.can_publish);
+    if (missing.length) return { ok: false, errors: [`${missing.map((t) => PLATFORM_LABELS[t.platform]).join("・")}：連携されていないか、投稿の許可がありません`] };
     await updateScheduledPost(admin, postId, {
       status: "scheduled", scheduled_at: due ? new Date().toISOString() : post.scheduled_at,
       reviewed_by: v.id, reviewed_by_name: v.name || v.email, reviewed_at: new Date().toISOString(), review_note: null,
