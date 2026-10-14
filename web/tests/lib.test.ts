@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { analyze, bestTimes } from "../src/lib/sns/analysis.ts";
+import { monthlyReminder, tokenStage, tokenWindowDays } from "../src/lib/sns/alert-rules.ts";
 import { checkConnection, isTokenError, metaExchangeCode, needsRefresh, threadsExchangeCode, xVerify } from "../src/lib/sns/connect.ts";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { aiMarkdown, crc32, downloads, toCsv, zip, type DownloadName } from "../src/lib/sns/export.ts";
@@ -197,12 +198,12 @@ test("この期間のポイント：フォロワーが±0人のときは「伸�
   assert.ok(one.some((i) => i.text.startsWith("Instagramのフォロワーが伸びました（+12人")));
 });
 
-test("予約時刻のおすすめ：件数が足りて普段より良い枠だけを、良い順に選ぶ", () => {
+test("予約時刻のおすすめ：5件以上あって普段より良い枠だけを、良い順に選ぶ", () => {
   const grid = <T,>(v: T) => Array.from({ length: 7 }, () => Array.from({ length: 8 }, () => v));
   const score = grid<number | null>(null), count = grid(0);
-  score[2][6] = 150; count[2][6] = 4; // 水 18〜21時
-  score[5][4] = 130; count[5][4] = 3; // 土 12〜15時
-  score[0][3] = 200; count[0][3] = 2; // 件数不足
+  score[2][6] = 150; count[2][6] = 6; // 水 18〜21時
+  score[5][4] = 130; count[5][4] = 5; // 土 12〜15時
+  score[0][3] = 270; count[0][3] = 3; // 件数不足（3件の「2.7倍」は偶然の差かもしれない）
   score[1][7] = 105; count[1][7] = 9; // 普段とほぼ同じ
   const r = bestTimes({ all: undefined, instagram: { score, count } } as never, ["instagram", "x"]);
   assert.deepEqual(r.map((b) => [b.label, b.hour, b.ratio]), [["水曜 18〜21時", 18, 1.5], ["土曜 12〜15時", 12, 1.3]]);
@@ -214,4 +215,19 @@ test("次のその曜日・時刻（日本時間）を返し、間に合わな�
   assert.equal(nextWeekdayAt(2, 6, now), "2026-10-21T06:00");
   assert.equal(nextWeekdayAt(2, 8, now), "2026-10-21T08:00");
   assert.equal(nextWeekdayAt(5, 12, now), "2026-10-17T12:00");
+});
+
+test("知らせのメール：期限の段階と、月次レポートの送り忘れの知らせの日", () => {
+  assert.equal(tokenStage(null), null);
+  assert.equal(tokenStage(10), null);
+  assert.equal(tokenStage(6.5), "7");
+  assert.equal(tokenStage(2.9), "3");
+  assert.equal(tokenStage(0.5), "1");
+  assert.equal(tokenStage(-3), "expired");
+  assert.equal(tokenWindowDays("expired"), 7);
+  assert.equal(tokenWindowDays("3"), 30);
+  assert.deepEqual(monthlyReminder("2026-11-01"), { month: "2026-10", round: "first" });
+  assert.deepEqual(monthlyReminder("2026-11-05"), { month: "2026-10", round: "second" });
+  assert.deepEqual(monthlyReminder("2027-01-03"), { month: "2026-12", round: "first" });
+  assert.equal(monthlyReminder("2026-10-14"), null);
 });

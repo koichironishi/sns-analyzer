@@ -381,9 +381,12 @@ export function generateInsights(d: AnalysisResult): Insight[] {
 
 export type BestTime = { platform: Platform; weekday: number; hour: number; label: string; ratio: number; n: number };
 
+/** 予約時刻のおすすめに使う枠の最低件数。3件では偶然の差が大きく、おすすめとして出すと確かな結果に見えてしまうため */
+export const BEST_TIME_MIN_POSTS = 5;
+
 /**
  * 曜日×時間帯の結果から、反応の良い枠を SNS ごとに上位 per 件まで選ぶ（投稿の予約時刻のおすすめ）。
- * 件数が少ない枠（MIN_SAMPLES 未満）と、普段（100）より1割以上良くない枠は出さない
+ * 件数が少ない枠（BEST_TIME_MIN_POSTS 未満）と、普段（100）より1割以上良くない枠は出さない
  */
 export function bestTimes(heatmap: AnalysisResult["heatmap"], platforms: readonly Platform[], per = 2): BestTime[] {
   const out: BestTime[] = [];
@@ -393,7 +396,7 @@ export function bestTimes(heatmap: AnalysisResult["heatmap"], platforms: readonl
     const cells: BestTime[] = [];
     h.score.forEach((row, w) => row.forEach((sc, sl) => {
       const n = h.count[w][sl];
-      if (sc !== null && n >= MIN_SAMPLES && sc >= 110) {
+      if (sc !== null && n >= BEST_TIME_MIN_POSTS && sc >= 110) {
         cells.push({ platform: p, weekday: w, hour: sl * SLOT_HOURS, label: `${WEEKDAYS[w]}曜 ${SLOTS[sl]}`, ratio: sc / 100, n });
       }
     }));

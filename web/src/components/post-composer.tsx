@@ -250,7 +250,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
               if (!list.length) return null;
               return (
                 <div className="best-times">
-                  <p className="hint" id="best-hint" style={{ margin: 0 }}>反応が良い時間帯（直近90日の投稿から）。押すと、次のその時刻を予約日時に入れます。</p>
+                  <p className="hint" id="best-hint" style={{ margin: 0 }}>反応が良い時間帯（直近90日・5件以上投稿した時間帯から）。目安なので、内容に合わせて決めてください。押すと、次のその時刻を予約日時に入れます。</p>
                   <ul className="chips" aria-describedby="best-hint">
                     {list.map((b) => {
                       const at = nextWeekdayAt(b.weekday, b.hour);

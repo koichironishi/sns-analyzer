@@ -61,12 +61,11 @@ export async function sendMail(to: string[], subject: string, lines: string[]): 
   });
 }
 
-/** 今日すでに同じ種類の知らせを送ったか（1日に何度も動く処理から、同じ知らせを重ねて送らないため） */
-export async function alertedToday(admin: SupabaseClient, kind: string): Promise<boolean> {
-  const start = new Date(`${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })}T00:00:00+09:00`).toISOString();
-  const { count } = await admin.from("sns_audit").select("id", { count: "exact", head: true })
-    .eq("action", `alert.${kind}`).gte("at", start);
-  return (count ?? 0) > 0;
+/** 直近 days 日に知らせた単位（markAlerted の detail）。同じ問題を重ねて知らせないため */
+export async function alertedKeys(admin: SupabaseClient, kind: string, days: number): Promise<Set<string>> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data } = await admin.from("sns_audit").select("detail").eq("action", `alert.${kind}`).gte("at", since).limit(5000);
+  return new Set(((data ?? []) as { detail: string | null }[]).map((r) => r.detail ?? ""));
 }
 
 export async function markAlerted(admin: SupabaseClient, kind: string, detail: string) {
