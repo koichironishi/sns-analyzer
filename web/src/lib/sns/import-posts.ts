@@ -90,7 +90,7 @@ export function checkImportInput(clientId: string, input: ImportPostInput, now =
 }
 
 /**
- * 承認待ちで登録する。同じ ref がすでにあれば、承認前（承認待ち・差し戻し・下書き）なら差し替え、
+ * 承認待ちで登録する。同じ ref がすでにあれば、承認前（承認待ち・差し戻し・下書き）か取り消し済みなら差し替え、
  * 承認後（予約中・投稿済みなど）なら触らずにそのまま返す（承認済みの内容を外から書き換えない）。
  */
 export async function importPost(admin: Db, clientId: string, input: ImportPostInput, mediaUrl: (path: string) => string): Promise<ImportPostResult> {
@@ -111,7 +111,8 @@ export async function importPost(admin: Db, clientId: string, input: ImportPostI
   const { data: cur } = await admin.from("sns_scheduled_posts").select("id,status,media").eq("client_id", clientId).eq("import_ref", input.ref).maybeSingle();
   const existing = cur as { id: string; status: string; media: { path: string }[] } | null;
   if (existing) {
-    if (!["pending", "rejected", "draft"].includes(existing.status)) {
+    // 取り消した回は公開されないので、承認待ちに戻して差し替えてよい
+    if (!["pending", "rejected", "draft", "canceled"].includes(existing.status)) {
       return { ok: true, id: existing.id, action: "unchanged", message: "承認済み（または投稿済み）のため、変更しませんでした" };
     }
     const { error } = await admin.from("sns_scheduled_posts").update(row).eq("id", existing.id);
@@ -119,7 +120,8 @@ export async function importPost(admin: Db, clientId: string, input: ImportPostI
     // 差し替えで使わなくなった画像を消す
     const old = existing.media.map((m) => m.path).filter((p) => !input.mediaPaths.includes(p));
     if (old.length) await admin.storage.from("sns-media").remove(old);
-    return { ok: true, id: existing.id, action: "updated", message: "承認待ちの投稿を差し替えました" };
+    return { ok: true, id: existing.id, action: "updated",
+      message: existing.status === "canceled" ? "取り消し済みの投稿を、承認待ちに戻して差し替えました" : "承認待ちの投稿を差し替えました" };
   }
   const { data, error } = await admin.from("sns_scheduled_posts")
     .insert({ ...row, client_id: clientId, import_ref: input.ref, created_by: null, created_by_name: IMPORT_ACTOR }).select("id").single();
