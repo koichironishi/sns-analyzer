@@ -21,6 +21,8 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   if (!name) notFound();
   // 左メニュー：全体のメニュー／選択中のクライアント（設定・連携）／名前とログアウト（MEO と同じ並び）
   const clientItems = v.kind === "staff" ? [
+    // 設定の画面からレポートへ戻れるように。レポートの画面（インサイト・投稿など）ではこの項目を選択中にする
+    { href: "", label: "ダッシュボード", fallback: true },
     { href: "/settings", label: "クライアント情報", keepQuery: false },
     { href: "/settings/connections", label: "SNS連携", keepQuery: false, match: ["/settings/meta-pages"] },
     { href: "/settings/users", label: "利用者管理", keepQuery: false },
