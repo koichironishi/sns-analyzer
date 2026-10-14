@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { xApp } from "@/lib/connect-flow";
-import { json } from "@/lib/http";
+import { json, siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDuePosts } from "@/lib/sns/publish/run";
 import { audit } from "@/lib/sns/store";
+import { sendAlert } from "@/lib/notify";
 
 // 予約投稿の処理。Supabase の pg_cron から数分おきに呼ぶ（supabase/sns-cron.sql）
 export const maxDuration = 300;
@@ -22,6 +23,20 @@ async function run(req: Request) {
   const r = await runDuePosts(admin, Date.now() + (maxDuration - 20) * 1000, { xApp: xApp() });
   if (r.processed.length || r.closed) {
     await audit(admin, null, "cron.publish", null, `${r.processed.length}件を投稿（残り ${r.remaining}件・中断 ${r.closed}件）`);
+  }
+  // 予約投稿が失敗・一部失敗したら、スタッフにメールで知らせる（画面を開かないと気づけないため）
+  const bad = r.processed.filter((x) => x.status === "failed" || x.status === "partial");
+  if (bad.length || r.closed) {
+    const { data } = await admin.from("sns_clients").select("id,name").in("id", [...new Set(bad.map((x) => x.post.client_id))]);
+    const name = new Map(((data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+    const lines = ["予約投稿で失敗がありました。「投稿」の画面で理由を確認し、必要なら再投稿してください。", ""];
+    for (const x of bad) {
+      lines.push(`■ ${name.get(x.post.client_id) ?? "（クライアント）"}　${x.status === "partial" ? "一部失敗" : "失敗"}　「${x.post.text.split("\n")[0].slice(0, 40)}」`);
+      for (const [k, v] of Object.entries(x.post.results)) if (v?.state === "failed") lines.push(`　・${k}：${v.error ?? "理由不明"}`);
+      lines.push(`　${siteUrl()}/clients/${x.post.client_id}/publish`);
+    }
+    if (r.closed) lines.push("", `途中で止まった投稿が${r.closed}件あります（失敗として閉じました）。SNS上に出ていないか確認してから再投稿してください。`);
+    await sendAlert(admin, `予約投稿の失敗（${bad.length + r.closed}件）`, lines);
   }
   return json({ processed: r.processed.length, remaining: r.remaining, closed: r.closed });
 }

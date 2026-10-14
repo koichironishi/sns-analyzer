@@ -183,3 +183,16 @@ test("複数アカウント：フォロワー推移の合計は、収集日の�
     [["2026-10-01", 100], ["2026-10-02", 150], ["2026-10-03", 170]]);
   assert.deepEqual(sumSeries([[["2026-10-01", 5]]]), [["2026-10-01", 5]]);
 });
+
+test("この期間のポイント：フォロワーが±0人のときは「伸びが最も大きい」「要対応」と書かない", async () => {
+  const { generateInsights } = await import("../src/lib/sns/analysis.ts");
+  const sum = (label: string, delta: number, growth: number) => ({ label, followersDelta: delta, followersGrowth: growth, erFollowers: null, change: {}, posts: 0 });
+  const make = (summary: Record<string, unknown>) => ({ platforms: Object.keys(summary), summary, heatmap: {}, media: [], hashtags: [], topPosts: [], total: { change: {} } } as never);
+  const flat = generateInsights(make({ instagram: sum("Instagram", 0, 0), facebook: sum("Facebook", 0, 0) }));
+  assert.ok(!flat.some((i) => i.text.includes("フォロワー")));
+  const mixed = generateInsights(make({ instagram: sum("Instagram", 30, 0.05), facebook: sum("Facebook", -4, -0.02) }));
+  assert.ok(mixed.some((i) => i.kind === "good" && i.text.includes("最も大きいのはInstagram（+30人")));
+  assert.ok(mixed.some((i) => i.kind === "warn" && i.text.includes("Facebookのフォロワーが減っています（-4人")));
+  const one = generateInsights(make({ instagram: sum("Instagram", 12, 0.01) }));
+  assert.ok(one.some((i) => i.text.startsWith("Instagramのフォロワーが伸びました（+12人")));
+});

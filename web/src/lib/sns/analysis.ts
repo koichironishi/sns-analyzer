@@ -318,10 +318,18 @@ export function generateInsights(d: AnalysisResult): Insight[] {
 
   const growth = plats.filter((p) => s[p]!.followersGrowth !== null);
   if (growth.length) {
-    const p = growth.reduce((a, b) => (s[b]!.followersGrowth! > s[a]!.followersGrowth! ? b : a));
-    const g = s[p]!.followersGrowth!;
-    out.push({ kind: g > 0 ? "good" : "warn", text:
-      `フォロワーの伸びが最も大きいのは${s[p]!.label}（${signed(s[p]!.followersDelta ?? 0)}人、${fmtPct(g)}）。` });
+    // 伸びたSNSがあれば最も伸びたSNSを「良好」に、減ったSNSは「要対応」に。増減のない（±0人）SNSには触れない。
+    // 以前は ±0人でも「伸びが最も大きい」と書き、しかも要対応になって矛盾していた（2026-10-14）
+    const up = growth.filter((p) => (s[p]!.followersDelta ?? 0) > 0);
+    if (up.length) {
+      const p = up.reduce((a, b) => (s[b]!.followersGrowth! > s[a]!.followersGrowth! ? b : a));
+      const lead = growth.length > 1 ? `フォロワーの伸びが最も大きいのは${s[p]!.label}` : `${s[p]!.label}のフォロワーが伸びました`;
+      out.push({ kind: "good", text: `${lead}（${signed(s[p]!.followersDelta!)}人、${fmtPct(s[p]!.followersGrowth!)}）。` });
+    }
+    for (const p of growth.filter((x) => (s[x]!.followersDelta ?? 0) < 0)) {
+      out.push({ kind: "warn", text:
+        `${s[p]!.label}のフォロワーが減っています（${signed(s[p]!.followersDelta!)}人、${fmtPct(s[p]!.followersGrowth!)}）。投稿の頻度や内容が、フォローの目的とずれていないか確認してください。` });
+    }
   }
 
   for (const p of plats) {

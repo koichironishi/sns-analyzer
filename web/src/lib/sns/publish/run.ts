@@ -100,12 +100,12 @@ export async function closeStalePosts(admin: SupabaseClient): Promise<number> {
 export async function runDuePosts(admin: SupabaseClient, deadline: number, deps: RunDeps = {}) {
   const closed = await closeStalePosts(admin);
   const ids = await duePostIds(admin);
-  const done: { id: string; status: PostStatus }[] = [];
+  const done: { id: string; status: PostStatus; post: ScheduledPost }[] = [];
   for (const id of ids) {
     // 1件あたり最大1分ほどかかる（画像の処理待ち）ため、残り時間が少なければ次回へ回す
     if (deadline - Date.now() < 70_000) break;
     const r = await publishNow(admin, id, deps);
-    if (r) done.push({ id, status: r.status });
+    if (r) done.push({ id, status: r.status, post: r });
   }
   return { processed: done, remaining: ids.length - done.length, closed };
 }

@@ -64,6 +64,30 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
           );
         })}
       </ul>
+      {/* 公開前（承認待ち・予約中・下書き）は、画像を大きく並べて本文と一緒に確かめられるようにする。
+          承認待ちは最初から開く（小さな画像のまま承認して、間違った画像が投稿されかけたため。2026-10-14） */}
+      {["pending", "scheduled", "draft", "rejected"].includes(post.status) && (
+        <details className="post-preview" open={post.status === "pending"}>
+          <summary>中身を確認する（画像{post.media.length}枚・本文{new Set(resolveTargets(post, conns).map((t) => t.platform)).size > 1 ? "・SNSごと" : ""}）</summary>
+          {post.media.length > 0 && (
+            <ol className="preview-grid" aria-label="投稿する画像（この順番で投稿されます）">
+              {post.media.map((m, i) => (
+                <li key={m.path}>
+                  <span className="preview-no" aria-hidden="true">{i + 1}</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <a href={m.url} target="_blank" rel="noopener noreferrer"><img src={m.url} alt={`${i + 1}枚目`} loading="lazy" /><span className="sr-only">（{i + 1}枚目を新しいタブで大きく開きます）</span></a>
+                </li>
+              ))}
+            </ol>
+          )}
+          {[...new Set(resolveTargets(post, conns).map((t) => t.platform))].map((p) => (
+            <div key={p} className="preview-text">
+              <p className="small muted" style={{ margin: "8px 0 4px" }}><i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" /> {PLATFORM_LABELS[p]}の本文</p>
+              <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{textFor(post, p) || <span className="muted">（本文なし）</span>}</p>
+            </div>
+          ))}
+        </details>
+      )}
       <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
     </li>
   );

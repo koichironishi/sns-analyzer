@@ -657,3 +657,12 @@ body:has(.side) .app-drawer { display: none; }
 /* 投稿作成：AIでSNSごとに書き分ける */
 .ai-write { margin-top: var(--s3); display: grid; gap: 4px; justify-items: start; }
 .ai-write .hint { margin: 0; }
+
+/* 公開前の確認（画像を大きく、投稿される順番の番号つきで並べる） */
+.post-preview { margin: var(--s3) 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4); background: var(--surface-2, var(--surface)); }
+.post-preview > summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; }
+.preview-grid { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: var(--s3); }
+.preview-grid li { position: relative; }
+.preview-grid img { display: block; width: 100%; height: auto; border-radius: var(--r-sm, 6px); border: 1px solid var(--border); background: #fff; }
+.preview-no { position: absolute; top: 6px; left: 6px; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: rgb(0 0 0 / .72); color: #fff; font-size: var(--fs-sm); font-weight: 700; display: grid; place-items: center; }
+.preview-text { border-top: 1px solid var(--grid); margin-top: var(--s3); padding-top: var(--s2); }
