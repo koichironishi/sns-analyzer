@@ -66,6 +66,8 @@ export type AnalysisResult = {
   hashtags: { tag: string; count: number; score: number; platforms: Platform[] }[];
   topPosts: { platform: Platform; date: string; text: string; media: string; permalink: string | null;
     engagements: number; views: number | null; erViews: number | null; score: number }[];
+  /** 投稿ごとのエンゲージメント・ER・パフォーマンス指数（投稿の ID → 値。投稿一覧で使う） */
+  postScores: Record<string, { engagements: number; erViews: number | null; score: number }>;
   insights: Insight[];
 };
 
@@ -286,6 +288,7 @@ export function analyze(posts: Post[], followers: FollowerSeries, opts: AnalyzeO
     heatmap,
     hashtags,
     topPosts,
+    postScores: Object.fromEntries(cur.map((r) => [r.post.id, { engagements: r.engagements, erViews: r.erViews, score: r.score }])),
     insights: [],
   };
   result.insights = generateInsights(result);

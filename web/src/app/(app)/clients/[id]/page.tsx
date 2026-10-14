@@ -6,7 +6,6 @@ import { Legend, Sparkline, StackedDaily } from "@/components/charts";
 import { fmtNum, fmtPct, fmtSigned, slash } from "@/lib/format";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
 import { PostList } from "@/components/post-list";
-import { PostRanking } from "@/components/post-ranking";
 
 // レイアウトのタイトルの型は同じ階層のページには効かないため、ここで組み立てる
 export async function generateMetadata({ params }: PageProps<"/clients/[id]">): Promise<Metadata> {
@@ -109,12 +108,6 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </div>
           </details>
         </div>
-      </section>
-
-      <section aria-labelledby="h-ranking" id="ranking">
-        <h2 id="h-ranking">投稿ランキング</h2>
-        <p className="sub">SNSの規模差を補正した「パフォーマンス指数」（100＝そのSNSの普段の投稿）で並べた上位投稿です。</p>
-        <PostRanking analysis={d} />
       </section>
 
       <section aria-labelledby="h-posts" id="posts">

@@ -91,8 +91,24 @@ h1, h2, h3 { line-height: 1.4; font-weight: 700; letter-spacing: .01em; }
 .tab:hover { color: var(--text); }
 .platform-switch { margin: var(--s3) 0 0; }
 .posts-table { max-height: 640px; overflow: auto; }
-.posts-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
-.sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
+.posts-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; white-space: nowrap; min-width: 0; vertical-align: bottom; }
+.posts-table th, .posts-table td { padding: 10px 8px; }
+.posts-table th:first-child, .posts-table td:first-child { padding-left: var(--s4); }
+.posts-table .post-text { min-width: 180px; }
+.th-line { display: block; white-space: nowrap; }
+.post-sns { font-size: var(--fs-xs); margin-bottom: 2px; }
+.sort-mark { display: block; font-size: .85em; }
+/* 横にスクロールできるときは、端に影を出して続きがあることを示す（スクロールしきると消える） */
+.posts-table {
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left / 40px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right / 40px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / .16), transparent) left / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / .16), transparent) right / 14px 100% no-repeat scroll,
+    var(--surface);
+}
+.posts-table tbody tr { background: transparent; }
+.sort-link { color: inherit; text-decoration: none; }
 .sort-link:hover { text-decoration: underline; }
 .platform-switch .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .tab[aria-pressed="true"], .tab[aria-current="true"], .tab[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 0 1px var(--border); }
@@ -120,6 +136,8 @@ tbody tr:hover > * { background: color-mix(in srgb, var(--surface-2) 55%, transp
 .card.flush table th:first-child, .card.flush table td:first-child { padding-left: var(--s5); }
 .card.flush table th:last-child, .card.flush table td:last-child { padding-right: var(--s5); }
 th.num, td.num { text-align: right; white-space: nowrap; }
+/* 列の多い表で見出しが1行のまま横に伸び、右の列が切れないよう、見出しは折り返す（数字のセルは折り返さない） */
+thead th, thead th.num { white-space: normal; min-width: 4.5em; }
 
 /* フォーム */
 label { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin: var(--s4) 0 6px; }
@@ -249,7 +267,7 @@ details.more .ins:first-child { border-top: 1px solid var(--grid); padding-top: 
 .bar-cell { min-width: 190px; white-space: nowrap; }
 .bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; vertical-align: middle; max-width: calc(100% - 100px); min-width: 2px; }
 .bar-val { margin-left: 8px; font-variant-numeric: tabular-nums; }
-.post-text { min-width: 260px; }
+.post-text { min-width: 220px; }
 .post-text a { color: inherit; }
 .rank { font-size: var(--fs-xs); color: var(--muted); margin-left: 4px; }
 .small { font-size: var(--fs-sm); }
