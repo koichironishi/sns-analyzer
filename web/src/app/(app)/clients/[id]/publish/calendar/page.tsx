@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { publishContext } from "@/lib/publish-page";
 import { listScheduledPosts, ownPostsBetween, type PostStatus, type ScheduledPost } from "@/lib/sns/store";
-import { addDays, todayIn, toLocal, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
+import { addDays, todayIn, todaySlotAfter, toLocal, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { platformsOf } from "@/lib/sns/publish/targets";
 import { truncate } from "@/lib/format";
 import { PageHead } from "@/components/report-ui";
@@ -33,6 +33,8 @@ export default async function PublishCalendarPage({ params, searchParams }: Page
   const sp = await searchParams;
   const { admin } = await publishContext(id);
   const today = todayIn();
+  // 今日に作るときは1時間後（12時をすでに過ぎていても予約できるように）。ほかの日は12時から始める
+  const nowPlusHour = todaySlotAfter(1);
   const want = typeof sp.month === "string" && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : today.slice(0, 7);
   const first = `${want}-01`;
   const [y, m] = want.split("-").map(Number);
@@ -103,6 +105,11 @@ export default async function PublishCalendarPage({ params, searchParams }: Page
             <li key={d} className={`cal-day${out ? " out" : ""}${d === today ? " today" : ""}${items.length ? "" : " empty"}`}>
               <span className="cal-date">
                 <span aria-hidden="true">{dd}</span>
+                {!out && d >= today && (
+                  <Link className="cal-add no-print" href={`/clients/${id}/publish/new?at=${d === today ? nowPlusHour : `${d}T12:00`}`}>
+                    <span aria-hidden="true">＋</span><span className="sr-only">{mm}月{dd}日に投稿を予約する</span>
+                  </Link>
+                )}
                 <span className="sr-only">{mm}月{dd}日（{WEEKDAYS[toLocal(`${d}T12:00:00+09:00`).weekday]}）{items.length ? `${items.length}件` : "投稿なし"}</span>
                 {d === today && <span className="cal-today-tag">今日</span>}
               </span>

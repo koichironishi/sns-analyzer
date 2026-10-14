@@ -155,6 +155,10 @@ create table if not exists sns_accounts (
   unique (client_id, platform, external_id)
 );
 create index if not exists idx_sns_accounts_client on sns_accounts(client_id);
+-- MEO のクライアント（clients.id）との結び付け。月次レポートに Googleマップ（口コミ・投稿・検索キーワード）の結果も載せるため。
+-- MEO の表は変えない（外部キーも張らない。MEO 側でクライアントを消しても、こちらは結果が出なくなるだけ）
+alter table sns_clients add column if not exists meo_client_id uuid;
+
 -- 呼び名（「本店」「店舗A」など）。同じSNSに複数のアカウントがあるとき、切り替えや投稿先で見分けやすくする
 alter table sns_accounts add column if not exists nickname text;
 
@@ -356,6 +360,9 @@ alter table sns_scheduled_posts add column if not exists targets jsonb not null 
 -- 外部ツール（Rhythmos AI など）から登録した投稿の識別子。同じ投稿を登録し直したときに重複させない
 alter table sns_scheduled_posts add column if not exists import_ref text check (import_ref is null or length(import_ref) between 1 and 200);
 create unique index if not exists idx_sns_scheduled_posts_import_ref on sns_scheduled_posts(client_id, import_ref) where import_ref is not null;
+
+-- 投稿のリンクに計測用の印（UTM）を付けるか。投稿するときに、SNSごとの utm_source を付けて出す（2026-10-15）
+alter table sns_scheduled_posts add column if not exists add_utm boolean not null default false;
 
 -- ---------- 外部ツールから投稿を登録するための合言葉（クライアントごとに1つ） ----------
 -- 合言葉そのものは保存せず、SHA-256 の値だけを持つ。service_role 専用（ポリシーを作らない）

@@ -115,6 +115,9 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
                       {p.permalink
                         ? <a href={p.permalink} target="_blank" rel="noopener noreferrer">{title}<span className="sr-only">（新しいタブで開きます）</span></a>
                         : title}
+                      {p.contentType !== "story" && (
+                        <Link className="reuse-link no-print" href={`/clients/${r.client.id}/publish/new?post=${p.id}`}>もとに作る<span className="sr-only">（「{title}」の本文で新しい投稿を作ります）</span></Link>
+                      )}
                     </td>
                     <td className="nowrap">
                       {p.contentType === "story"

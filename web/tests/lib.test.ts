@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { analyze, bestTimes } from "../src/lib/sns/analysis.ts";
 import { monthlyReminder, prepWindow, tokenStage, tokenWindowDays } from "../src/lib/sns/alert-rules.ts";
+import { addUtm, hasLink } from "../src/lib/sns/publish/utm.ts";
 import { checkConnection, isTokenError, metaExchangeCode, needsRefresh, threadsExchangeCode, xVerify } from "../src/lib/sns/connect.ts";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { aiMarkdown, crc32, downloads, toCsv, zip, type DownloadName } from "../src/lib/sns/export.ts";
@@ -238,4 +239,19 @@ test("月初の準備：1日は朝の収集のあと（8時から）、5日ま�
   assert.deepEqual(prepWindow("2026-11-03", 2), { month: "2026-10" });
   assert.deepEqual(prepWindow("2027-01-05", 23), { month: "2026-12" });
   assert.equal(prepWindow("2026-11-06", 9), null);
+});
+
+test("リンクに計測用の印（UTM）を付ける：SNSごと・既存の印は残す・句読点やかっこは含めない", () => {
+  const id = "1234abcd-0000-0000-0000-000000000000";
+  assert.equal(addUtm("詳しくは https://example.com/a?x=1 へ", "x", id),
+    "詳しくは https://example.com/a?x=1&utm_source=x&utm_medium=social&utm_campaign=sns_post&utm_content=1234abcd へ");
+  assert.equal(addUtm("（https://example.com/）。", "threads", id),
+    "（https://example.com/?utm_source=threads&utm_medium=social&utm_campaign=sns_post&utm_content=1234abcd）。");
+  assert.equal(addUtm("見てね https://example.com/#top.", "facebook", id),
+    "見てね https://example.com/?utm_source=facebook&utm_medium=social&utm_campaign=sns_post&utm_content=1234abcd#top.");
+  assert.equal(addUtm("https://example.com/?utm_source=lp", "x", id), "https://example.com/?utm_source=lp");
+  assert.equal(addUtm("https://example.com/", "instagram", id), "https://example.com/");
+  assert.equal(addUtm("リンクなし", "x", id), "リンクなし");
+  assert.equal(hasLink("詳しくは https://example.com"), true);
+  assert.equal(hasLink("詳しくはプロフィールから"), false);
 });

@@ -204,3 +204,27 @@ export async function removeViewerAction(_: ActionState, form: FormData): Promis
   }
   redirect(to);
 }
+
+/** MEO のクライアントと結び付ける（月次レポートに Googleマップの結果を載せるため）。空なら外す */
+export async function linkMeoAction(_: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const { v, admin } = await staff();
+    const id = String(form.get("client_id") ?? "");
+    if (!UUID_RE.test(id) || !(await getClient(admin, id))) return { error: "クライアントの指定が正しくありません" };
+    const meo = String(form.get("meo_client_id") ?? "");
+    if (meo && !UUID_RE.test(meo)) return { error: "MEO のクライアントの指定が正しくありません" };
+    let label = "（なし）";
+    if (meo) {
+      const { data } = await admin.from("clients").select("name").eq("id", meo).maybeSingle();
+      if (!data) return { error: "MEO のクライアントが見つかりません" };
+      label = (data as { name: string }).name;
+    }
+    const { error } = await admin.from("sns_clients").update({ meo_client_id: meo || null }).eq("id", id);
+    if (error) return { error: `保存に失敗しました：${error.message}` };
+    await audit(admin, v, "client.meo", id, label, await clientIp());
+    revalidatePath(`/clients/${id}`, "layout");
+    return { ok: meo ? `MEO の「${label}」と結び付けました。月次レポートに Googleマップの結果が載ります。` : "MEO との結び付けを外しました。" };
+  } catch (e) {
+    return fail(e);
+  }
+}

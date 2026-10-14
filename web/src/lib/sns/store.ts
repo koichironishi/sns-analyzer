@@ -675,8 +675,13 @@ export async function audit(admin: Db, actor: { id: string; email: string } | nu
 
 export type AuditRow = { id: number; at: string; actor_email: string | null; ip: string | null; action: string; client_id: string | null; detail: string | null };
 
-export async function listAudit(db: Db, limit = 300): Promise<AuditRow[]> {
-  return check(await db.from("sns_audit").select("id,at,actor_email,ip,action,client_id,detail").order("at", { ascending: false }).limit(limit), "操作ログの読み込み") as AuditRow[];
+/** 自動の処理が残す記録（定期処理・知らせのメール・月初の準備）。操作ログでは、人の操作が埋もれないよう既定で隠す */
+export const SYSTEM_AUDIT_PREFIXES = ["cron.", "alert.", "monthly.ai"];
+
+export async function listAudit(db: Db, limit = 300, opts: { includeSystem?: boolean } = {}): Promise<AuditRow[]> {
+  let q = db.from("sns_audit").select("id,at,actor_email,ip,action,client_id,detail");
+  if (!opts.includeSystem) for (const p of SYSTEM_AUDIT_PREFIXES) q = q.not("action", "like", `${p}%`);
+  return check(await q.order("at", { ascending: false }).limit(limit), "操作ログの読み込み") as AuditRow[];
 }
 
 /** クライアント一覧用：全クライアントの接続状況（トークンは返さない） */
@@ -724,6 +729,8 @@ export type ScheduledPost = {
   // 承認
   requested_mode: "now" | "schedule" | null; review_note: string | null; reviewed_by: string | null;
   reviewed_by_name: string | null; reviewed_at: string | null;
+  /** リンクに計測用の印（UTM）を付けて投稿する */
+  add_utm?: boolean;
 };
 
 export async function listScheduledPosts(db: Db, clientId: string, limit = 200): Promise<ScheduledPost[]> {

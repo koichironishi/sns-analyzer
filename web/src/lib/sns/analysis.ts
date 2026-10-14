@@ -381,6 +381,16 @@ export function generateInsights(d: AnalysisResult): Insight[] {
   return out;
 }
 
+export type TagHint = { tag: string; count: number; ratio: number; platforms: Platform[] };
+
+/**
+ * 作成画面で出すハッシュタグのおすすめ：直近の投稿で、普段より反応の良かったタグ（3件以上・1割以上良いもの）を上位 n 件
+ */
+export function tagHints(hashtags: AnalysisResult["hashtags"], n = 8): TagHint[] {
+  return hashtags.filter((h) => h.count >= 3 && h.score >= 110).sort((a, b) => b.score - a.score).slice(0, n)
+    .map((h) => ({ tag: h.tag, count: h.count, ratio: h.score / 100, platforms: h.platforms }));
+}
+
 export type BestTime = { platform: Platform; weekday: number; hour: number; label: string; ratio: number; n: number };
 
 /**

@@ -160,6 +160,8 @@ export type RunAiOptions = {
   model?: string; effort?: (typeof AI_EFFORTS)[number]; brandContext?: string; question?: string;
   includePostText: boolean; consentBy: string; consentAt: string; tz?: string;
   client?: Anthropic;
+  /** 打ち切り（定期処理の時間の上限の手前で止めて、失敗として記録するため） */
+  signal?: AbortSignal;
 };
 
 export async function runAiAnalysis(data: AnalysisResult, posts: Post[], followers: FollowerSeries,
@@ -181,8 +183,9 @@ export async function runAiAnalysis(data: AnalysisResult, posts: Post[], followe
       thinking: { type: "adaptive" },
       output_config: { effort: opts.effort ?? "high", format: zodOutputFormat(AiOutputSchema) },
       messages: [{ role: "user", content: prompt }],
-    }).finalMessage();
+    }, opts.signal ? { signal: opts.signal } : undefined).finalMessage();
   } catch (e) {
+    if (e instanceof Anthropic.APIUserAbortError || opts.signal?.aborted) throw new AIError("時間内に終わりませんでした。分析の深さを下げるか、期間を短くしてください。");
     if (e instanceof Anthropic.AuthenticationError) throw new AIError("Anthropic API の認証に失敗しました。ANTHROPIC_API_KEY を確認してください。");
     if (e instanceof Anthropic.PermissionDeniedError) throw new AIError("APIキーに権限がありません。");
     if (e instanceof Anthropic.RateLimitError) throw new AIError("Anthropic API の利用上限に達しました。しばらく待ってから実行してください。");

@@ -7,7 +7,8 @@ import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORMS, PLATFORM_LABELS, accountLabel, todayIn } from "@/lib/sns/models";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
 import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
-import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
+import { addViewerAction, deleteClientAction, linkMeoAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
+import { getMeoLink, meoClients } from "@/lib/meo-summary";
 import { ActionForm } from "@/components/action-form";
 import { Flash } from "@/components/flash";
 import { CollectButton } from "@/components/collect-button";
@@ -69,6 +70,10 @@ export async function SettingsView({ params, searchParams, part }: {
     getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id), getRequireApproval(admin, id),
     part === "connections" ? getImportKey(admin, id).catch(() => null) : null,
   ]);
+  // MEO のクライアント（同じ Supabase）。MEO の表が読めない環境では出さない
+  const meo = part === "client"
+    ? await Promise.all([meoClients(admin), getMeoLink(admin, id)]).then(([list, linked]) => ({ list, linked })).catch(() => null)
+    : null;
   const consent = consentState(consentRow);
   const hasMeta = Boolean(metaApp());
   const hasThreads = Boolean(threadsApp());
@@ -102,6 +107,20 @@ export async function SettingsView({ params, searchParams, part }: {
             <div className="form-actions"><SubmitButton pendingText="保存しています…">保存</SubmitButton></div>
           </ActionForm>
         </div>
+        {meo && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <ActionForm action={linkMeoAction}>
+              <Hidden id={id} />
+              <label htmlFor="cl-meo">MEO のクライアント（任意）</label>
+              <select id="cl-meo" name="meo_client_id" defaultValue={meo.linked ?? ""} aria-describedby="cl-meo-hint">
+                <option value="">結び付けない</option>
+                {meo.list.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <p className="hint" id="cl-meo-hint">同じ会社の MEO（Googleマップ）のクライアントを選ぶと、月次レポートに口コミ・Googleの投稿・検索キーワードの結果も載ります。</p>
+              <div className="form-actions"><SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton></div>
+            </ActionForm>
+          </div>
+        )}
       </section>
 
       <section id="brand" aria-labelledby="h-brand">

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { publishContext } from "@/lib/publish-page";
 import { listConnections, listScheduledPosts, type ScheduledPost } from "@/lib/sns/store";
 import { PLATFORM_LABELS, accountLabel } from "@/lib/sns/models";
-import { textFor } from "@/lib/sns/publish/run";
+import { publishTextFor, textFor } from "@/lib/sns/publish/run";
 import { resolveTargets } from "@/lib/sns/publish/targets";
 import type { Platform } from "@/lib/sns/models";
 import { fmtDateTime, truncate } from "@/lib/format";
@@ -85,12 +85,18 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
           {[...new Set(resolveTargets(post, conns).map((t) => t.platform))].map((p) => (
             <div key={p} className="preview-text">
               <p className="small muted" style={{ margin: "8px 0 4px" }}><i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" /> {PLATFORM_LABELS[p]}の本文</p>
-              <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{textFor(post, p) || <span className="muted">（本文なし）</span>}</p>
+              {/* 実際に投稿する本文（計測用の印を付ける設定なら、付けたあとの文） */}
+              <p style={{ whiteSpace: "pre-wrap", margin: 0, overflowWrap: "anywhere" }}>{publishTextFor(post, p) || <span className="muted">（本文なし）</span>}</p>
             </div>
           ))}
         </details>
       )}
       <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
+      {["published", "partial", "failed", "canceled"].includes(post.status) && (
+        <p className="small" style={{ margin: "8px 0 0" }}>
+          <Link href={`/clients/${clientId}/publish/new?from=${post.id}`}>これをもとに新しい投稿を作る<span className="sr-only">（本文・画像・投稿先を入れた状態で始めます）</span></Link>
+        </p>
+      )}
     </li>
   );
 }

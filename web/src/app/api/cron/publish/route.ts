@@ -5,7 +5,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runDuePosts } from "@/lib/sns/publish/run";
 import { audit } from "@/lib/sns/store";
 import { sendAlert } from "@/lib/notify";
-import { monthlyPrepStep } from "@/lib/monthly-prep";
 
 // 予約投稿の処理。Supabase の pg_cron から数分おきに呼ぶ（supabase/sns-cron.sql）
 export const maxDuration = 300;
@@ -21,8 +20,7 @@ function authorized(req: Request): boolean {
 async function run(req: Request) {
   if (!authorized(req)) return json({ error: "unauthorized" }, 401);
   const admin = createAdminClient();
-  const started = Date.now();
-  const r = await runDuePosts(admin, started + (maxDuration - 20) * 1000, { xApp: xApp() });
+  const r = await runDuePosts(admin, Date.now() + (maxDuration - 20) * 1000, { xApp: xApp() });
   if (r.processed.length || r.closed) {
     await audit(admin, null, "cron.publish", null, `${r.processed.length}件を投稿（残り ${r.remaining}件・中断 ${r.closed}件）`);
   }
@@ -40,16 +38,7 @@ async function run(req: Request) {
     if (r.closed) lines.push("", `途中で止まった投稿が${r.closed}件あります（失敗として閉じました）。SNS上に出ていないか確認してから再投稿してください。`);
     await sendAlert(admin, `予約投稿の失敗（${bad.length + r.closed}件）`, lines);
   }
-  // 月初の準備（先月のAI分析の自動実行）を1クライアントだけ進める。投稿に時間がかかった回と、残りがある回は次に回す
-  let prep: string | null = null;
-  if (!r.remaining && Date.now() - started < 60_000) {
-    try {
-      prep = await monthlyPrepStep(admin);
-    } catch (e) {
-      console.error("月初の準備に失敗しました", e instanceof Error ? e.message : e);
-    }
-  }
-  return json({ processed: r.processed.length, remaining: r.remaining, closed: r.closed, prep });
+  return json({ processed: r.processed.length, remaining: r.remaining, closed: r.closed });
 }
 
 export const GET = run;

@@ -3,12 +3,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
 import { LIMITS, textLength } from "@/lib/sns/publish/rules";
+import { hasLink } from "@/lib/sns/publish/utm";
 import { PLATFORMS, PLATFORM_LABELS, accountLabel, nextWeekdayAt, type Platform } from "@/lib/sns/models";
-import type { BestTime } from "@/lib/sns/analysis";
+import type { BestTime, TagHint } from "@/lib/sns/analysis";
 
 /** 投稿先の候補。1アカウント＝1件（同じSNSに複数ある）。未連携のSNSは key が null の1件で表す */
 export type ComposerConnection = { key: string | null; platform: Platform; connected: boolean; canPublish: boolean; username: string | null; nickname?: string | null };
-type Img = { key: string; path: string | null; previewUrl: string; width: number; height: number; uploading: boolean; error?: string };
+type Img = { key: string; path: string | null; previewUrl: string; width: number; height: number; uploading: boolean; error?: string; copied?: boolean };
 
 const MAX_SIDE = 1440;
 const AI_BUSY = "AIが書いています…";
@@ -38,13 +39,16 @@ function localNow(offsetMin = 0) {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
-export function PostComposer({ clientId, connections, initial, needsApproval = false, bestTimes = [] }: {
+export function PostComposer({ clientId, connections, initial, needsApproval = false, bestTimes = [], tags = [] }: {
   clientId: string;
+  /** ハッシュタグのおすすめ（直近の投稿で反応の良かったタグ） */
+  tags?: TagHint[];
   /** 予約時刻のおすすめ（反応の良い曜日×時間帯） */
   bestTimes?: BestTime[];
   connections: ComposerConnection[];
   needsApproval?: boolean;
-  initial?: { id: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null };
+  /** id なし＝新しい投稿（「これをもとに作る」やカレンダーからの作成）。copy：画像は別の投稿のもの（保存時に複製する） */
+  initial?: { id?: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets?: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null; copy?: boolean; addUtm?: boolean };
 }) {
   const router = useRouter();
   // 投稿先はアカウント単位（"instagram:<id>"）。新しい投稿では、投稿できるアカウントをすべて選んだ状態で始める
@@ -52,9 +56,11 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
   const platforms: Platform[] = PLATFORMS.filter((p) => connections.some((c) => c.platform === p && c.key && targets.includes(c.key)));
   const [text, setText] = useState(initial?.text ?? "");
   const [perText, setPerText] = useState<Partial<Record<Platform, string>>>(initial?.platformTexts ?? {});
-  const [images, setImages] = useState<Img[]>(initial?.media.map((m, i) => ({ key: `i${i}`, path: m.path, previewUrl: m.url, width: 0, height: 0, uploading: false })) ?? []);
+  const [images, setImages] = useState<Img[]>(initial?.media.map((m, i) => ({ key: `i${i}`, path: m.path, previewUrl: m.url, width: 0, height: 0, uploading: false, copied: Boolean(initial.copy) })) ?? []);
   const [mode, setMode] = useState<SavePostInput["mode"]>(initial?.scheduledLocal ? "schedule" : "now");
   const [when, setWhen] = useState(initial?.scheduledLocal ?? localNow(60));
+  const [utm, setUtm] = useState(initial?.addUtm ?? true);
+  const withLink = hasLink(text) || Object.values(perText).some((t) => t && hasLink(t));
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [aiNote, setAiNote] = useState<string[] | null>(null);
@@ -123,7 +129,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
       && !window.confirm(`この投稿は ${fmt(initial.scheduledLocal)} に予約されていました。今すぐ投稿します。よろしいですか？`)) return;
     setBusy("保存しています…");
     const r = await savePost({
-      clientId, id: initial?.id, text, platformTexts: perText, targets, mediaPaths: images.map((i) => i.path!), mode, scheduledLocal: when,
+      clientId, id: initial?.id, text, platformTexts: perText, targets, mediaPaths: images.map((i) => i.path!), copyMedia: images.filter((i) => i.copied).map((i) => i.path!), addUtm: utm && withLink, mode, scheduledLocal: when,
     });
     if (!r.ok) { setBusy(null); return setErrors(r.errors); }
     if (r.pending) {
@@ -179,6 +185,31 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
           })}
         </ul>
         {platforms.includes("x") && <p className="hint">X は日本語を1文字＝2として数えます（全角140文字まで）。</p>}
+        {withLink && (
+          <label className="check" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={utm} onChange={(e) => setUtm(e.target.checked)} aria-describedby="utm-hint" />
+            リンクに計測用の印（UTM）を付ける
+          </label>
+        )}
+        {withLink && <p className="hint" id="utm-hint" style={{ marginTop: 0 }}>Facebook・Threads・X のリンクに「どのSNSの、どの投稿から来たか」の印を付けて投稿します。Google アナリティクスの「集客」で、SNSからの訪問を見分けられます（Instagram は本文のリンクを押せないため付けません）。</p>}
+        {tags.length > 0 && (
+          <div className="tag-hints">
+            <p className="hint" id="tag-hint" style={{ margin: 0 }}>反応が良かったハッシュタグ（直近90日・3件以上使ったもの）。押すと本文の最後に足します。</p>
+            <ul className="chips" aria-describedby="tag-hint">
+              {tags.map((t) => {
+                const used = new RegExp(`#${t.tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_])`, "iu").test(text);
+                return (
+                  <li key={t.tag}>
+                    <button type="button" className="chip" aria-pressed={used} disabled={used}
+                      onClick={() => setText((cur) => `${cur.replace(/\s+$/, "")}${cur.trim() ? (/#\S+$/.test(cur.trim()) ? " " : "\n\n") : ""}#${t.tag}`)}>
+                      #{t.tag}<span className="small muted">（普段の{t.ratio.toFixed(1)}倍・{t.count}件）</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         {platforms.length > 0 && (
           <div className="ai-write">
             <button type="button" className="btn" onClick={aiWrite} disabled={busy !== null || !text.trim()} aria-describedby="ai-write-hint">

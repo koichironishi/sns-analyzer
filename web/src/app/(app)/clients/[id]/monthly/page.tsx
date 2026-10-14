@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
-import { monthLabel, monthRange, monthlyAi, monthlyMailLines, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { monthLabel, monthRange, monthlyAccounts, monthlyAi, monthlyMailLines, monthlyMeo, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import type { PlatformSummary } from "@/lib/sns/analysis";
 import { siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listViewers } from "@/lib/sns/store";
@@ -30,6 +31,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
   const v = await getViewer();
   const isStaff = v?.kind === "staff";
   const d = r.analysis;
+  const [accts, meo] = await Promise.all([monthlyAccounts(r, month), monthlyMeo(id, month)]);
   const admin = createAdminClient();
   const [viewers, sent] = isStaff
     ? await Promise.all([
@@ -57,7 +59,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
 
       <article className="monthly" aria-labelledby="h-monthly">
         <header className="monthly-head">
-          <p className="monthly-kicker">SNSレポート</p>
+          <p className="monthly-kicker">{meo ? "SNS・Googleマップ レポート" : "SNSレポート"}</p>
           <h2 id="h-monthly">{r.client.name}　{monthLabel(month)}</h2>
           <p className="muted small">対象：{slash(range.start)}〜{slash(range.end)}{range.partial && "（今月の途中経過）"}・比較は直前の{range.days}日間</p>
         </header>
@@ -95,24 +97,31 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                     <th scope="col" className="num">投稿</th><th scope="col" className="num">エンゲージメント</th><th scope="col" className="num">ER（フォロワー比）</th>
                   </tr></thead>
                   <tbody>
-                    {d.platforms.map((p) => {
+                    {d.platforms.flatMap((p) => {
+                      const subs = accts[p] ?? [];
+                      // 同じSNSに複数アカウントがあるときは、合計の行のあとにアカウントごとの行を続ける
+                      const row = (key: string, head: React.ReactNode, who: string, s: PlatformSummary, vals: (number | null)[], sub = false) => {
+                        const known = vals.filter((v): v is number => v !== null);
+                        return (
+                          <tr key={key} className={sub ? "sub-row" : undefined}>
+                            <th scope="row">{head}</th>
+                            <td className="num">{fmtNum(s.followers)}</td>
+                            <td className="num">{fmtSigned(s.followersDelta)}</td>
+                            <td className="monthly-spark">
+                              <Sparkline values={vals} platform={p}
+                                label={`${who}のフォロワー推移：${known.length ? `${fmtNum(known[0])}人から${fmtNum(known.at(-1))}人` : "データなし"}`} />
+                            </td>
+                            <td className="num">{fmtNum(s.posts)}<Delta value={s.change.posts} /></td>
+                            <td className="num">{fmtNum(s.engagements)}<Delta value={s.change.engagements} /></td>
+                            <td className="num">{fmtPct(s.erFollowers)}</td>
+                          </tr>
+                        );
+                      };
                       const s = d.summary[p]!;
-                      const vals = d.daily.byPlatform[p]?.followers ?? [];
-                      const known = vals.filter((v): v is number => v !== null);
-                      return (
-                        <tr key={p}>
-                          <th scope="row"><Chip platform={p} /> <span className="small muted">{s.account}</span></th>
-                          <td className="num">{fmtNum(s.followers)}</td>
-                          <td className="num">{fmtSigned(s.followersDelta)}</td>
-                          <td className="monthly-spark">
-                            <Sparkline values={vals} platform={p}
-                              label={`${PLATFORM_LABELS[p]}のフォロワー推移：${known.length ? `${fmtNum(known[0])}人から${fmtNum(known.at(-1))}人` : "データなし"}`} />
-                          </td>
-                          <td className="num">{fmtNum(s.posts)}<Delta value={s.change.posts} /></td>
-                          <td className="num">{fmtNum(s.engagements)}<Delta value={s.change.engagements} /></td>
-                          <td className="num">{fmtPct(s.erFollowers)}</td>
-                        </tr>
-                      );
+                      return [
+                        row(p, <><Chip platform={p} /> <span className="small muted">{subs.length ? "合計" : s.account}</span></>, PLATFORM_LABELS[p], s, d.daily.byPlatform[p]?.followers ?? []),
+                        ...subs.map((a) => row(a.id, <span className="sub-name">{a.name}</span>, `${PLATFORM_LABELS[p]}（${a.name}）`, a.summary, a.followers, true)),
+                      ];
                     })}
                   </tbody>
                 </table>
@@ -164,7 +173,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                       <tbody>
                         {x!.rows.map((row) => (
                           <tr key={row.name} className={row.isOwn ? "own" : undefined}>
-                            <th scope="row">{row.name}</th>
+                            <th scope="row">{row.isOwn ? r.client.name : row.name}</th>
                             <td className="num">{fmtNum(row.followers)}</td>
                             <td className="num">{fmtSigned(row.followersDelta)}</td>
                             <td className="num">{fmtNum(row.posts)}</td>
@@ -177,6 +186,32 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                   </div>
                 ))}
                 {comp.insights.length > 0 && <div className="card"><Insights items={comp.insights} visible={99} /></div>}
+              </section>
+            )}
+
+            {meo && (
+              <section aria-labelledby="h-m-meo">
+                <h3 id="h-m-meo">Googleマップ（{meo.locations}店舗）</h3>
+                <div className="hero">
+                  <div className="stat"><div className="stat-label">この月の口コミ</div><div className="stat-value">{fmtNum(meo.newReviews)}件</div>
+                    <span className="muted small">{meo.newAvg !== null ? `平均 ★${meo.newAvg.toFixed(1)}` : "—"}</span></div>
+                  <div className="stat"><div className="stat-label">口コミの合計</div><div className="stat-value">{fmtNum(meo.totalReviews)}件</div>
+                    <span className="muted small">{meo.totalAvg !== null ? `平均 ★${meo.totalAvg.toFixed(1)}` : "—"}</span></div>
+                  <div className="stat"><div className="stat-label">Google の投稿</div><div className="stat-value">{fmtNum(meo.posts)}件</div>
+                    <span className="muted small">この月に公開</span></div>
+                  <div className="stat"><div className="stat-label">未返信の口コミ</div><div className="stat-value">{fmtNum(meo.unreplied)}件</div>
+                    <span className="muted small">今の時点</span></div>
+                </div>
+                {meo.keywords.length > 0 && (
+                  <div className="card flush scroll" style={{ marginTop: 12 }}>
+                    <table>
+                      <caption>検索で表示されたキーワード（上位5件）</caption>
+                      <thead><tr><th scope="col">キーワード</th><th scope="col" className="num">表示回数</th></tr></thead>
+                      <tbody>{meo.keywords.map((k) => <tr key={k.keyword}><th scope="row">{k.keyword}</th><td className="num">{fmtNum(k.impressions)}</td></tr>)}</tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="small muted">Google での閲覧数・電話・経路検索の回数は、MEO のレポートでご覧いただけます。</p>
               </section>
             )}
 
@@ -218,7 +253,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
               <p className="hint">主な数字・ポイント・SNS別・反応の良かった投稿・競合との比較・来月の提案をメールの本文に書き、ログインしなくても読めるようにします。グラフと詳しい表は、添えるリンク先（ログインが必要）で見られます。1人ずつ別のメールで送ります。</p>
               <details className="more">
                 <summary>メールの文面を見る</summary>
-                <pre className="mail-preview">{monthlyMailLines(r, month, `${siteUrl()}/clients/${id}/monthly?month=${month}`).join("\n")}</pre>
+                <pre className="mail-preview">{monthlyMailLines(r, month, `${siteUrl()}/clients/${id}/monthly?month=${month}`, accts, meo).join("\n")}</pre>
               </details>
               <label className="check"><input type="checkbox" name="confirm" required />上のレポートとメールの文面を確認しました</label>
               <div className="form-actions"><SubmitButton pendingText="送っています…">{monthLabel(month)}のレポートを送る</SubmitButton></div>

@@ -13,12 +13,17 @@ import {
 } from "../store.ts";
 import { publishErrorMessage, publishTo, type PublishDeps } from "./publishers.ts";
 import { resolveTargets } from "./targets.ts";
+import { addUtm } from "./utm.ts";
 
 export type RunDeps = PublishDeps & { xApp?: XApp | null };
 
 /** SNSごとの本文（個別の文があればそれを使う） */
 export const textFor = (post: Pick<ScheduledPost, "text" | "platform_texts">, p: Platform) =>
   (post.platform_texts?.[p] ?? "").trim() ? post.platform_texts[p]! : post.text;
+
+/** 実際に投稿する本文（計測用の印を付ける設定なら、リンクに付ける） */
+export const publishTextFor = (post: Pick<ScheduledPost, "id" | "text" | "platform_texts" | "add_utm">, p: Platform) =>
+  post.add_utm ? addUtm(textFor(post, p), p, post.id) : textFor(post, p);
 
 /** 全体の状態。keys は投稿先ごとの結果のキー（resolveTargets の key） */
 export function overallStatus(keys: string[], results: Record<string, PlatformResult>): PostStatus {
@@ -57,7 +62,7 @@ export async function publishClaimedPost(admin: SupabaseClient, post: ScheduledP
       }
       const r = await publishTo(
         { platform: p, externalId: conn.external_id, accessToken: token, username: conn.username ?? "" },
-        { text: textFor(post, p), imageUrls },
+        { text: publishTextFor(post, p), imageUrls },
         { ...deps, graphVersion: settings.graph_api_version },
       );
       results[t.key] = { state: "published", id: r.externalId, permalink: r.permalink, error: null, at };

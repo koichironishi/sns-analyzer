@@ -14,7 +14,7 @@ export class AiNotReady extends AIError {}
  * 同意がない・データがないときは AiNotReady、API の失敗は AIError（どちらも、理由をそのまま画面やメールに出せる文）
  */
 export async function runAiForClient(admin: SupabaseClient, db: SupabaseClient, clientId: string,
-  opts: { days: number; end: string; question?: string; createdBy: string | null }): Promise<AiResult> {
+  opts: { days: number; end: string; question?: string; createdBy: string | null; signal?: AbortSignal }): Promise<AiResult> {
   const { days, end } = opts;
   const consent = consentState(await getConsentRow(admin, clientId));
   const problem = consentProblem(consent);
@@ -26,6 +26,7 @@ export async function runAiForClient(admin: SupabaseClient, db: SupabaseClient, 
   const result = await runAiAnalysis(analysis, data.ownPosts, data.ownFollowers, cmp && Object.keys(cmp.platforms).length ? cmp : null, {
     model: settings.ai_model, effort: settings.ai_effort, brandContext: brand, question: opts.question ?? "",
     includePostText: consent.row!.include_post_text, consentBy: consent.row!.granted_by ?? "", consentAt: consent.row!.granted_at ?? "",
+    signal: opts.signal,
   });
   await saveAiResult(admin, clientId, end, days, result, opts.createdBy);
   return result;

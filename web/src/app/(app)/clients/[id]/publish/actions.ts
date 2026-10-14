@@ -4,6 +4,7 @@
  * スタッフと、そのクライアントの利用者が使える。Server Action は外部から直接呼べるため、毎回権限を確認する。
  */
 import { randomUUID } from "node:crypto";
+import { addUtm } from "@/lib/sns/publish/utm";
 import { revalidatePath } from "next/cache";
 import { getViewer, UUID_RE, type Viewer } from "@/lib/auth";
 import { clientIp } from "@/lib/http";
@@ -59,6 +60,10 @@ export type SavePostInput = {
   /** 投稿先のアカウント（"instagram:<external_id>" のキー） */
   targets: string[];
   mediaPaths: string[];
+  /** mediaPaths のうち、別の投稿の画像（「これをもとに作る」）。保存時に複製して、元の投稿と画像を共有しない */
+  copyMedia?: string[];
+  /** リンクに計測用の印（UTM）を付けて投稿する */
+  addUtm?: boolean;
   mode: "draft" | "schedule" | "now";
   scheduledLocal?: string; // "YYYY-MM-DDTHH:mm"（日本時間）
 };
@@ -86,11 +91,14 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     const mediaPaths = (input.mediaPaths ?? []).map(String);
     if (mediaPaths.length > 10) return { ok: false, errors: ["画像は10枚までです"] };
     if (mediaPaths.some((p) => !new RegExp(`^${input.clientId}/[0-9a-f-]{36}\\.jpg$`).test(p))) return { ok: false, errors: ["画像の指定が正しくありません"] };
-    const media: MediaItem[] = mediaPaths.map((path) => ({ path, url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl }));
+    const toMedia = (paths: string[]): MediaItem[] => paths.map((path) => ({ path, url: admin.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl }));
+    let media = toMedia(mediaPaths);
 
     const errors: string[] = [];
     if (input.mode !== "draft") {
-      errors.push(...validatePost(platforms, (p) => platformTexts[p] ?? text, media.length));
+      // 文字数は、計測用の印を付けたあとの本文で確かめる（Threads などは URL も文字数に入るため）
+      const addUtmOn = Boolean(input.addUtm);
+      errors.push(...validatePost(platforms, (p) => (addUtmOn ? addUtm(platformTexts[p] ?? text, p, "00000000") : platformTexts[p] ?? text), media.length));
       for (const t of targets) {
         const c = conns.find((x) => x.platform === t.platform && x.external_id === t.external_id);
         if (c && !c.can_publish) errors.push(`${PLATFORM_LABELS[t.platform]}（${c.username ?? t.external_id}）：投稿の許可がありません（スタッフが「SNS連携」で連携し直す必要があります）`);
@@ -114,6 +122,19 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     }
     if (errors.length) return { ok: false, errors };
 
+    // 別の投稿の画像は複製する（元の投稿を削除・編集したときに、こちらの画像まで消えないように）
+    const copy = new Set((input.copyMedia ?? []).map(String));
+    if (copy.size) {
+      for (let i = 0; i < mediaPaths.length; i++) {
+        if (!copy.has(mediaPaths[i])) continue;
+        const to = `${input.clientId}/${randomUUID()}.jpg`;
+        const { error } = await admin.storage.from(MEDIA_BUCKET).copy(mediaPaths[i], to);
+        if (error) return { ok: false, errors: ["画像を複製できませんでした。画像を入れ直してください。"] };
+        mediaPaths[i] = to;
+      }
+      media = toMedia(mediaPaths);
+    }
+
     // クライアントの利用者の投稿は、設定に応じてスタッフの承認を待つ
     const needsApproval = input.mode !== "draft" && v.kind === "client" && (await getRequireApproval(admin, input.clientId));
     const status: PostStatus = input.mode === "draft" ? "draft" : needsApproval ? "pending" : "scheduled";
@@ -129,12 +150,14 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
       await removeMedia(admin, cur.media.map((m) => m.path).filter((p) => !mediaPaths.includes(p)));
       await updateScheduledPost(admin, id, {
         text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt, results: {}, requested_mode: requestedMode,
+        add_utm: Boolean(input.addUtm),
         // 依頼し直したら、前回の差し戻しの記録は消す（下書き保存のときは、理由を見ながら直せるよう残す）
         ...(status !== "draft" ? { review_note: null, reviewed_by: null, reviewed_by_name: null, reviewed_at: null } : {}),
       });
     } else {
       id = await insertScheduledPost(admin, {
         client_id: input.clientId, text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt,
+        add_utm: Boolean(input.addUtm),
         created_by: v.id, created_by_name: v.name || v.email, requested_mode: requestedMode,
       });
     }

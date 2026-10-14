@@ -4,7 +4,7 @@ import { requireClientAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PLATFORMS } from "@/lib/sns/models";
 import { getClient, getRequireApproval, listConnections, loadReportData } from "@/lib/sns/store";
-import { analyze, bestTimes, type BestTime } from "@/lib/sns/analysis";
+import { analyze, bestTimes, tagHints, type BestTime, type TagHint } from "@/lib/sns/analysis";
 import { todayIn } from "@/lib/sns/models";
 import { targetKey } from "@/lib/sns/publish/targets";
 import type { ComposerConnection } from "@/components/post-composer";
@@ -29,13 +29,16 @@ export async function publishContext(clientId: string) {
   return { v, admin, client, connections, needsApproval };
 }
 
-/** 予約時刻のおすすめ：直近90日の曜日×時間帯の結果から、SNS ごとに反応の良い枠を選ぶ。失敗しても投稿の作成は止めない */
-export async function publishBestTimes(clientId: string): Promise<BestTime[]> {
+/**
+ * 作成画面のおすすめ：直近90日の分析から、反応の良い曜日×時間帯（SNSごと）と、反応の良いハッシュタグ。
+ * 失敗しても投稿の作成は止めない
+ */
+export async function publishHints(clientId: string): Promise<{ bestTimes: BestTime[]; tags: TagHint[] }> {
   try {
     const data = await loadReportData(createAdminClient(), clientId, { days: 90, end: todayIn() });
     const a = analyze(data.ownPosts, data.ownFollowers, { days: 90, end: todayIn(), accountNames: data.ownNames });
-    return bestTimes(a.heatmap, PLATFORMS);
+    return { bestTimes: bestTimes(a.heatmap, PLATFORMS), tags: tagHints(a.hashtags) };
   } catch {
-    return [];
+    return { bestTimes: [], tags: [] };
   }
 }

@@ -49,6 +49,14 @@ create or replace function current_client_id() returns uuid language sql stable 
 create policy clients_read on clients for select using (is_staff() or id = current_client_id());
 create policy staff_self on staff for select using (id = auth.uid() or is_staff());
 create policy cu_self on client_users for select using (id = auth.uid() or is_staff());
+-- 月次レポートの Googleマップの欄のため（MEO の表の一部の列だけ）
+create table locations (id uuid primary key default gen_random_uuid(), client_id uuid not null references clients(id) on delete cascade, name text not null);
+create table reviews (id uuid primary key default gen_random_uuid(), location_id uuid not null references locations(id) on delete cascade,
+  rating smallint not null, reply_status text not null default 'none', review_created_at timestamptz);
+create table posts (id uuid primary key default gen_random_uuid(), location_id uuid not null references locations(id) on delete cascade,
+  status text not null default 'draft', published_at timestamptz);
+create table keywords_monthly (id uuid primary key default gen_random_uuid(), location_id uuid not null references locations(id) on delete cascade,
+  month date not null, keyword text not null, impressions integer not null default 0);
 create role authenticated;
 `;
 
@@ -70,6 +78,12 @@ async function seed() {
   // MEO のクライアント（SNS分析とは別）
   await db.query("insert into clients (id, name) values ($1, 'MEO だけのクライアント')", [CLIENT_A]);
   await db.query("insert into client_users (id, client_id, name, email) values ($1, $2, $3, $4)", [USERS[3].id, CLIENT_A, USERS[3].name, USERS[3].email]);
+  // MEO の店舗と、9月の口コミ・投稿・キーワード（月次レポートの Googleマップの欄の確認用）
+  const loc = (await db.query<{ id: string }>("insert into locations (client_id, name) values ($1, '本店') returning id", [CLIENT_A])).rows[0].id;
+  await db.query(`insert into reviews (location_id, rating, reply_status, review_created_at) values
+    ($1, 5, 'replied', '2026-08-20T03:00:00Z'), ($1, 4, 'replied', '2026-09-05T03:00:00Z'), ($1, 5, 'none', '2026-09-18T03:00:00Z'), ($1, 3, 'none', '2026-10-02T03:00:00Z')`, [loc]);
+  await db.query(`insert into posts (location_id, status, published_at) values ($1, 'published', '2026-09-03T01:00:00Z'), ($1, 'published', '2026-09-17T01:00:00Z'), ($1, 'draft', null)`, [loc]);
+  await db.query(`insert into keywords_monthly (location_id, month, keyword, impressions) values ($1, '2026-09-01', '大津 カフェ', 320), ($1, '2026-09-01', 'ランチ 大津', 180)`, [loc]);
   // SNS分析のクライアント
   await db.query("insert into sns_clients (id, name) values ($1, 'デモ株式会社'), ($2, 'サンプル商店')", [CLIENT_A, CLIENT_B]);
   await db.query("insert into staff (id, name, email, role) values ($1, $2, $3, 'admin'), ($4, $5, $6, 'member')",
@@ -372,6 +386,14 @@ export async function start(port = PORT) {
     try {
       const raw = await readRaw(req);
       const body = parseBody(raw);
+      // 画像の複製（「これをもとに作る」）
+      if (url.pathname === "/storage/v1/object/copy" && req.method === "POST") {
+        const b = body as { bucketId: string; sourceKey: string; destinationKey: string };
+        const f = files.get(`${b.bucketId}/${b.sourceKey}`);
+        res.writeHead(f ? 200 : 404, { "Content-Type": "application/json" });
+        if (f) files.set(`${b.bucketId}/${b.destinationKey}`, f);
+        return res.end(JSON.stringify(f ? { Key: `${b.bucketId}/${b.destinationKey}` } : { message: "not found" }));
+      }
       const st = url.pathname.match(/^\/storage\/v1\/object\/(upload\/sign|public|list)?\/?([a-z0-9-]+)\/?(.*)$/);
       if (st) {
         const [, kind, bucket, path] = st;

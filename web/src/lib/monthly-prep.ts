@@ -14,10 +14,11 @@ type Db = SupabaseClient;
 
 /**
  * 月初の準備：先月を対象にしたAI分析を、同意のあるクライアントについて自動で実行し、月次レポートを「送るだけ」にする。
- * 予約投稿の定期処理（5分おき）から呼び、1回に1クライアントだけ進める（AI分析は数分かかるため）。
+ * 専用の定期処理（/api/cron/monthly、月初に10分おき）から呼び、1回に1クライアントだけ進める（AI分析は数分かかるため）。
+ * deadline を過ぎそうなら AI分析を打ち切り、失敗として記録する（処理ごと止められて、記録もなく費用だけかかるのを防ぐ）。
  * 全員が終わったら、スタッフに「準備ができました」と送付の一覧を知らせる
  */
-export async function monthlyPrepStep(admin: Db): Promise<string | null> {
+export async function monthlyPrepStep(admin: Db, deadline: number): Promise<string | null> {
   const now = new Date().toISOString();
   const plan = prepWindow(todayIn(), toLocal(now).hour);
   if (!plan) return null;
@@ -60,7 +61,7 @@ export async function monthlyPrepStep(admin: Db): Promise<string | null> {
     }
     await audit(admin, null, "monthly.ai", id, `${month}:${id}:start`);
     try {
-      const r = await runAiForClient(admin, admin, id, { days, end, createdBy: null });
+      const r = await runAiForClient(admin, admin, id, { days, end, createdBy: null, signal: AbortSignal.timeout(Math.max(10_000, deadline - Date.now())) });
       await audit(admin, null, "ai.run", id, `月初の自動実行・${days}日間・${end}まで・${r._meta.model}・投稿${r._meta.postsSent}件`);
       return `完了：${name.get(id)}`;
     } catch (e) {

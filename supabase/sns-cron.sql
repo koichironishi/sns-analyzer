@@ -42,3 +42,20 @@ select cron.schedule(
   );
   $$
 );
+
+-- ---------- 月初の準備：毎月1〜5日に10分おき、先月を対象にしたAI分析を1クライアントずつ自動で実行する ----------
+-- （AI分析は数分かかるため、予約投稿とは別に呼ぶ。準備が終わっていれば何もしない。日本時間の1日8時より前は動かない）
+select cron.unschedule('sns-monthly') where exists (select 1 from cron.job where jobname = 'sns-monthly');
+
+select cron.schedule(
+  'sns-monthly',
+  '*/10 * 1-5 * *',
+  $$
+  select net.http_post(
+    url     := 'https://sns.rhythmos-works.jp/api/cron/monthly',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || 'REPLACE_WITH_CRON_SECRET', 'Content-Type', 'application/json'),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 300000
+  );
+  $$
+);

@@ -120,6 +120,13 @@ export function nextWeekdayAt(weekday: number, hour: number, now = Date.now(), m
   return "";
 }
 
+/** 今から hours 時間後の、ちょうどの時刻（日本時間・datetime-local の形）。日付をまたぐときは今日の 23:30 */
+export function todaySlotAfter(hours = 1, now = Date.now()): string {
+  const today = toLocal(new Date(now).toISOString()).date;
+  const t = toLocal(new Date(now + hours * 3_600_000).toISOString());
+  return t.date === today ? `${today}T${String(t.hour).padStart(2, "0")}:00` : `${today}T23:30`;
+}
+
 /** YYYY-MM-DD に日数を足す */
 export function addDays(date: string, n: number): string {
   const [y, m, d] = date.split("-").map(Number);

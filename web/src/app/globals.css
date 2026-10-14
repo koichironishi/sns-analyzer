@@ -720,12 +720,13 @@ body:has(.side) .app-drawer { display: none; }
 }
 
 /* 予約時刻のおすすめ */
-.best-times { display: grid; gap: 6px; margin-top: var(--s2); }
+.best-times, .tag-hints { display: grid; gap: 6px; margin-top: var(--s2); }
+.tag-hints ul { list-style: none; padding: 0; margin: 0; }
 .best-times ul { list-style: none; padding: 0; margin: 0; }
-.best-times button.chip { cursor: pointer; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-sm); white-space: normal; text-align: left; }
-.best-times button.chip:hover { border-color: var(--accent); }
-.best-times button.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
-.best-times button.chip:disabled { opacity: .6; cursor: default; }
+.tag-hints button.chip, .best-times button.chip { cursor: pointer; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-sm); white-space: normal; text-align: left; }
+.tag-hints button.chip:hover, .best-times button.chip:hover { border-color: var(--accent); }
+.tag-hints button.chip[aria-pressed="true"], .best-times button.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
+.tag-hints button.chip:disabled, .best-times button.chip:disabled { opacity: .6; cursor: default; }
 
 /* 月次レポート（印刷・PDF保存を前提に、1列で読み下せる並び） */
 .monthly-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s3); }
@@ -742,6 +743,9 @@ body:has(.side) .app-drawer { display: none; }
 .monthly-recs { padding-left: 1.4em; display: grid; gap: var(--s2); margin-bottom: 0; }
 .monthly tr.own th, .monthly tr.own td { background: var(--accent-bg); }
 .monthly-spark { min-width: 120px; width: 160px; }
+.monthly tr.sub-row th, .monthly tr.sub-row td { font-size: var(--fs-sm); background: var(--bg); }
+.monthly .sub-name::before { content: "└ "; color: var(--muted); }
+.monthly .sub-name { padding-left: 1em; font-weight: 400; }
 .monthly-spark svg { width: 100%; height: 32px; display: block; }
 @media print {
   .monthly section { break-inside: avoid; }
@@ -749,3 +753,11 @@ body:has(.side) .app-drawer { display: none; }
 }
 
 .mail-preview { white-space: pre-wrap; font-family: inherit; font-size: var(--fs-sm); background: var(--surface-2); padding: 12px 16px; border-radius: var(--r-md); max-height: 480px; overflow: auto; }
+
+/* カレンダーの日付から投稿を作る「＋」 */
+.cal-add { margin-left: auto; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; color: var(--accent); text-decoration: none; font-weight: 700; }
+.cal-add:hover, .cal-add:focus-visible { background: var(--accent-bg); }
+.cal-day:not(:hover):not(:focus-within) .cal-add { opacity: .45; }
+@media (max-width: 760px) { .cal-add { opacity: 1; } }
+/* 投稿一覧の「もとに作る」 */
+.reuse-link { display: inline-block; margin-left: 8px; font-size: var(--fs-xs); white-space: nowrap; }
