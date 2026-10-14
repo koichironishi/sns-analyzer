@@ -15,8 +15,9 @@ import { Chip, PageHead } from "@/components/report-ui";
 import { SubmitButton } from "@/components/submit-button";
 import {
   connectX, deleteData, disconnect, grantAiConsent, importCsv, recordFollowerCount, removeCompetitor,
-  revokeAiConsent, saveBrand, testConnection, upsertCompetitor,
+  issueImportKey, revokeAiConsent, revokeImportKey, saveBrand, testConnection, upsertCompetitor,
 } from "./actions";
+import { getImportKey } from "@/lib/sns/import-posts";
 
 /** 「設定・連携」は MEO と同じく3つのページに分ける（クライアント情報／SNS連携／利用者管理）。中身はこの1つの部品で持つ */
 export type SettingsPart = "client" | "connections" | "users";
@@ -62,9 +63,10 @@ export async function SettingsView({ params, searchParams, part }: {
   const admin = createAdminClient();
   const client = await getClient(admin, id);
   if (!client) notFound();
-  const [conns, states, competitors, consentRow, brand, settings, viewers, requireApproval] = await Promise.all([
+  const [conns, states, competitors, consentRow, brand, settings, viewers, requireApproval, importKey] = await Promise.all([
     listConnections(admin, id), listCollectState(admin, id), listCompetitors(admin, id), getConsentRow(admin, id),
     getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id), getRequireApproval(admin, id),
+    part === "connections" ? getImportKey(admin, id).catch(() => null) : null,
   ]);
   const consent = consentState(consentRow);
   const connOf = (p: Platform) => conns.find((c) => c.platform === p);
@@ -348,6 +350,37 @@ export async function SettingsView({ params, searchParams, part }: {
               <input id="f-date" name="date" type="date" max={todayIn()} defaultValue={todayIn()} />
               <div className="form-actions"><SubmitButton pendingText="記録しています…">記録</SubmitButton></div>
             </ActionForm>
+          </div>
+        </div>
+      </section>
+
+      <section id="external" aria-labelledby="h-external">
+        <h2 id="h-external">外部ツールからの投稿の登録</h2>
+        <p className="sub">
+          Rhythmos AI で作ったカルーセルなどを、コマンド1つでこのクライアントの「投稿」に<strong>承認待ち</strong>で登録できるようにします。
+          登録された投稿は、スタッフが「投稿」の画面で中身を見て承認するまで公開されません。
+        </p>
+        <div className="card">
+          {importKey ? (
+            <p>
+              合言葉：発行済み（末尾 <code>{importKey.key_hint}</code>・{importKey.created_by_name ?? "—"}・{fmtDateTime(importKey.created_at)}）
+              <br /><span className="muted small">最後に使われた日時：{importKey.last_used_at ? fmtDateTime(importKey.last_used_at) : "まだ使われていません"}</span>
+            </p>
+          ) : <p className="muted">合言葉はまだ発行していません。</p>}
+          <dl className="kv-list">
+            <dt>クライアントID</dt><dd><code>{id}</code></dd>
+          </dl>
+          <div className="form-actions">
+            <ActionForm action={issueImportKey}>
+              <Hidden id={id} />
+              <SubmitButton pendingText="発行しています…">{importKey ? "合言葉を作り直す（前の合言葉は使えなくなります）" : "合言葉を発行する"}</SubmitButton>
+            </ActionForm>
+            {importKey && (
+              <ActionForm action={revokeImportKey}>
+                <Hidden id={id} />
+                <SubmitButton pendingText="無効にしています…" className="btn danger">合言葉を無効にする</SubmitButton>
+              </ActionForm>
+            )}
           </div>
         </div>
       </section>

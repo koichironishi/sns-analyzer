@@ -1,10 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** ログイン不要のパス（審査で公開URLの提出が必要なページ、外部からのコールバック、cron） */
+/** ログイン不要のパス（審査で公開URLの提出が必要なページ、外部からのコールバック、cron、外部ツール用の受け口） */
 export function isPublicPath(path: string): boolean {
   return path === "/privacy" || path === "/terms" || path === "/data-deletion"
-    || path.startsWith("/data-deletion/") || path.startsWith("/api/data-deletion/") || path.startsWith("/api/cron/");
+    || path.startsWith("/data-deletion/") || path.startsWith("/api/data-deletion/") || path.startsWith("/api/cron/")
+    // 外部ツールからの投稿の登録（ログインの代わりに、ルート側でクライアントごとの合言葉を確かめる）
+    || path.startsWith("/api/import/");
 }
 
 /** セッション（Cookie）を更新し、未ログインなら /login へ誘導する */

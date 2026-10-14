@@ -15,6 +15,7 @@ import { cleanHandle } from "@/lib/sns/collectors/types";
 import { checkConnection, listMetaPages, xVerify } from "@/lib/sns/connect";
 import { ImportError, readCsv } from "@/lib/sns/importers";
 import { PLATFORMS, PLATFORM_LABELS, isPlatform, todayIn, type Platform } from "@/lib/sns/models";
+import { deleteImportKey, newImportKey, saveImportKey } from "@/lib/sns/import-posts";
 import { CONSENT_VERSION } from "@/lib/sns/privacy";
 import {
   audit, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
@@ -22,7 +23,8 @@ import {
   saveCompetitor, saveConnection, setBrandContext,
 } from "@/lib/sns/store";
 
-export type ActionState = { ok?: string; error?: string };
+/** secret：一度だけ画面に表示する値（外部ツールの合言葉）。保存も記録もしない */
+export type ActionState = { ok?: string; error?: string; secret?: string };
 
 async function staff(form: FormData) {
   const v = await getViewer();
@@ -277,6 +279,33 @@ export async function deleteData(_: ActionState, form: FormData): Promise<Action
     const msg = await deletePlatformData(admin, clientId, platform, scope as "own" | "competitor" | "all", form.get("disconnect") === "on");
     await audit(admin, v, "data.delete", clientId, msg, await clientIp());
     return done(clientId, msg);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---- 外部ツール（Rhythmos AI）からの投稿の登録 ---------------------------------------------
+
+/** 合言葉を発行する（作り直すと、前の合言葉は使えなくなる）。合言葉は画面に一度だけ表示する */
+export async function issueImportKey(_: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const { v, clientId, admin } = await staff(form);
+    const k = newImportKey();
+    await saveImportKey(admin, clientId, k.hash, k.hint, v.name || v.email);
+    await audit(admin, v, "import.key_issue", clientId, `末尾 ${k.hint}`, await clientIp());
+    revalidatePath(`/clients/${clientId}/settings/connections`);
+    return { ok: "合言葉を発行しました。この画面を閉じると二度と表示されないため、今すぐ Rhythmos AI に登録してください。", secret: k.key };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function revokeImportKey(_: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const { v, clientId, admin } = await staff(form);
+    await deleteImportKey(admin, clientId);
+    await audit(admin, v, "import.key_revoke", clientId, "", await clientIp());
+    return done(clientId, "合言葉を無効にしました。外部ツールからは登録できなくなりました。");
   } catch (e) {
     return fail(e);
   }

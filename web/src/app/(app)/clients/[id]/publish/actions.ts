@@ -11,8 +11,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedToUtc } from "@/lib/sns/importers";
 import { DEFAULT_TZ, isPlatform, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { validatePost } from "@/lib/sns/publish/rules";
+import { AIError } from "@/lib/sns/ai";
+import { writePerPlatform } from "@/lib/sns/ai-write";
+import { consentState } from "@/lib/sns/privacy";
 import {
-  audit, deleteScheduledPost, getClient, getRequireApproval, getScheduledPost, insertScheduledPost, listConnections, MEDIA_BUCKET,
+  audit, deleteScheduledPost, getBrandContext, getClient, getConsentRow, getRequireApproval, getScheduledPost, insertScheduledPost, listConnections, MEDIA_BUCKET,
   removeMedia, updateScheduledPost, type MediaItem, type PostStatus,
 } from "@/lib/sns/store";
 
@@ -230,6 +233,35 @@ export async function rejectPost(clientId: string, postId: string, note: string)
     revalidatePath(`/clients/${clientId}/publish`);
     return { ok: true };
   } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * 本文（下書き・メモ）をもとに、AI が SNSごとの本文を書く。
+ * 公開はしない。結果は画面の「SNSごとの本文」に入れ、人が確認して直す。
+ * AI に文章を送るため、そのクライアントの AI 利用の同意がある場合だけ使える。
+ */
+export async function aiWritePost(clientId: string, source: string, platformList: string[]): Promise<Result<{ texts: Partial<Record<Platform, string>>; warnings: string[] }>> {
+  try {
+    const { v, admin } = await poster(clientId);
+    const platforms = [...new Set(platformList)].filter(isPlatform);
+    const text = String(source ?? "").trim();
+    if (!platforms.length) return { ok: false, errors: ["投稿先のSNSを1つ以上選んでください"] };
+    if (text.length < 5) return { ok: false, errors: ["本文に、伝えたいこと（下書きやメモ）を書いてください。それをもとにSNSごとの文章を作ります"] };
+    if (text.length > 3000) return { ok: false, errors: ["本文が長すぎます（3,000字まで）"] };
+    const consent = consentState(await getConsentRow(admin, clientId));
+    if (!consent.valid) {
+      return { ok: false, errors: [v.kind === "staff"
+        ? "このクライアントは AI 利用の同意がないため使えません。「クライアント情報」で同意を記録してください"
+        : "AI の利用の同意がまだないため使えません。担当者にお問い合わせください"] };
+    }
+    const client = await getClient(admin, clientId);
+    const r = await writePerPlatform({ clientName: client?.name ?? "", brandContext: await getBrandContext(admin, clientId), source: text, platforms });
+    await audit(admin, v, "post.ai_write", clientId, `${platforms.join(",")}・${r.model}`, await clientIp());
+    return { ok: true, texts: r.texts, warnings: r.warnings };
+  } catch (e) {
+    if (e instanceof AIError) return { ok: false, errors: [e.message] };
     return fail(e);
   }
 }

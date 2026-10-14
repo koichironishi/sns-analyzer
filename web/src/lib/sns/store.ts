@@ -588,7 +588,7 @@ export async function saveAiResult(admin: Db, clientId: string, periodEnd: strin
 export async function audit(admin: Db, actor: { id: string; email: string } | null, action: string, clientId: string | null, detail = "", ip = "") {
   // 操作ログの失敗で本来の操作を止めない
   await admin.from("sns_audit").insert({
-    actor_id: actor?.id ?? null, actor_email: actor?.email ?? null, ip: ip || null, action, client_id: clientId, detail: detail.slice(0, 500),
+    actor_id: actor?.id || null, actor_email: actor?.email ?? null, ip: ip || null, action, client_id: clientId, detail: detail.slice(0, 500),
   });
 }
 

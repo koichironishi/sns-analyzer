@@ -318,6 +318,21 @@ drop trigger if exists trg_sns_scheduled_posts_updated on sns_scheduled_posts;
 create trigger trg_sns_scheduled_posts_updated before update on sns_scheduled_posts
   for each row execute function set_updated_at();
 
+-- 外部ツール（Rhythmos AI など）から登録した投稿の識別子。同じ投稿を登録し直したときに重複させない
+alter table sns_scheduled_posts add column if not exists import_ref text check (import_ref is null or length(import_ref) between 1 and 200);
+create unique index if not exists idx_sns_scheduled_posts_import_ref on sns_scheduled_posts(client_id, import_ref) where import_ref is not null;
+
+-- ---------- 外部ツールから投稿を登録するための合言葉（クライアントごとに1つ） ----------
+-- 合言葉そのものは保存せず、SHA-256 の値だけを持つ。service_role 専用（ポリシーを作らない）
+create table if not exists sns_import_keys (
+  client_id       uuid primary key references sns_clients(id) on delete cascade,
+  key_hash        text not null,
+  key_hint        text not null,
+  created_by_name text,
+  created_at      timestamptz not null default now(),
+  last_used_at    timestamptz
+);
+
 -- 投稿画像の置き場所（Instagram・Threads は公開URLから画像を取りに来るため公開バケット。ファイル名は推測できない値）
 do $$
 begin
@@ -375,6 +390,7 @@ alter table sns_deletion_requests enable row level security;
 alter table sns_scheduled_posts   enable row level security;
 alter table sns_daily_insights    enable row level security;
 alter table sns_audience          enable row level security;
+alter table sns_import_keys       enable row level security;
 
 -- スタッフ専用の表
 drop policy if exists sns_app_settings_staff    on sns_app_settings;
@@ -413,5 +429,5 @@ begin
   end loop;
 end $$;
 
--- sns_connections / sns_deletion_requests はポリシーを作らない（service_role 専用）。
+-- sns_connections / sns_deletion_requests / sns_import_keys はポリシーを作らない（service_role 専用）。
 -- 接続状態を画面に出すときは、サーバー側で service_role 経由で取得し、トークンは返さない。

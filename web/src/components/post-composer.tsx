@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
+import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
 import { LIMITS, textLength } from "@/lib/sns/publish/rules";
 import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 
@@ -9,6 +9,7 @@ export type ComposerConnection = { platform: Platform; connected: boolean; canPu
 type Img = { key: string; path: string | null; previewUrl: string; width: number; height: number; uploading: boolean; error?: string };
 
 const MAX_SIDE = 1440;
+const AI_BUSY = "AIが書いています…";
 
 /** 画像を JPEG（長い辺 1440px まで）に変換する。Instagram は JPEG しか受け付けないため */
 async function toJpeg(file: File): Promise<{ blob: Blob; width: number; height: number }> {
@@ -51,6 +52,22 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
   const [when, setWhen] = useState(initial?.scheduledLocal ?? localNow(60));
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [aiNote, setAiNote] = useState<string[] | null>(null);
+  const [perOpen, setPerOpen] = useState(Object.keys(initial?.platformTexts ?? {}).length > 0);
+
+  /** 本文（下書き・メモ）をもとに、AI に SNSごとの本文を書いてもらう。書き換える前に確認する */
+  const aiWrite = async () => {
+    if (Object.values(perText).some((t) => t?.trim()) && !window.confirm("SNSごとの本文を、AIが書いた文章で置き換えます。よろしいですか？")) return;
+    setBusy(AI_BUSY);
+    setErrors([]);
+    setAiNote(null);
+    const r = await aiWritePost(clientId, text, platforms);
+    setBusy(null);
+    if (!r.ok) { setErrors(r.errors); return; }
+    setPerText((cur) => ({ ...cur, ...r.texts }));
+    setPerOpen(true);
+    setAiNote(r.warnings);
+  };
   const errRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (errors.length) errRef.current?.focus(); }, [errors]);
 
@@ -151,7 +168,21 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
         </ul>
         {platforms.includes("x") && <p className="hint">X は日本語を1文字＝2として数えます（全角140文字まで）。</p>}
         {platforms.length > 0 && (
-          <details className="more">
+          <div className="ai-write">
+            <button type="button" className="btn" onClick={aiWrite} disabled={busy !== null || !text.trim()} aria-describedby="ai-write-hint">
+              {busy === AI_BUSY ? AI_BUSY : "AIでSNSごとに書き分ける"}
+            </button>
+            <p className="hint" id="ai-write-hint">上の本文（下書きや、伝えたいことのメモでも可）をもとに、選んだSNSの文字数と書き方に合わせた文章を下の「SNSごとに本文を変える」に入れます。内容は必ず確認して直してください。</p>
+            {aiNote && (
+              <div role="status" className="small">
+                {aiNote.length ? aiNote.map((w) => <p key={w} style={{ color: "var(--warn)", margin: 0 }}>{w}</p>)
+                  : <p style={{ margin: 0 }}>SNSごとの本文を入れました。事実や表現に誤りがないか確認してください。</p>}
+              </div>
+            )}
+          </div>
+        )}
+        {platforms.length > 0 && (
+          <details className="more" open={perOpen} onToggle={(e) => setPerOpen((e.currentTarget as HTMLDetailsElement).open)}>
             <summary>SNSごとに本文を変える</summary>
             {platforms.map((p) => (
               <div key={p}>
