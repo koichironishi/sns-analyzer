@@ -6,21 +6,27 @@ import { slash } from "@/lib/format";
 import { todayIn } from "@/lib/sns/models";
 import { PeriodForm } from "./period-form";
 import { PlatformSwitch } from "./platform-switch";
-import { PLATFORM_LABELS } from "@/lib/sns/models";
+import { PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { EmptyState } from "./empty-state";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
-export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true }: {
+export async function ReportPage({ report, lead, children, needsData = true, platformSwitch = true, sns: snsOverride, switchPlatforms, empty: emptyOverride }: {
   report: Report;
   /** 画面の名前（見出しはレイアウトの ClientHead が出すため、ここでは表示しない） */
   title?: string;
   lead: string; children: React.ReactNode; needsData?: boolean;
   /** SNSごとの切り替えを出すか（AI分析など、SNSで絞り込まないページは false） */
   platformSwitch?: boolean;
+  /** 「すべて」を持たない画面（インサイトなど）で、表示中のSNSと選べるSNSを指定する */
+  sns?: Platform | null;
+  switchPlatforms?: Platform[];
+  /** データがないときの案内を差し替える */
+  empty?: React.ReactNode;
 }) {
   const { start, end, days } = report.analysis.period;
-  const sns = platformSwitch ? report.period.sns : null;
+  const sns = platformSwitch ? (snsOverride !== undefined ? snsOverride : report.period.sns) : null;
+  const choices = switchPlatforms ?? report.platforms;
   const eyebrow = `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
@@ -30,16 +36,18 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
       <PageHead eyebrow={eyebrow} lead={lead}>
         <div className="page-period no-print">
           <Suspense><PeriodForm today={todayIn()} /></Suspense>
-          {platformSwitch && report.platforms.length > 1 && <Suspense><PlatformSwitch platforms={report.platforms} current={sns} /></Suspense>}
+          {platformSwitch && choices.length > (switchPlatforms ? 0 : 1) && (
+            <Suspense><PlatformSwitch platforms={choices} current={sns} allowAll={!switchPlatforms} /></Suspense>
+          )}
         </div>
       </PageHead>
-      {empty ? (
+      {emptyOverride ?? (empty ? (
         <EmptyState title="この期間のデータがありません"
           body={v?.kind === "staff"
             ? "SNSを連携するか、CSVを取り込むと表示されます。連携後は、毎日自動でデータを収集します。"
             : "データの準備ができるまでお待ちください。期間を変えると表示される場合があります。"}
           action={v?.kind === "staff" ? <Link className="btn primary" href={`/clients/${report.client.id}/settings/connections`}>SNSを連携する</Link> : undefined} />
-      ) : children}
+      ) : children)}
     </>
   );
 }

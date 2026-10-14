@@ -519,6 +519,20 @@ pre.code { white-space: pre-wrap; word-break: break-all; background: var(--surfa
 .bars-plot .grid-line { stroke: var(--grid); stroke-width: 1; }
 .bars-x { position: absolute; left: 0; right: 0; top: 100%; height: 28px; }
 .bars-x span { position: absolute; top: 6px; transform: translateX(-50%); font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }
+/* インサイト：指標ごとのカード（Meta のインサイト「結果」と同じ並び） */
+.insight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); margin-top: var(--s4); }
+.insight-grid > section { margin-top: 0; }
+.insight-card { display: grid; gap: var(--s2); align-content: start; }
+.insight-card h3 { margin: 0; font-size: var(--fs-md); }
+.insight-card .sub { margin: 0; }
+.insight-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--s3); margin: 0; }
+.insight-extra { display: flex; flex-wrap: wrap; gap: 4px var(--s5); margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.insight-extra div { display: flex; gap: 6px; }
+.insight-extra dd { margin: 0; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.bars.line { height: 180px; }
+/* 正方形の viewBox が高さを押し広げないよう、線の SVG は枠に重ねて置く */
+.bars.line .bars-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+@media (max-width: 760px) { .insight-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .bars { height: 220px; } }
 .pcard-title { margin: 0; font-size: var(--fs-base); font-weight: 700; line-height: 1.4; }
 .scroll[role="region"]:focus-visible { outline-offset: -2px; }

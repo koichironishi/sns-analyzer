@@ -1,5 +1,6 @@
 import type { Platform } from "../models.ts";
 import type { CollectResult, HttpOptions } from "./http.ts";
+import type { InsightsRequest, InsightsResult } from "./insights.ts";
 
 /** sns_connections の1行から作る接続情報（トークンはサーバー内でのみ扱う） */
 export type ConnectionConfig = {
@@ -20,6 +21,8 @@ export interface Collector {
   collect(opts: CollectOptions): Promise<CollectResult>;
   /** 自社の接続情報を使って、競合の公開データを取得する */
   collectCompetitor(handle: string, opts: CollectOptions): Promise<CollectResult>;
+  /** アカウント全体の日別の指標とフォロワーの属性（対応している SNS のみ） */
+  accountInsights?(req: InsightsRequest): Promise<InsightsResult>;
 }
 
 export type CollectorDeps = { graphVersion?: string; http?: HttpOptions };

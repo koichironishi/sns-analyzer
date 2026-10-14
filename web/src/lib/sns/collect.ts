@@ -9,7 +9,7 @@ import { isTokenError, needsRefresh, threadsRefresh, xNeedsRefresh, xRefresh } f
 import { cleanHandle } from "./collectors/types.ts";
 import { PLATFORM_LABELS, addDays, toLocal, todayIn, type Platform } from "./models.ts";
 import {
-  deletePosts, getAppSettings, getConnectionSecrets, xPostsToVerify, listCollectState, listCompetitors, purgeExpired, saveCollected, setCollectState,
+  deletePosts, getAppSettings, insightDates, saveInsights, getConnectionSecrets, xPostsToVerify, listCollectState, listCompetitors, purgeExpired, saveCollected, setCollectState,
   updateConnection, type ConnectionSecret,
 } from "./store.ts";
 
@@ -58,6 +58,7 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
 
   let saved = 0;
   let removed = 0;
+  let insightsSaved = 0;
   try {
     const own = await collector.collect(opts);
     // 取得が途中で打ち切られていなければ、SNS上で削除された投稿を同期して消す
@@ -66,6 +67,7 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
     saved += r.posts;
     removed += r.removed;
     warnings.push(...own.warnings);
+    insightsSaved = await collectInsights(admin, collector, conn, r.accountId, deadline, warnings);
     await updateConnection(admin, conn.client_id, platform, { status: "connected", last_error: null });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "不明なエラー";
@@ -107,10 +109,37 @@ async function collectConnection(admin: SupabaseClient, conn: ConnectionSecret, 
     }
   }
 
-  const summary = `${label}：投稿 ${saved}件を保存${removed ? `・SNS上で削除された ${removed}件を削除` : ""}`;
+  const summary = `${label}：投稿 ${saved}件を保存${insightsSaved ? `・インサイト ${insightsSaved}件を保存` : ""}${removed ? `・SNS上で削除された ${removed}件を削除` : ""}`;
   const note = warnings.length ? `${summary}（注意：${warnings.join(" / ")}）` : summary;
   await setCollectState(admin, conn.client_id, platform, true, warnings.length ? warnings.join(" / ").slice(0, 500) : null, saved);
   return { clientId: conn.client_id, platform, ok: true, message: note };
+}
+
+/** インサイトをさかのぼって取る日数（初回はこの日数分。以後は直近の数日を取り直す） */
+const INSIGHT_BACKFILL_DAYS = 90;
+const INSIGHT_REFRESH_DAYS = 7;
+
+/**
+ * アカウント全体のインサイト（Facebook ページ・Instagram）。
+ * 投稿の収集を優先し、残り時間があるときだけ取る。失敗しても投稿の収集は成功として扱う。
+ */
+async function collectInsights(admin: SupabaseClient, collector: ReturnType<typeof createCollector>, conn: ConnectionSecret,
+  accountId: string, deadline: number, warnings: string[]): Promise<number> {
+  if (!collector.accountInsights || Date.now() > deadline - 15_000) return 0;
+  const end = addDays(todayIn(), -1); // 当日分はまだ確定していないため、前日まで
+  const start = addDays(end, -(INSIGHT_BACKFILL_DAYS - 1));
+  try {
+    const have = await insightDates(admin, accountId, "views", start);
+    // 保存済みの日が十分あれば、直近の数日だけを取り直す
+    const from = have.size >= INSIGHT_BACKFILL_DAYS - INSIGHT_REFRESH_DAYS ? addDays(end, -(INSIGHT_REFRESH_DAYS - 1)) : start;
+    const r = await collector.accountInsights({ start: from, end, have, deadline: deadline - 8_000 });
+    warnings.push(...r.warnings);
+    return await saveInsights(admin, conn.client_id, accountId, conn.platform, r);
+  } catch (e) {
+    // インサイトの失敗（テーブルの未作成を含む）で、投稿の収集まで失敗扱いにしない
+    warnings.push(`インサイトを取得できませんでした（${e instanceof Error ? e.message : "不明なエラー"}）`);
+    return 0;
+  }
 }
 
 /** すべての接続を、前回の実行が古い順に締め切りまで処理する（cron 用） */

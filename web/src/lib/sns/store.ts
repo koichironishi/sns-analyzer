@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CompetitorAccount } from "./compare.ts";
 import type { CollectResult } from "./collectors/http.ts";
+import type { Audience, InsightMetric, InsightsResult } from "./collectors/insights.ts";
 import { DEFAULT_TZ, PLATFORMS, addDays, isPlatform, todayIn, type FollowerSeries, type MediaType, type Platform, type Post, type Series } from "./models.ts";
 import type { ConsentRow, DeletionService } from "./privacy.ts";
 import { DELETION_PLATFORMS } from "./privacy.ts";
@@ -265,7 +266,7 @@ export type SaveOptions = {
   tz?: string;
 };
 
-export type SaveCounts = { posts: number; removed: number };
+export type SaveCounts = { posts: number; removed: number; accountId: string };
 
 export async function saveCollected(admin: Db, clientId: string, result: CollectResult, opts: SaveOptions = {}): Promise<SaveCounts> {
   const { account } = result;
@@ -307,7 +308,46 @@ export async function saveCollected(admin: Db, clientId: string, result: Collect
       removed += ids.length;
     }
   }
-  return { posts: saved, removed };
+  return { posts: saved, removed, accountId: acc.id };
+}
+
+// ---- インサイト（アカウント全体の日別の指標・フォロワーの属性） --------------------------------
+
+/** その指標を保存済みの日（取り直しを省くため） */
+export async function insightDates(admin: Db, accountId: string, metric: InsightMetric, since: string): Promise<Set<string>> {
+  const rows = await selectAll<{ date: string }>((a, b) => admin.from("sns_daily_insights").select("date")
+    .eq("account_id", accountId).eq("metric", metric).gte("date", since).order("date").range(a, b), "インサイトの確認");
+  return new Set(rows.map((r) => r.date));
+}
+
+export async function saveInsights(admin: Db, clientId: string, accountId: string, platform: Platform, r: InsightsResult, tz = DEFAULT_TZ): Promise<number> {
+  for (const batch of chunks(r.daily, 500)) {
+    check(await admin.from("sns_daily_insights").upsert(batch.map((d) => ({
+      account_id: accountId, client_id: clientId, platform, date: d.date, metric: d.metric, value: Math.round(d.value),
+    })), { onConflict: "account_id,date,metric" }), "インサイトの保存");
+  }
+  if (r.audience) {
+    check(await admin.from("sns_audience").upsert({
+      account_id: accountId, client_id: clientId, platform, fetched_date: todayIn(tz), data: r.audience,
+    }, { onConflict: "account_id,fetched_date" }), "フォロワーの属性の保存");
+  }
+  return r.daily.length;
+}
+
+export type InsightRow = { platform: Platform; date: string; metric: InsightMetric; value: number };
+
+/** 自社アカウントの日別の指標（呼び出した人の権限で読む） */
+export async function loadInsights(db: Db, clientId: string, platform: Platform, start: string, end: string): Promise<InsightRow[]> {
+  return selectAll<InsightRow>((a, b) => db.from("sns_daily_insights").select("platform,date,metric,value")
+    .eq("client_id", clientId).eq("platform", platform).gte("date", start).lte("date", end)
+    .order("date").order("metric").range(a, b), "インサイトの読み込み");
+}
+
+/** フォロワーの属性の最新の記録 */
+export async function latestAudience(db: Db, clientId: string, platform: Platform): Promise<{ date: string; data: Audience } | null> {
+  const rows = check(await db.from("sns_audience").select("fetched_date,data").eq("client_id", clientId).eq("platform", platform)
+    .order("fetched_date", { ascending: false }).limit(1), "フォロワーの属性の読み込み") as { fetched_date: string; data: Audience }[];
+  return rows[0] ? { date: rows[0].fetched_date, data: rows[0].data } : null;
 }
 
 /** 同じ SNS・同じユーザー名のアカウント（API で取得済みのものを含む）を探す */
@@ -466,6 +506,8 @@ export async function purgeExpired(admin: Db, retentionDays: number, tz = DEFAUL
   const posts = await del("sns_posts", "posted_at", `${cutoff}T00:00:00Z`);
   const metrics = await del("sns_post_metrics", "fetched_date", cutoff);
   const snapshots = await del("sns_snapshots", "date", cutoff);
+  await del("sns_daily_insights", "date", cutoff);
+  await del("sns_audience", "fetched_date", cutoff);
   const ai = await del("sns_ai_results", "created_at", `${cutoff}T00:00:00Z`);
   await del("sns_deletion_requests", "created_at", `${cutoff}T00:00:00Z`);
   // 保存期間を過ぎた投稿の記録と画像（予約中・処理中のものは残す）

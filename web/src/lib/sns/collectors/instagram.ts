@@ -4,6 +4,7 @@
  */
 import type { MediaType } from "../models.ts";
 import { ApiError, HttpClient, InsightsFetcher, graphPaginate, metrics, num, parseTime, str, type CollectedPost, type CollectResult } from "./http.ts";
+import { instagramInsights, type InsightsRequest, type InsightsResult } from "./insights.ts";
 import { DEADLINE_WARNING, cleanHandle, overDeadline, type CollectOptions, type Collector, type CollectorDeps, type ConnectionConfig } from "./types.ts";
 
 const MEDIA_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count";
@@ -73,6 +74,10 @@ export class InstagramCollector implements Collector {
       warnings.push(`ストーリーズを取得できませんでした（${e.message}）`);
     }
     return { account, posts, warnings: [...warnings, ...this.insights.warnings, ...this.storyInsights.warnings] };
+  }
+
+  accountInsights(req: InsightsRequest): Promise<InsightsResult> {
+    return instagramInsights(this.http, this.cfg.externalId, req);
   }
 
   /**

@@ -209,6 +209,32 @@ create or replace view sns_posts_latest with (security_invoker = true) as
     limit 1
   ) m on true;
 
+-- ---------- アカウント全体の日別の指標（インサイト。Facebook ページ・Instagram） ----------
+-- metric：views（閲覧数）/ viewers（閲覧者・リーチ）/ interactions / visits（ページへのアクセス）/
+--         link_clicks / follows / unfollows / video_views / engaged（反応したアカウント）
+create table if not exists sns_daily_insights (
+  account_id uuid not null references sns_accounts(id) on delete cascade,
+  client_id  uuid not null references sns_clients(id) on delete cascade,
+  platform   text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
+  date       date not null,
+  metric     text not null check (metric ~ '^[a-z_]{1,40}$'),
+  value      bigint not null,
+  primary key (account_id, date, metric)
+);
+create index if not exists idx_sns_daily_insights_client_date on sns_daily_insights(client_id, date);
+
+-- ---------- フォロワーの属性（性別・年齢・市区町村・国）。取得日ごとに1件 ----------
+-- data：{"gender_age": {"F": {"25-34": 12}}, "city": {"大津市": 40}, "country": {"JP": 120}}
+create table if not exists sns_audience (
+  account_id   uuid not null references sns_accounts(id) on delete cascade,
+  client_id    uuid not null references sns_clients(id) on delete cascade,
+  platform     text not null check (platform in ('instagram', 'facebook', 'threads', 'x')),
+  fetched_date date not null,
+  data         jsonb not null default '{}',
+  primary key (account_id, fetched_date)
+);
+create index if not exists idx_sns_audience_client on sns_audience(client_id, fetched_date);
+
 -- ---------- AI分析の同意（クライアント単位） ----------
 create table if not exists sns_ai_consents (
   client_id         uuid primary key references sns_clients(id) on delete cascade,
@@ -347,6 +373,8 @@ alter table sns_collect_state     enable row level security;
 alter table sns_audit             enable row level security;
 alter table sns_deletion_requests enable row level security;
 alter table sns_scheduled_posts   enable row level security;
+alter table sns_daily_insights    enable row level security;
+alter table sns_audience          enable row level security;
 
 -- スタッフ専用の表
 drop policy if exists sns_app_settings_staff    on sns_app_settings;
@@ -374,7 +402,8 @@ declare t text;
 begin
   foreach t in array array[
     'sns_competitors', 'sns_accounts', 'sns_snapshots', 'sns_posts',
-    'sns_post_metrics', 'sns_ai_consents', 'sns_ai_results', 'sns_scheduled_posts'
+    'sns_post_metrics', 'sns_ai_consents', 'sns_ai_results', 'sns_scheduled_posts',
+    'sns_daily_insights', 'sns_audience'
   ] loop
     execute format('drop policy if exists %I_staff_select on %I;', t, t);
     execute format('drop policy if exists %I_client_select on %I;', t, t);

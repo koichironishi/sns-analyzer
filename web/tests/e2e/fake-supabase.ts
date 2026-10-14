@@ -106,11 +106,31 @@ async function seed() {
   async function series(accountId: string, s: [string, number][]) {
     for (const [d, f] of s) await db.query("insert into sns_snapshots (account_id, client_id, date, followers) values ($1,$2,$3,$4)", [accountId, CLIENT_A, shiftDate(d), f]);
   }
+  // アカウント全体のインサイト（過去90日分。値は決まった式で作る）
+  async function insights(accountId: string, platform: string) {
+    const metrics = platform === "facebook"
+      ? { views: 60, viewers: 18, interactions: 4, visits: 5, follows: 1, unfollows: 0, video_views: 2 }
+      : { views: 400, viewers: 120, interactions: 30, link_clicks: 3, engaged: 20, follows: 2 };
+    for (let i = 1; i <= 90; i++) {
+      const date = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+      for (const [metric, base] of Object.entries(metrics)) {
+        const wave = 1 + 0.6 * Math.sin(i / 3) + (i % 7 === 0 ? 0.8 : 0);
+        await db.query("insert into sns_daily_insights (account_id, client_id, platform, date, metric, value) values ($1,$2,$3,$4,$5,$6)",
+          [accountId, CLIENT_A, platform, date, metric, Math.max(0, Math.round(base * wave))]);
+      }
+    }
+    const data = platform === "instagram"
+      ? { genderAge: { F: { "18-24": 8, "25-34": 30, "35-44": 22, "45-54": 9 }, M: { "18-24": 5, "25-34": 18, "35-44": 25, "45-54": 12, "65+": 2 } },
+          city: { "Otsu, Shiga": 88, "Kyoto, Kyoto": 7, "Kusatsu, Shiga": 5, "Osaka, Osaka": 4 }, country: { JP: 128, US: 2 } }
+      : { city: { "Otsu, Shiga": 40, "Moriyama, Shiga": 3 } };
+    await db.query("insert into sns_audience (account_id, client_id, platform, fetched_date, data) values ($1,$2,$3,$4,$5)", [accountId, CLIENT_A, platform, today, data]);
+  }
   const names: Record<string, string> = { instagram: "demo_shop", facebook: "デモ株式会社", threads: "demo_shop", x: "demo_shop" };
   for (const platform of ["instagram", "facebook", "threads", "x"]) {
     const acc = await account(platform, `demo_${platform}`, names[platform], null);
     await posts(acc, fx.posts.filter((p) => p.platform === platform));
     await series(acc, fx.followers[platform] ?? []);
+    if (platform === "instagram" || platform === "facebook") await insights(acc, platform);
   }
   const compIds = new Map<string, string>();
   for (const c of fx.competitors) {

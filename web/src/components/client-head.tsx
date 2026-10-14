@@ -11,6 +11,7 @@ import { PrintButton } from "./print-button";
  */
 const TABS = [
   { seg: "", label: "ダッシュボード" },
+  { seg: "insights", label: "インサイト" },
   { seg: "publish", label: "投稿", keepQuery: false },
   { seg: "ai", label: "AI分析" },
   { seg: "sns", label: "比較・分析", also: ["timing"] },

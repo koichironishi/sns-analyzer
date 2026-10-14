@@ -54,6 +54,46 @@ export function StackedDaily({ dates, series, label }: {
   );
 }
 
+/**
+ * 日別の折れ線（インサイト）。値のない日は線を切る。
+ * 目盛りの文字は HTML で置き、日別グラフの棒（StackedDaily）と同じ枠を使う。
+ */
+export function DailyLine({ dates, values, color, label }: { dates: string[]; values: (number | null)[]; color: string; label: string }) {
+  const max = niceMax(Math.max(0, ...values.map((v) => v ?? 0)));
+  const n = Math.max(1, dates.length - 1);
+  const ticks = [0, 0.5, 1];
+  const labelEvery = Math.ceil(dates.length / 6);
+  // 値のある日が続く区間ごとに線を引く（1日だけの値は点で出す）
+  const runs: [number, number][][] = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    const pt: [number, number] = [(i / n) * 100, 100 - (v / max) * 100];
+    if (i > 0 && values[i - 1] !== null && runs.length) runs[runs.length - 1].push(pt);
+    else runs.push([pt]);
+  });
+  return (
+    <div className="bars line" role="img" aria-label={label}>
+      <div className="bars-y" aria-hidden="true">
+        {ticks.map((f) => <span key={f} style={{ bottom: `${f * 100}%` }}>{(f * max).toLocaleString("ja-JP")}</span>)}
+      </div>
+      <div className="bars-plot">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {ticks.map((f) => <line key={f} className="grid-line" x1={0} x2={100} y1={100 - f * 100} y2={100 - f * 100} vectorEffect="non-scaling-stroke" />)}
+          {runs.map((r, k) => r.length > 1
+            ? <polyline key={k} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+                points={r.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ")} />
+            : <line key={k} x1={r[0][0]} x2={r[0][0]} y1={r[0][1]} y2={r[0][1]} stroke={color} strokeWidth="6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />)}
+        </svg>
+        <div className="bars-x" aria-hidden="true">
+          {dates.map((d, i) => i % labelEvery === 0 && (
+            <span key={d} style={{ left: `${(i / n) * 100}%` }}>{slash(d.slice(5))}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** フォロワー推移の小さな折れ線 */
 export function Sparkline({ values, platform, label }: { values: (number | null)[]; platform: Platform; label: string }) {
   const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null);

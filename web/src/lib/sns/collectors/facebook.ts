@@ -5,6 +5,7 @@
  */
 import type { MediaType } from "../models.ts";
 import { ApiError, HttpClient, InsightsFetcher, graphPaginate, metrics, num, parseTime, str, type CollectedPost, type CollectResult } from "./http.ts";
+import { facebookInsights, type InsightsRequest, type InsightsResult } from "./insights.ts";
 import { DEADLINE_WARNING, cleanHandle, overDeadline, type CollectOptions, type Collector, type CollectorDeps, type ConnectionConfig } from "./types.ts";
 
 const BASIC_FIELDS = "id,message,created_time,permalink_url,shares,attachments{media_type}";
@@ -79,6 +80,10 @@ export class FacebookCollector implements Collector {
       if (posts.length >= opts.maxPosts) break;
     }
     return { account, posts, warnings: [...warnings, ...this.insights.warnings] };
+  }
+
+  accountInsights(req: InsightsRequest): Promise<InsightsResult> {
+    return facebookInsights(this.http, this.cfg.externalId, req);
   }
 
   private followerViewsUnsupported = false;
