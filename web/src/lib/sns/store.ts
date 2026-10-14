@@ -120,7 +120,8 @@ export async function getBrandContext(db: Db, clientId: string): Promise<string>
 /** クライアントの利用者の投稿に、スタッフの承認が必要か（設定がなければ必要） */
 export async function getRequireApproval(db: Db, clientId: string): Promise<boolean> {
   const row = check(await db.from("sns_client_settings").select("require_approval").eq("client_id", clientId).maybeSingle(), "クライアント設定の読み込み");
-  return (row as { require_approval?: boolean } | null)?.require_approval ?? true;
+  // 既定は承認なし（利用者が作る投稿はクライアントの責任）
+  return (row as { require_approval?: boolean } | null)?.require_approval ?? false;
 }
 
 export async function setRequireApproval(admin: Db, clientId: string, value: boolean): Promise<void> {

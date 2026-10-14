@@ -431,7 +431,10 @@ export async function SettingsView({ params, searchParams, part }: {
           <ActionForm action={setApprovalAction}>
             <Hidden id={id} />
             <label className="check"><input type="checkbox" name="require_approval" defaultChecked={requireApproval} />利用者が作った投稿は、スタッフの承認を経てから公開する</label>
-            <p className="hint">承認待ちの投稿は「投稿」の画面に表示され、スタッフが「承認する」か「差し戻す」を選べます。スタッフが作った投稿は承認なしで公開されます。</p>
+            <p className="hint">
+              通常はオフです（利用者が作った投稿は、クライアントの責任でそのまま公開されます）。オンにすると、利用者の投稿は「投稿」の画面で承認待ちになり、スタッフが「承認する」か「差し戻す」を選べます。
+              スタッフが作った投稿は承認なしで公開されます。外部ツール（Rhythmos AI）から登録した投稿は、この設定に関係なく承認待ちになります。
+            </p>
             <div className="form-actions"><SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton></div>
           </ActionForm>
         </div>

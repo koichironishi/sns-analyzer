@@ -83,7 +83,9 @@ create table if not exists sns_client_settings (
 );
 
 -- クライアントの閲覧ユーザーが作った投稿に、スタッフの承認を必須にするか
-alter table sns_client_settings add column if not exists require_approval boolean not null default true;
+alter table sns_client_settings add column if not exists require_approval boolean not null default false;
+-- クライアントの利用者が作る投稿はクライアントの責任のため、承認は既定でなし（必要なクライアントだけ「利用者管理」で有効にする）
+alter table sns_client_settings alter column require_approval set default false;
 
 drop trigger if exists trg_sns_client_settings_updated on sns_client_settings;
 create trigger trg_sns_client_settings_updated before update on sns_client_settings
