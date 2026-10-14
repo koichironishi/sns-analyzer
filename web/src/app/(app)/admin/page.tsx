@@ -6,7 +6,8 @@ import { AI_EFFORTS, AI_MODELS } from "@/lib/sns/ai";
 import { getAppSettings } from "@/lib/sns/store";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
-import { saveAppSettings } from "./actions";
+import { mailConfigured, recipients } from "@/lib/notify";
+import { saveAppSettings, sendTestAlert } from "./actions";
 
 export const metadata: Metadata = { title: "全体設定" };
 
@@ -14,7 +15,10 @@ const EFFORT_LABELS = { low: "低（速い・安い）", medium: "中", high: "�
 
 export default async function AdminPage() {
   await requireAdmin();
-  const s = await getAppSettings(createAdminClient());
+  const admin = createAdminClient();
+  const s = await getAppSettings(admin);
+  const mailOk = mailConfigured();
+  const to = mailOk ? await recipients(admin) : [];
   const missing = (Object.keys(LEGAL_FIELDS) as LegalKey[]).filter((k) => !OPTIONAL_LEGAL.includes(k) && !s.legal[k]);
   return (
     <main id="main" className="app-main narrow" tabIndex={-1}>
@@ -54,6 +58,16 @@ export default async function AdminPage() {
           ))}
         </section>
         <div className="form-actions"><SubmitButton pendingText="保存しています…">保存</SubmitButton></div>
+      </ActionForm>
+      <ActionForm action={sendTestAlert} className="stack" label="知らせのメール">
+        <section className="card" aria-labelledby="h-alert">
+          <h2 id="h-alert" style={{ fontSize: "var(--fs-lg)", margin: 0 }}>知らせのメール</h2>
+          <p className="hint">予約投稿の失敗・データ収集のエラー・連携の期限が近いときに、スタッフへメールで知らせます。</p>
+          {mailOk
+            ? <p>送り先：{to.length ? to.join("、") : "なし（ALERT_TO も、メールアドレスのある有効な管理者もいません）"}</p>
+            : <div className="msg error" role="alert">メールの設定がありません。Vercel の環境変数に SMTP_HOST・SMTP_PORT・SMTP_USER・SMTP_PASS を追加し、デプロイし直してください。</div>}
+          <div className="form-actions"><SubmitButton pendingText="送っています…">テスト送信</SubmitButton></div>
+        </section>
       </ActionForm>
     </main>
   );

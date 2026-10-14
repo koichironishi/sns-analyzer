@@ -7,6 +7,7 @@ import { LEGAL_FIELDS } from "@/lib/legal-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_EFFORTS, AI_MODELS } from "@/lib/sns/ai";
 import { audit } from "@/lib/sns/store";
+import { deliver, recipients } from "@/lib/notify";
 import type { ActionState } from "../clients/[id]/settings/actions";
 
 const Settings = z.object({
@@ -38,4 +39,22 @@ export async function saveAppSettings(_: ActionState, form: FormData): Promise<A
   await audit(admin, v, "settings.update", null, JSON.stringify(parsed.data), await clientIp());
   revalidatePath("/", "layout");
   return { ok: "全体設定を保存しました。" };
+}
+
+/** 知らせのメールのテスト送信（SMTP の設定と送り先を確かめる） */
+export async function sendTestAlert(): Promise<ActionState> {
+  const v = await getViewer();
+  if (!v || v.kind !== "staff" || !v.isAdmin) return { error: "権限がありません" };
+  const admin = createAdminClient();
+  try {
+    const to = await recipients(admin);
+    await deliver(admin, "テスト送信", [
+      "これは知らせのメールのテスト送信です。",
+      "予約投稿の失敗・データ収集のエラー・連携の期限が近いときに、この宛先へ届きます。",
+    ]);
+    await audit(admin, v, "alert.test", null, to.join(", "), await clientIp());
+    return { ok: `テストメールを送りました（${to.join("、")}）。届いているか確認してください。` };
+  } catch (e) {
+    return { error: `送れませんでした：${e instanceof Error ? e.message : String(e)}` };
+  }
 }

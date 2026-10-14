@@ -16,7 +16,7 @@ const env = (k: string) => (process.env[k] ?? "").trim();
 
 export const mailConfigured = () => Boolean(env("SMTP_HOST") && env("SMTP_USER") && env("SMTP_PASS"));
 
-async function recipients(admin: SupabaseClient): Promise<string[]> {
+export async function recipients(admin: SupabaseClient): Promise<string[]> {
   const fixed = env("ALERT_TO").split(",").map((x) => x.trim()).filter(Boolean);
   if (fixed.length) return fixed;
   const { data } = await admin.from("staff").select("email,role,is_active");
@@ -26,28 +26,33 @@ async function recipients(admin: SupabaseClient): Promise<string[]> {
 
 /** 知らせを送る。送れたら true（未設定・失敗でも本来の処理は止めない） */
 export async function sendAlert(admin: SupabaseClient, subject: string, lines: string[]): Promise<boolean> {
-  if (!mailConfigured()) return false;
   try {
-    const to = await recipients(admin);
-    if (!to.length) return false;
-    const port = Number(env("SMTP_PORT") || 587);
-    const transport = nodemailer.createTransport({
-      host: env("SMTP_HOST"), port, secure: port === 465,
-      auth: { user: env("SMTP_USER"), pass: env("SMTP_PASS") },
-      connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
-    });
-    await transport.sendMail({
-      from: { name: env("SMTP_FROM_NAME") || "Rhythmos マーケティング", address: env("SMTP_USER") },
-      to,
-      subject: `【SNS分析】${subject}`,
-      text: [...lines, "", `SNS分析：${siteUrl()}`, "（このメールは自動で送っています）"].join("\n"),
-    });
-    await audit(admin, null, "alert.mail", null, `${subject}（${to.length}人）`);
-    return true;
+    return (await deliver(admin, subject, lines)) > 0;
   } catch (e) {
     console.error("知らせのメールを送れませんでした", e instanceof Error ? e.message : e);
     return false;
   }
+}
+
+/** 送る。送った人数を返し、送れなければ例外を投げる（テスト送信で理由を見せるため） */
+export async function deliver(admin: SupabaseClient, subject: string, lines: string[]): Promise<number> {
+  if (!mailConfigured()) throw new Error("メールの設定（SMTP_HOST・SMTP_USER・SMTP_PASS）がありません");
+  const to = await recipients(admin);
+  if (!to.length) throw new Error("送り先がありません（ALERT_TO も、メールアドレスのある有効な管理者もいません）");
+  const port = Number(env("SMTP_PORT") || 587);
+  const transport = nodemailer.createTransport({
+    host: env("SMTP_HOST"), port, secure: port === 465,
+    auth: { user: env("SMTP_USER"), pass: env("SMTP_PASS") },
+    connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+  });
+  await transport.sendMail({
+    from: { name: env("SMTP_FROM_NAME") || "Rhythmos マーケティング", address: env("SMTP_USER") },
+    to,
+    subject: `【SNS分析】${subject}`,
+    text: [...lines, "", `SNS分析：${siteUrl()}`, "（このメールは自動で送っています）"].join("\n"),
+  });
+  await audit(admin, null, "alert.mail", null, `${subject}（${to.length}人）`);
+  return to.length;
 }
 
 /** 今日すでに同じ種類の知らせを送ったか（1日に何度も動く処理から、同じ知らせを重ねて送らないため） */
