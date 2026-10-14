@@ -4,7 +4,7 @@ import { metaApp, threadsApp, xApp } from "@/lib/connect-flow";
 import { fmtDateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
-import { PLATFORMS, PLATFORM_LABELS, todayIn } from "@/lib/sns/models";
+import { PLATFORMS, PLATFORM_LABELS, accountLabel, todayIn } from "@/lib/sns/models";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
 import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
 import { addViewerAction, deleteClientAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
@@ -15,7 +15,7 @@ import { Chip, PageHead } from "@/components/report-ui";
 import { SubmitButton } from "@/components/submit-button";
 import {
   connectX, deleteData, disconnect, grantAiConsent, importCsv, recordFollowerCount, removeCompetitor,
-  issueImportKey, revokeAiConsent, revokeImportKey, saveBrand, testConnection, upsertCompetitor,
+  issueImportKey, revokeAiConsent, revokeImportKey, saveBrand, saveNickname, testConnection, upsertCompetitor,
 } from "./actions";
 import { getImportKey } from "@/lib/sns/import-posts";
 
@@ -229,7 +229,7 @@ export async function SettingsView({ params, searchParams, part }: {
                 {list.map((c) => {
                   const st = states.find((x) => x.platform === p && x.external_id === c.external_id);
                   const left = daysLeft(c.token_expires_at ?? null);
-                  const name = c.username ? `${p === "facebook" ? "" : "@"}${c.username}` : c.external_id;
+                  const name = accountLabel(p, c.username, c.nickname, c.external_id);
                   return (
                     <div className="conn conn-account" key={c.external_id}>
                       <div>
@@ -246,6 +246,16 @@ export async function SettingsView({ params, searchParams, part }: {
                         <ActionForm action={testConnection}><Hidden id={id} /><input type="hidden" name="platform" value={p} /><input type="hidden" name="external_id" value={c.external_id} />
                           <SubmitButton className="btn" pendingText="確認しています…">連携を確認</SubmitButton></ActionForm>
                       </div>
+                      <details className="more" style={{ gridColumn: "1 / -1" }}>
+                        <summary>{c.nickname ? "呼び名を変える" : "呼び名を付ける（「本店」「店舗A」など）"}</summary>
+                        <ActionForm action={saveNickname} className="row">
+                          <Hidden id={id} /><input type="hidden" name="platform" value={p} /><input type="hidden" name="external_id" value={c.external_id} />
+                          <label htmlFor={`nick-${p}-${c.external_id}`} className="sr-only">{name}の呼び名</label>
+                          <input id={`nick-${p}-${c.external_id}`} name="nickname" type="text" maxLength={30} defaultValue={c.nickname ?? ""} placeholder="例：本店" style={{ maxWidth: 240 }} />
+                          <SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton>
+                        </ActionForm>
+                        <p className="hint">レポートのアカウントの切り替えと、投稿先の選択に表示します。空にして保存すると外れます。</p>
+                      </details>
                       <details className="more" style={{ gridColumn: "1 / -1" }}>
                         <summary>このアカウントの連携を解除する</summary>
                         <ActionForm action={disconnect}>

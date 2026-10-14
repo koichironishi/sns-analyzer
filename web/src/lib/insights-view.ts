@@ -56,7 +56,7 @@ type CardDef = { metric: InsightMetric | "post_clicks"; title: string; how: "sum
 const CARDS: Record<"facebook" | "instagram", CardDef[]> = {
   facebook: [
     { metric: "views", title: "閲覧数", how: "sum", note: "コンテンツが表示された回数" },
-    { metric: "viewers", title: "閲覧者", how: "avg", note: "コンテンツを見た人数（1日あたりの平均）" },
+    { metric: "viewers", title: "閲覧者", how: "avg", note: "コンテンツを見た人数。Meta の画面の「期間の合計人数」とは数え方が違います" },
     { metric: "interactions", title: "コンテンツでのインタラクション", how: "sum", note: "リアクション・コメント・シェアなど" },
     { metric: "visits", title: "アクセス", how: "sum", note: "Facebookページが見られた回数" },
     { metric: "post_clicks", title: "リンククリック", how: "sum", note: "投稿のクリック数の合計（投稿日で集計）" },
@@ -65,9 +65,9 @@ const CARDS: Record<"facebook" | "instagram", CardDef[]> = {
   ],
   instagram: [
     { metric: "views", title: "閲覧数", how: "sum", note: "コンテンツが表示された回数" },
-    { metric: "viewers", title: "リーチ", how: "avg", note: "コンテンツを見たアカウント数（1日あたりの平均）" },
+    { metric: "viewers", title: "リーチ", how: "avg", note: "コンテンツを見たアカウント数。Meta の画面の「期間の合計」とは数え方が違います" },
     { metric: "interactions", title: "コンテンツでのインタラクション", how: "sum", note: "いいね・コメント・保存・シェアなど" },
-    { metric: "engaged", title: "反応したアカウント", how: "avg", note: "反応したアカウント数（1日あたりの平均）" },
+    { metric: "engaged", title: "反応したアカウント", how: "avg", note: "反応したアカウント数。Meta の画面の「期間の合計」とは数え方が違います" },
     { metric: "link_clicks", title: "プロフィールのリンクのタップ", how: "sum", note: "プロフィールのリンク・ボタンが押された回数" },
     { metric: "follows", title: "フォロー", how: "sum", note: "新しいフォロワー（直近30日のみ。フォロワー100人以上のアカウント）" },
   ],

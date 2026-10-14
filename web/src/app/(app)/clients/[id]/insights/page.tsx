@@ -29,7 +29,7 @@ export default async function InsightsPage({ params, searchParams }: PageProps<"
           <div className="insight-grid">
             {cards.map((c) => (
               <article className="card insight-card" key={c.key} aria-labelledby={`h-${c.key}`}>
-                <h3 id={`h-${c.key}`}>{c.title}</h3>
+                <h3 id={`h-${c.key}`}>{c.title}{c.how === "avg" && <span className="how-tag">1日平均</span>}</h3>
                 {c.note && <p className="sub">{c.note}</p>}
                 <p className="insight-value">
                   <span className="stat-value">{fmt(c, c.total)}</span>

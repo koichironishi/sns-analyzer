@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { connectionOverview, listClients, listCollectState, pendingCounts } from "@/lib/sns/store";
+import { connectionOverview, listClients, listCollectState, postStatusCounts } from "@/lib/sns/store";
+import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORMS, PLATFORM_LABELS } from "@/lib/sns/models";
 import { fmtDateTime } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -21,11 +22,29 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
   if (v.kind === "client") redirect(`/clients/${v.clientId}`);
   const db = await createClient();
   const admin = createAdminClient();
-  const [clients, conns, states, pendings] = await Promise.all([listClients(db), connectionOverview(admin), listCollectState(db), pendingCounts(admin)]);
+  const [clients, conns, states, counts] = await Promise.all([listClients(db), connectionOverview(admin), listCollectState(db), postStatusCounts(admin)]);
+  // クライアントごとの「対応が要ること」。毎朝この一覧だけで確認できるようにする
+  const issues = new Map(clients.map((c) => {
+    const mine = conns.filter((x) => x.client_id === c.id);
+    const relink = mine.filter((x) => { const d = daysLeft(x.token_expires_at); return x.status === "error" || (d !== null && d <= 7); }).length;
+    const collect = states.filter((s) => s.client_id === c.id && s.last_error).length;
+    return [c.id, { relink, collect, failed: counts.failed.get(c.id) ?? 0, pending: counts.pending.get(c.id) ?? 0 }];
+  }));
+  const attention = clients.filter((c) => { const i = issues.get(c.id)!; return i.relink + i.collect + i.failed > 0; }).length;
+  // 対応が要るクライアントを先に並べる（並びは名前順のまま）
+  const sorted = [...clients].sort((a, b) => {
+    const w = (id: string) => { const i = issues.get(id)!; return i.relink + i.collect + i.failed > 0 ? 0 : i.pending > 0 ? 1 : 2; };
+    return w(a.id) - w(b.id);
+  });
   return (
     <main id="main" className="app-main" tabIndex={-1}>
       <h1 className="page-title">クライアント一覧</h1>
       <p className="sub">SNS分析のクライアントです（MEO のクライアントとは別に管理します）。スタッフは MEO と同じアカウントでログインできます。</p>
+      {clients.length > 0 && (
+        <p className={`msg ${attention ? "error" : "ok"}`} role="status">
+          {attention ? `対応が必要なクライアントが${attention}件あります（一覧の上に並べています）。` : "対応が必要なクライアントはありません。"}
+        </p>
+      )}
       {sp.ok === "client_deleted" && <Flash kind="ok">クライアントと、そのSNSデータをすべて削除しました。</Flash>}
       <details className="card no-print" style={{ marginBottom: 16 }} open={clients.length === 0}>
         <summary className="btn primary" style={{ display: "inline-flex" }}>クライアントを追加</summary>
@@ -41,10 +60,10 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
         <EmptyState title="クライアントがまだありません" body="上の「クライアントを追加」から登録すると、ここに一覧が表示されます。" />
       ) : (
         <ul className="client-list">
-          {clients.map((c) => {
+          {sorted.map((c) => {
             const mine = conns.filter((x) => x.client_id === c.id);
             const last = states.filter((s) => s.client_id === c.id).map((s) => s.last_success_at ?? "").sort().at(-1);
-            const errors = mine.filter((x) => x.status === "error").length;
+            const i = issues.get(c.id)!;
             return (
               <li key={c.id}>
                 <Link href={`/clients/${c.id}`} className="card client-card">
@@ -56,8 +75,14 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
                     ))}
                   </div>
                   <span className="small muted">最終収集：{last ? fmtDateTime(last) : "まだありません"}</span>
-                  {errors > 0 && <span className="badge warn">要対応：連携エラー {errors}件</span>}
-                  {(pendings.get(c.id) ?? 0) > 0 && <span className="badge info">承認待ちの投稿 {pendings.get(c.id)}件</span>}
+                  {(i.relink + i.collect + i.failed + i.pending) > 0 && (
+                    <div className="chips" aria-label="対応が必要なこと">
+                      {i.relink > 0 && <span className="badge warn">要再連携 {i.relink}件</span>}
+                      {i.collect > 0 && <span className="badge warn">収集エラー {i.collect}件</span>}
+                      {i.failed > 0 && <span className="badge warn">投稿の失敗 {i.failed}件</span>}
+                      {i.pending > 0 && <span className="badge info">承認待ち {i.pending}件</span>}
+                    </div>
+                  )}
                 </Link>
               </li>
             );

@@ -131,10 +131,19 @@ export async function setRequireApproval(admin: Db, clientId: string, value: boo
 
 /** スタッフ向け：クライアントごとの承認待ちの件数 */
 export async function pendingCounts(admin: Db): Promise<Map<string, number>> {
-  const rows = check(await admin.from("sns_scheduled_posts").select("client_id").eq("status", "pending"), "承認待ちの確認") as { client_id: string }[];
-  const m = new Map<string, number>();
-  for (const r of rows) m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
-  return m;
+  return (await postStatusCounts(admin)).pending;
+}
+
+/** クライアントごとの、承認待ちと失敗（一部失敗を含む）の予約投稿の件数 */
+export async function postStatusCounts(admin: Db): Promise<{ pending: Map<string, number>; failed: Map<string, number> }> {
+  const rows = check(await admin.from("sns_scheduled_posts").select("client_id,status").in("status", ["pending", "failed", "partial"]), "予約投稿の状態の確認") as
+    { client_id: string; status: PostStatus }[];
+  const pending = new Map<string, number>(), failed = new Map<string, number>();
+  for (const r of rows) {
+    const m = r.status === "pending" ? pending : failed;
+    m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
+  }
+  return { pending, failed };
 }
 
 export async function setBrandContext(admin: Db, clientId: string, text: string): Promise<void> {
@@ -149,7 +158,7 @@ type PostRow = {
   comments: number; shares: number; saves: number; quotes: number; clicks: number | null;
   content_type: string | null; follower_views: number | null;
 };
-type AccountRow = { id: string; platform: string; external_id: string; username: string | null; competitor_id: string | null; source: string; updated_at: string };
+type AccountRow = { id: string; platform: string; external_id: string; username: string | null; nickname: string | null; competitor_id: string | null; source: string; updated_at: string };
 type SnapshotRow = { account_id: string; date: string; followers: number | null };
 export type CompetitorRow = { id: string; name: string; handles: Partial<Record<Platform, string>>; created_at: string };
 
@@ -223,7 +232,7 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
   const from = `${addDays(start, -opts.days - 1)}T00:00:00Z`; // 前期間の比較用にさかのぼる
   const to = `${addDays(opts.end, 2)}T00:00:00Z`;
   const [accounts, competitorList, posts, snaps] = await Promise.all([
-    selectAll<AccountRow>((a, b) => db.from("sns_accounts").select("id,platform,external_id,username,competitor_id,source,updated_at").eq("client_id", clientId).order("id").range(a, b), "アカウントの読み込み"),
+    selectAll<AccountRow>((a, b) => db.from("sns_accounts").select("id,platform,external_id,username,nickname,competitor_id,source,updated_at").eq("client_id", clientId).order("id").range(a, b), "アカウントの読み込み"),
     selectAll<CompetitorRow>((a, b) => db.from("sns_competitors").select("id,name,handles,created_at").eq("client_id", clientId).order("name").range(a, b), "競合の読み込み"),
     selectAll<PostRow>((a, b) => db.from("sns_posts_latest")
       .select("id,account_id,platform,external_id,posted_at,text,media_type,permalink,views,reach,likes,comments,shares,saves,quotes,clicks,content_type,follower_views")
@@ -264,7 +273,7 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
   const postAccounts = new Set([...ownPosts, ...ownStories].map((p) => p.accountId));
   const ownAccounts: OwnAccount[] = own
     .filter((a) => postAccounts.has(a.id) || (seriesOf.get(a.id)?.length ?? 0) > 0)
-    .map((a) => ({ id: a.id, platform: a.platform as Platform, name: a.username || a.external_id }));
+    .map((a) => ({ id: a.id, platform: a.platform as Platform, name: a.nickname || a.username || a.external_id }));
   for (const a of own) {
     const s = seriesOf.get(a.id);
     if (s?.length) ownFollowersByAccount[a.id] = s;
@@ -273,9 +282,9 @@ export async function loadReportData(db: Db, clientId: string, opts: { days: num
     const list = own.filter((x) => x.platform === p);
     const summed = sumSeries(list.map((a) => seriesOf.get(a.id) ?? []).filter((s) => s.length));
     if (summed.length) ownFollowers[p] = summed;
-    const named = list.filter((a) => a.username);
+    const named = list.filter((a) => a.username || a.nickname);
     // 1アカウントならその名前。複数ならアカウントの数（画面で「2アカウント」のように出す）
-    if (named.length === 1) ownNames[p] = named[0].username!;
+    if (named.length === 1) ownNames[p] = named[0].nickname || named[0].username!;
     else if (named.length > 1) ownNames[p] = `${new Set(ownAccounts.filter((x) => x.platform === p).map((x) => x.id)).size || named.length}アカウント`;
   }
 
@@ -417,14 +426,30 @@ export type ConnectionInfo = {
   platform: Platform; external_id: string; username: string | null; token_expires_at: string | null;
   status: "connected" | "error"; last_error: string | null; connected_at: string; updated_at: string;
   can_publish: boolean; auth_kind: string;
+  /** アカウントの呼び名（sns_accounts.nickname） */
+  nickname?: string | null;
 };
 export type ConnectionSecret = ConnectionInfo & { client_id: string; access_token: string; connected_user_id: string | null; refresh_token: string | null };
 
 /** 画面表示用。トークンは返さない */
 export async function listConnections(admin: Db, clientId: string): Promise<ConnectionInfo[]> {
-  return check(await admin.from("sns_connections")
-    .select("platform,external_id,username,token_expires_at,status,last_error,connected_at,updated_at,can_publish,auth_kind")
-    .eq("client_id", clientId), "接続情報の読み込み") as ConnectionInfo[];
+  const [conns, names] = await Promise.all([
+    admin.from("sns_connections")
+      .select("platform,external_id,username,token_expires_at,status,last_error,connected_at,updated_at,can_publish,auth_kind")
+      .eq("client_id", clientId),
+    admin.from("sns_accounts").select("platform,external_id,nickname").eq("client_id", clientId).is("competitor_id", null).not("nickname", "is", null),
+  ]);
+  const nick = new Map(((check(names, "呼び名の読み込み") ?? []) as { platform: string; external_id: string; nickname: string }[])
+    .map((r) => [`${r.platform}:${r.external_id}`, r.nickname]));
+  return (check(conns, "接続情報の読み込み") as ConnectionInfo[]).map((c) => ({ ...c, nickname: nick.get(`${c.platform}:${c.external_id}`) ?? null }));
+}
+
+/** アカウントの呼び名を付ける（空なら外す）。まだ収集前でアカウントの行がなければ作る */
+export async function setNickname(admin: Db, clientId: string, platform: Platform, externalId: string, username: string | null, nickname: string | null) {
+  check(await admin.from("sns_accounts").upsert(
+    { client_id: clientId, platform, external_id: externalId, ...(username ? { username } : {}), nickname, updated_at: new Date().toISOString() },
+    { onConflict: "client_id,platform,external_id" },
+  ), "呼び名の保存");
 }
 
 export async function getConnectionSecrets(admin: Db, clientId?: string): Promise<ConnectionSecret[]> {
@@ -655,9 +680,9 @@ export async function listAudit(db: Db, limit = 300): Promise<AuditRow[]> {
 }
 
 /** クライアント一覧用：全クライアントの接続状況（トークンは返さない） */
-export async function connectionOverview(admin: Db): Promise<{ client_id: string; platform: Platform; status: string; username: string | null }[]> {
-  return check(await admin.from("sns_connections").select("client_id,platform,status,username"), "接続情報の読み込み") as
-    { client_id: string; platform: Platform; status: string; username: string | null }[];
+export async function connectionOverview(admin: Db): Promise<{ client_id: string; platform: Platform; status: string; username: string | null; token_expires_at: string | null }[]> {
+  return check(await admin.from("sns_connections").select("client_id,platform,status,username,token_expires_at"), "接続情報の読み込み") as
+    { client_id: string; platform: Platform; status: string; username: string | null; token_expires_at: string | null }[];
 }
 
 /**
@@ -749,4 +774,19 @@ export const MEDIA_BUCKET = "sns-media";
 
 export async function removeMedia(admin: Db, paths: string[]) {
   if (paths.length) await admin.storage.from(MEDIA_BUCKET).remove(paths);
+}
+
+export type CalendarPost = { id: string; accountId: string; platform: Platform; externalId: string; postedAt: string; text: string; permalink: string | null; story: boolean };
+
+/** 期間内に SNS 上に出た自社の投稿（収集済み）。投稿カレンダーで、この画面を通さずに出した投稿も並べるため */
+export async function ownPostsBetween(db: Db, clientId: string, startIso: string, endIso: string): Promise<CalendarPost[]> {
+  const ids = (check(await db.from("sns_accounts").select("id").eq("client_id", clientId).is("competitor_id", null), "アカウントの読み込み") as { id: string }[]).map((r) => r.id);
+  if (!ids.length) return [];
+  const rows = check(await db.from("sns_posts").select("id,account_id,platform,external_id,posted_at,text,permalink,content_type")
+    .in("account_id", ids).gte("posted_at", startIso).lt("posted_at", endIso).order("posted_at").limit(1000), "投稿の読み込み") as
+    { id: string; account_id: string; platform: string; external_id: string; posted_at: string; text: string | null; permalink: string | null; content_type: string | null }[];
+  return rows.filter((r) => isPlatform(r.platform)).map((r) => ({
+    id: r.id, accountId: r.account_id, platform: r.platform as Platform, externalId: r.external_id,
+    postedAt: new Date(r.posted_at).toISOString(), text: r.text ?? "", permalink: r.permalink, story: r.content_type === "story",
+  }));
 }

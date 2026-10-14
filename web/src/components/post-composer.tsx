@@ -3,10 +3,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
 import { LIMITS, textLength } from "@/lib/sns/publish/rules";
-import { PLATFORMS, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
+import { PLATFORMS, PLATFORM_LABELS, accountLabel, nextWeekdayAt, type Platform } from "@/lib/sns/models";
+import type { BestTime } from "@/lib/sns/analysis";
 
 /** 投稿先の候補。1アカウント＝1件（同じSNSに複数ある）。未連携のSNSは key が null の1件で表す */
-export type ComposerConnection = { key: string | null; platform: Platform; connected: boolean; canPublish: boolean; username: string | null };
+export type ComposerConnection = { key: string | null; platform: Platform; connected: boolean; canPublish: boolean; username: string | null; nickname?: string | null };
 type Img = { key: string; path: string | null; previewUrl: string; width: number; height: number; uploading: boolean; error?: string };
 
 const MAX_SIDE = 1440;
@@ -37,8 +38,10 @@ function localNow(offsetMin = 0) {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
-export function PostComposer({ clientId, connections, initial, needsApproval = false }: {
+export function PostComposer({ clientId, connections, initial, needsApproval = false, bestTimes = [] }: {
   clientId: string;
+  /** 予約時刻のおすすめ（反応の良い曜日×時間帯） */
+  bestTimes?: BestTime[];
   connections: ComposerConnection[];
   needsApproval?: boolean;
   initial?: { id: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null };
@@ -152,7 +155,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
         <div className="checks">
           {connections.map((c) => {
             const disabled = !c.connected || !c.canPublish || !c.key;
-            const name = c.username ? `${c.platform === "facebook" ? "" : "@"}${c.username}` : "";
+            const name = accountLabel(c.platform, c.username, c.nickname);
             const note = !c.connected ? "未連携" : !c.canPublish ? "投稿の許可なし（再連携が必要）" : "";
             return (
               <label key={c.key ?? c.platform} className="check" style={{ opacity: disabled ? 0.7 : 1 }}>
@@ -242,6 +245,29 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
             <label htmlFor="post-when">予約日時（日本時間）</label>
             <input id="post-when" type="datetime-local" value={when} min={localNow(2)} onChange={(e) => setWhen(e.target.value)} aria-describedby="when-hint" />
             <p className="hint" id="when-hint">予約時刻から数分以内に投稿します。</p>
+            {(() => {
+              const list = bestTimes.filter((b) => platforms.includes(b.platform));
+              if (!list.length) return null;
+              return (
+                <div className="best-times">
+                  <p className="hint" id="best-hint" style={{ margin: 0 }}>反応が良い時間帯（直近90日の投稿から）。押すと、次のその時刻を予約日時に入れます。</p>
+                  <ul className="chips" aria-describedby="best-hint">
+                    {list.map((b) => {
+                      const at = nextWeekdayAt(b.weekday, b.hour);
+                      return (
+                        <li key={`${b.platform}-${b.weekday}-${b.hour}`}>
+                          <button type="button" className="chip" disabled={!at} aria-pressed={when === at}
+                            onClick={() => setWhen(at)}>
+                            <i className="dot" style={{ background: `var(--c-${b.platform})` }} aria-hidden="true" />
+                            {PLATFORM_LABELS[b.platform]} {b.label}<span className="small muted">（普段の{b.ratio.toFixed(1)}倍・{b.n}件）</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })()}
           </>
         )}
       </fieldset>

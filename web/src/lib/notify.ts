@@ -39,6 +39,14 @@ export async function deliver(admin: SupabaseClient, subject: string, lines: str
   if (!mailConfigured()) throw new Error("メールの設定（SMTP_HOST・SMTP_USER・SMTP_PASS）がありません");
   const to = await recipients(admin);
   if (!to.length) throw new Error("送り先がありません（ALERT_TO も、メールアドレスのある有効な管理者もいません）");
+  await sendMail(to, `【SNS分析】${subject}`, [...lines, "", `SNS分析：${siteUrl()}`, "（このメールは自動で送っています）"]);
+  await audit(admin, null, "alert.mail", null, `${subject}（${to.length}人）`);
+  return to.length;
+}
+
+/** メールを送る（送れなければ例外）。スタッフへの知らせと、クライアントへの月次レポートの送付で使う */
+export async function sendMail(to: string[], subject: string, lines: string[]): Promise<void> {
+  if (!mailConfigured()) throw new Error("メールの設定（SMTP_HOST・SMTP_USER・SMTP_PASS）がありません");
   const port = Number(env("SMTP_PORT") || 587);
   const transport = nodemailer.createTransport({
     host: env("SMTP_HOST"), port, secure: port === 465,
@@ -48,11 +56,9 @@ export async function deliver(admin: SupabaseClient, subject: string, lines: str
   await transport.sendMail({
     from: { name: env("SMTP_FROM_NAME") || "Rhythmos マーケティング", address: env("SMTP_USER") },
     to,
-    subject: `【SNS分析】${subject}`,
-    text: [...lines, "", `SNS分析：${siteUrl()}`, "（このメールは自動で送っています）"].join("\n"),
+    subject,
+    text: lines.join("\n"),
   });
-  await audit(admin, null, "alert.mail", null, `${subject}（${to.length}人）`);
-  return to.length;
 }
 
 /** 今日すでに同じ種類の知らせを送ったか（1日に何度も動く処理から、同じ知らせを重ねて送らないため） */

@@ -21,7 +21,7 @@ import { CONSENT_VERSION } from "@/lib/sns/privacy";
 import {
   audit, deleteAccountData, deleteCompetitor, deleteConnection, deletePlatformData, findAccount, getAppSettings,
   getConnectionSecrets, grantConsent, listCompetitors, recordFollowers, revokeConsent, saveCollected,
-  saveCompetitor, saveConnection, setBrandContext,
+  saveCompetitor, saveConnection, setBrandContext, setNickname,
 } from "@/lib/sns/store";
 
 /** secret：一度だけ画面に表示する値（外部ツールの合言葉）。保存も記録もしない */
@@ -316,5 +316,24 @@ export async function revokeImportKey(_: ActionState, form: FormData): Promise<A
     return done(clientId, "合言葉を無効にしました。外部ツールからは登録できなくなりました。");
   } catch (e) {
     return fail(e);
+  }
+}
+
+/** アカウントの呼び名（「本店」「店舗A」など）を付ける */
+export async function saveNickname(_: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const { v, clientId, admin } = await staff(form);
+    const platform = String(form.get("platform"));
+    const externalId = String(form.get("external_id") ?? "");
+    if (!isPlatform(platform) || !externalId) return { error: "SNSの指定が正しくありません" };
+    const nickname = String(form.get("nickname") ?? "").trim();
+    if (nickname.length > 30) return { error: "呼び名は30文字以内で入力してください" };
+    const conn = (await getConnectionSecrets(admin, clientId)).find((c) => c.platform === platform && c.external_id === externalId);
+    if (!conn) return { error: "未連携です" };
+    await setNickname(admin, clientId, platform, externalId, conn.username, nickname || null);
+    await audit(admin, v, "account.nickname", clientId, `${PLATFORM_LABELS[platform]} ${conn.username ?? externalId} → ${nickname || "（なし）"}`, await clientIp());
+    return done(clientId, nickname ? `呼び名を「${nickname}」にしました。` : "呼び名を外しました。");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "保存できませんでした" };
   }
 }

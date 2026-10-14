@@ -21,10 +21,12 @@ const TABS = [
 /** タブにない画面（設定・投稿の作成など）の名前 */
 function pageLabel(rest: string): string {
   if (rest === "publish/new") return "新しい投稿";
+  if (rest === "publish/calendar") return "投稿カレンダー";
   if (rest.startsWith("publish/")) return "投稿の編集";
   // 左メニューに置いた作業の画面（レポートのタブには出さない）
   if (rest === "publish") return "投稿";
   if (rest === "ai") return "AI分析";
+  if (rest === "monthly") return "月次レポート";
   if (rest === "settings/meta-pages") return "連携するページの選択";
   if (rest === "settings/connections") return "SNS連携";
   if (rest === "settings/users") return "利用者管理";

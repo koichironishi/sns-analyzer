@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { UUID_RE } from "@/lib/auth";
-import { publishContext } from "@/lib/publish-page";
+import { publishBestTimes, publishContext } from "@/lib/publish-page";
 import { getScheduledPost, listConnections } from "@/lib/sns/store";
 import { resolveTargets, targetKey } from "@/lib/sns/publish/targets";
 import { PageHead } from "@/components/report-ui";
@@ -29,7 +29,7 @@ export default async function EditPostPage({ params }: PageProps<"/clients/[id]/
       {post.status === "rejected" && post.review_note && (
         <div className="msg error" role="alert">差し戻されました（{post.reviewed_by_name ?? "担当者"}）：{post.review_note}</div>
       )}
-      <PostComposer clientId={id} connections={connections} needsApproval={needsApproval} initial={{
+      <PostComposer clientId={id} connections={connections} needsApproval={needsApproval} bestTimes={await publishBestTimes(id)} initial={{
         id: post.id, text: post.text, platformTexts: post.platform_texts, media: post.media,
         // 以前の投稿（SNS名だけ）は、そのSNSで最初に連携したアカウントを選んだ状態にする
         targets: resolveTargets(post, conns).filter((t) => t.externalId).map((t) => targetKey(t.platform, t.externalId!)),

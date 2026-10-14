@@ -6,6 +6,12 @@
 export const PLATFORMS = ["instagram", "facebook", "threads", "x"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/** アカウントの表示名。呼び名があれば「呼び名・@ユーザー名」、なければ「@ユーザー名」（Facebook は @ を付けない） */
+export function accountLabel(platform: Platform, username: string | null, nickname?: string | null, externalId = ""): string {
+  const handle = username ? `${platform === "facebook" ? "" : "@"}${username}` : externalId;
+  return nickname ? (handle ? `${nickname}・${handle}` : nickname) : handle;
+}
+
 export const PLATFORM_LABELS: Record<Platform, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
@@ -98,6 +104,21 @@ export function toLocal(iso: string, tz = DEFAULT_TZ): LocalTime {
 
 /** 今日の日付（指定タイムゾーン） */
 export const todayIn = (tz = DEFAULT_TZ): string => toLocal(new Date().toISOString(), tz).date;
+
+/**
+ * 次の「その曜日（月=0）のその時刻」（日本時間）を datetime-local の形（YYYY-MM-DDTHH:mm）で返す。
+ * 今からの余裕が minAheadMin 分ない場合は翌週にする（投稿の予約時刻のおすすめ用）
+ */
+export function nextWeekdayAt(weekday: number, hour: number, now = Date.now(), minAheadMin = 30): string {
+  const today = toLocal(new Date(now).toISOString());
+  for (let i = 0; i < 15; i++) {
+    const date = addDays(today.date, i);
+    if (toLocal(`${date}T12:00:00+09:00`).weekday !== weekday) continue;
+    const at = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00+09:00`).getTime();
+    if (at - now >= minAheadMin * 60_000) return `${date}T${String(hour).padStart(2, "0")}:00`;
+  }
+  return "";
+}
 
 /** YYYY-MM-DD に日数を足す */
 export function addDays(date: string, n: number): string {

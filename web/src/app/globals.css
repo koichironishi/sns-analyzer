@@ -666,3 +666,82 @@ body:has(.side) .app-drawer { display: none; }
 .preview-grid img { display: block; width: 100%; height: auto; border-radius: var(--r-sm, 6px); border: 1px solid var(--border); background: #fff; }
 .preview-no { position: absolute; top: 6px; left: 6px; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: rgb(0 0 0 / .72); color: #fff; font-size: var(--fs-sm); font-weight: 700; display: grid; place-items: center; }
 .preview-text { border-top: 1px solid var(--grid); margin-top: var(--s3); padding-top: var(--s2); }
+
+/* 投稿一覧の見出し：件数と並び順だけを出し、用語の説明は「数字の見方」に畳む */
+.list-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+.list-head .sub { margin: 0; }
+.help-note summary { cursor: pointer; font-size: var(--fs-sm); color: var(--accent); }
+.help-note dl { margin: var(--s2) 0 0; padding: 12px 16px; background: var(--surface-2); border-radius: var(--r-md); display: grid; gap: 6px; font-size: var(--fs-sm); max-width: 640px; }
+.help-note dl div { display: grid; grid-template-columns: 9em 1fr; gap: var(--s2); }
+.help-note dt { font-weight: 700; }
+.help-note dd { margin: 0; }
+@media (max-width: 600px) { .help-note dl div { grid-template-columns: 1fr; gap: 0; } }
+
+/* インサイトのカード：1日平均の指標は見出しで明示する（Meta の画面は期間の合計のため） */
+.how-tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
+  background: var(--info-bg); color: var(--info); vertical-align: middle; }
+
+/* 投稿カレンダー：月曜はじまりの7列。狭い画面では投稿のある日だけを縦に並べる */
+.cal-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+.cal-title { margin: 0 var(--s2); font-size: var(--fs-xl); }
+.cal-title .small { margin-left: 6px; font-weight: 400; }
+.cal-legend { display: flex; flex-wrap: wrap; gap: var(--s2); list-style: none; padding: 0; margin: 0 0 var(--s3); }
+.cal-direct { display: inline-block; padding: 1px 8px; border: 1px dashed var(--border-strong); border-radius: 999px; font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; list-style: none; padding: 0; margin: 0;
+  background: var(--border); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.cal-wd { background: var(--surface-2); text-align: center; font-size: var(--fs-sm); font-weight: 700; padding: 6px 0; color: var(--text-2); }
+.cal-wd.weekend { color: var(--muted); }
+.cal-day { background: var(--surface); min-height: 112px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cal-day.out { background: var(--bg); }
+.cal-day.out .cal-date { color: var(--muted); }
+.cal-day.today { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-date { font-size: var(--fs-sm); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.cal-today-tag { font-size: var(--fs-xs); color: var(--on-accent); background: var(--accent); border-radius: 999px; padding: 0 6px; }
+.cal-items { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; }
+.cal-item { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px; padding: 3px 5px; border-radius: var(--r-sm);
+  font-size: var(--fs-xs); line-height: 1.35; color: var(--text); text-decoration: none; border: 1px solid transparent; }
+.cal-item:hover { border-color: var(--border-strong); }
+.cal-item.info { background: var(--info-bg); }
+.cal-item.good { background: var(--good-bg); }
+.cal-item.warn { background: var(--warn-bg); }
+.cal-item.plain { background: var(--surface-2); }
+.cal-item.direct { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-2); }
+.cal-time { font-variant-numeric: tabular-nums; font-weight: 700; }
+.cal-dots { display: inline-flex; gap: 2px; }
+.cal-dots .dot { margin: 0; }
+.cal-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .cal-grid { grid-template-columns: 1fr; background: none; border: 0; gap: var(--s2); }
+  .cal-wd, .cal-day.empty, .cal-day.out { display: none; }
+  .cal-day { min-height: 0; border: 1px solid var(--border); border-radius: var(--r-md); }
+  .cal-date .sr-only { position: static; width: auto; height: auto; clip: auto; margin: 0; overflow: visible; white-space: normal; }
+  .cal-date > span[aria-hidden] { display: none; }
+  .cal-text { white-space: normal; }
+}
+
+/* 予約時刻のおすすめ */
+.best-times { display: grid; gap: 6px; margin-top: var(--s2); }
+.best-times ul { list-style: none; padding: 0; margin: 0; }
+.best-times button.chip { cursor: pointer; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-sm); white-space: normal; text-align: left; }
+.best-times button.chip:hover { border-color: var(--accent); }
+.best-times button.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); }
+.best-times button.chip:disabled { opacity: .6; cursor: default; }
+
+/* 月次レポート（印刷・PDF保存を前提に、1列で読み下せる並び） */
+.monthly-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s3); }
+.monthly-pick label { margin: 0; font-weight: 700; }
+.monthly-pick select { width: auto; margin: 0; }
+.monthly { display: grid; gap: var(--s4); }
+.monthly section h3 { font-size: var(--fs-lg); margin: 0 0 var(--s2); }
+.monthly-head { border-bottom: 2px solid var(--text); padding-bottom: var(--s2); }
+.monthly-head h2 { font-size: var(--fs-2xl); margin: 2px 0; }
+.monthly-kicker { margin: 0; font-size: var(--fs-sm); font-weight: 700; letter-spacing: .08em; color: var(--accent); }
+.monthly-top { list-style: none; display: grid; gap: var(--s3); }
+.monthly-top li { display: grid; grid-template-columns: 2em 1fr; gap: var(--s2); align-items: start; }
+.monthly-rank { font-size: var(--fs-xl); font-weight: 700; color: var(--accent); line-height: 1.2; }
+.monthly-recs { padding-left: 1.4em; display: grid; gap: var(--s2); margin-bottom: 0; }
+.monthly tr.own th, .monthly tr.own td { background: var(--accent-bg); }
+@media print {
+  .monthly section { break-inside: avoid; }
+  .monthly-head { margin-top: 0; }
+}

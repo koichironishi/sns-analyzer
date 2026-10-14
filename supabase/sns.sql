@@ -155,6 +155,8 @@ create table if not exists sns_accounts (
   unique (client_id, platform, external_id)
 );
 create index if not exists idx_sns_accounts_client on sns_accounts(client_id);
+-- 呼び名（「本店」「店舗A」など）。同じSNSに複数のアカウントがあるとき、切り替えや投稿先で見分けやすくする
+alter table sns_accounts add column if not exists nickname text;
 
 drop trigger if exists trg_sns_accounts_updated on sns_accounts;
 create trigger trg_sns_accounts_updated before update on sns_accounts

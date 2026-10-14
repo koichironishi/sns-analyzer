@@ -1,0 +1,214 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { getViewer } from "@/lib/auth";
+import { monthLabel, monthRange, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listViewers } from "@/lib/sns/store";
+import { PLATFORM_LABELS } from "@/lib/sns/models";
+import { PRIORITY_LABELS, platformLabel } from "@/lib/sns/ai";
+import { fmtDateTime, fmtNum, fmtPct, fmtSigned, slash, truncate } from "@/lib/format";
+import { Chip, Delta, Insights, PageHead } from "@/components/report-ui";
+import { ActionForm } from "@/components/action-form";
+import { SubmitButton } from "@/components/submit-button";
+import { EmptyState } from "@/components/empty-state";
+import { sendMonthlyReport } from "./actions";
+
+export const metadata: Metadata = { title: "月次レポート" };
+
+/**
+ * 月次レポート：1か月の結果を1枚にまとめる（印刷・PDF保存と、クライアントへのメール送付）。
+ * 主要な数字 → ポイント → SNS別 → 反応の良かった投稿 → 競合 → AIのまとめ、の順（報告の場で読む順）
+ */
+export default async function MonthlyPage({ params, searchParams }: PageProps<"/clients/[id]/monthly">) {
+  const { id } = await params;
+  const sp = await searchParams;
+  const month = parseMonth(sp.month);
+  const range = monthRange(month);
+  const r = await monthlyReport(id, month);
+  const v = await getViewer();
+  const isStaff = v?.kind === "staff";
+  const d = r.analysis;
+  const admin = createAdminClient();
+  const [viewers, sent] = isStaff
+    ? await Promise.all([
+      listViewers(admin, id),
+      admin.from("sns_audit").select("at,actor_email,detail").eq("client_id", id).eq("action", "monthly.sent").like("detail", `${month}：%`).order("at", { ascending: false }).limit(5),
+    ])
+    : [[], { data: [] }];
+  const to = viewers.filter((u) => u.is_active && u.email);
+  const history = (sent.data ?? []) as { at: string; actor_email: string | null; detail: string }[];
+  // AI分析は、この月を対象に実行したもの（期間の終わりがこの月の中にあるもの）だけを載せる
+  const ai = r.ai && r.ai.period_end >= range.start && r.ai.period_end <= `${month}-31` ? r.ai.result : null;
+  const comp = r.competitors;
+
+  return (
+    <>
+      <PageHead lead="1か月の結果を1枚にまとめます。印刷・PDF保存や、クライアントへのメール送付に使えます。" />
+      <form className="no-print monthly-pick" action="" aria-label="対象の月">
+        <label htmlFor="month-pick">対象の月</label>
+        <select id="month-pick" name="month" defaultValue={month}>
+          {recentMonths().map((m, i) => <option key={m} value={m}>{monthLabel(m)}{i === 0 ? "（今月・途中）" : ""}</option>)}
+        </select>
+        <button type="submit" className="btn">表示</button>
+        <span className="small muted">印刷・PDF保存は、右上の「PDFで保存・印刷」から</span>
+      </form>
+
+      <article className="monthly" aria-labelledby="h-monthly">
+        <header className="monthly-head">
+          <p className="monthly-kicker">SNSレポート</p>
+          <h2 id="h-monthly">{r.client.name}　{monthLabel(month)}</h2>
+          <p className="muted small">対象：{slash(range.start)}〜{slash(range.end)}{range.partial && "（今月の途中経過）"}・比較は直前の{range.days}日間</p>
+        </header>
+
+        {d.platforms.length === 0 ? (
+          <EmptyState title="この月のデータはありません" body="SNSを連携して収集すると、月ごとのレポートが作れます。" />
+        ) : (
+          <>
+            <section aria-labelledby="h-m-kpi">
+              <h3 id="h-m-kpi">主な数字</h3>
+              <div className="hero">
+                {monthlyTotals(r).map((x) => (
+                  <div className="stat" key={x.label}>
+                    <div className="stat-label">{x.label}</div>
+                    <div className="stat-value">{x.value}</div>
+                    {x.change !== null ? <Delta value={x.change} label="前月比 " /> : <span className="muted small">{x.note}</span>}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section aria-labelledby="h-m-ins">
+              <h3 id="h-m-ins">この月のポイント</h3>
+              <div className="card"><Insights items={d.insights} visible={99} /></div>
+            </section>
+
+            <section aria-labelledby="h-m-sns">
+              <h3 id="h-m-sns">SNS別</h3>
+              <div className="card flush scroll">
+                <table>
+                  <caption className="sr-only">SNS別の結果</caption>
+                  <thead><tr>
+                    <th scope="col">SNS</th><th scope="col" className="num">フォロワー</th><th scope="col" className="num">増減</th>
+                    <th scope="col" className="num">投稿</th><th scope="col" className="num">エンゲージメント</th><th scope="col" className="num">ER（フォロワー比）</th>
+                  </tr></thead>
+                  <tbody>
+                    {d.platforms.map((p) => {
+                      const s = d.summary[p]!;
+                      return (
+                        <tr key={p}>
+                          <th scope="row"><Chip platform={p} /> <span className="small muted">{s.account}</span></th>
+                          <td className="num">{fmtNum(s.followers)}</td>
+                          <td className="num">{fmtSigned(s.followersDelta)}</td>
+                          <td className="num">{fmtNum(s.posts)}<Delta value={s.change.posts} /></td>
+                          <td className="num">{fmtNum(s.engagements)}<Delta value={s.change.engagements} /></td>
+                          <td className="num">{fmtPct(s.erFollowers)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {d.topPosts.length > 0 && (
+              <section aria-labelledby="h-m-top">
+                <h3 id="h-m-top">反応の良かった投稿</h3>
+                <ol className="card monthly-top">
+                  {d.topPosts.slice(0, 5).map((t, i) => (
+                    <li key={i}>
+                      <span className="monthly-rank" aria-hidden="true">{i + 1}</span>
+                      <div>
+                        <p className="small muted" style={{ margin: 0 }}><Chip platform={t.platform} /> {slash(t.date)}・{t.media}</p>
+                        <p style={{ margin: "2px 0" }}>{truncate(t.text.replace(/\s+/g, " "), 80) || "（本文なし）"}</p>
+                        <p className="small" style={{ margin: 0 }}>
+                          エンゲージメント {fmtNum(t.engagements)}・指数 {fmtNum(t.score)}
+                          {t.permalink && <span className="no-print">・<a href={t.permalink} target="_blank" rel="noopener noreferrer">SNSで見る<span className="sr-only">（新しいタブで開きます）</span></a></span>}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            {comp && (
+              <section aria-labelledby="h-m-comp">
+                <h3 id="h-m-comp">競合との比較</h3>
+                {Object.entries(comp.platforms).map(([p, x]) => (
+                  <div className="card flush scroll" key={p} style={{ marginBottom: 12 }}>
+                    <table>
+                      <caption>{PLATFORM_LABELS[p as keyof typeof PLATFORM_LABELS]}</caption>
+                      <thead><tr>
+                        <th scope="col">アカウント</th><th scope="col" className="num">フォロワー</th><th scope="col" className="num">この月の増減</th>
+                        <th scope="col" className="num">投稿</th><th scope="col" className="num">平均エンゲージメント</th><th scope="col" className="num">ER（フォロワー比）</th>
+                      </tr></thead>
+                      <tbody>
+                        {x!.rows.map((row) => (
+                          <tr key={row.name} className={row.isOwn ? "own" : undefined}>
+                            <th scope="row">{row.name}</th>
+                            <td className="num">{fmtNum(row.followers)}</td>
+                            <td className="num">{fmtSigned(row.followersDelta)}</td>
+                            <td className="num">{fmtNum(row.posts)}</td>
+                            <td className="num">{fmtNum(row.avgEng, 1)}</td>
+                            <td className="num">{fmtPct(row.erFollowers)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                {comp.insights.length > 0 && <div className="card"><Insights items={comp.insights} visible={99} /></div>}
+              </section>
+            )}
+
+            <section aria-labelledby="h-m-ai">
+              <h3 id="h-m-ai">AIのまとめと来月の提案</h3>
+              {ai ? (
+                <div className="card">
+                  <p className="ai-headline" style={{ marginTop: 0 }}>{ai.headline}</p>
+                  <p>{ai.summary}</p>
+                  {ai.recommendations.length > 0 && (
+                    <ol className="monthly-recs">
+                      {[...ai.recommendations].sort((a, b) => ["high", "medium", "low"].indexOf(a.priority) - ["high", "medium", "low"].indexOf(b.priority)).slice(0, 3).map((x, i) => (
+                        <li key={i}><strong>{x.action}</strong><span className="small muted">（優先度 {PRIORITY_LABELS[x.priority]}・{platformLabel(x.platform)}）</span><br /><span className="small">{x.reason}</span></li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ) : (
+                <p className="muted">
+                  この月を対象にしたAI分析はまだありません。
+                  {isStaff && <> 「<Link href={`/clients/${id}/ai?days=${range.days}&end=${range.end}`}>AI分析</Link>」で、期間をこの月にして実行すると、ここに載ります。</>}
+                </p>
+              )}
+            </section>
+          </>
+        )}
+      </article>
+
+      {isStaff && d.platforms.length > 0 && (
+        <section className="card no-print" aria-labelledby="h-m-send" style={{ marginTop: 24 }}>
+          <h2 id="h-m-send" style={{ fontSize: "var(--fs-lg)", marginTop: 0 }}>クライアントにメールで送る</h2>
+          {to.length === 0 ? (
+            <p className="muted">送り先がありません。「<Link href={`/clients/${id}/settings/users`}>利用者管理</Link>」でクライアントの利用者を登録すると送れます。</p>
+          ) : (
+            <ActionForm action={sendMonthlyReport}>
+              <input type="hidden" name="client_id" value={id} />
+              <input type="hidden" name="month" value={month} />
+              <p style={{ marginTop: 0 }}>送り先：{to.map((u) => `${u.name}（${u.email}）`).join("、")}</p>
+              <p className="hint">主な数字とポイントをメールの本文に書き、このページへのリンクを添えます（見るにはログインが必要です）。1人ずつ別のメールで送ります。</p>
+              <label className="check"><input type="checkbox" name="confirm" required />上のレポートの内容を確認しました</label>
+              <div className="form-actions"><SubmitButton pendingText="送っています…">{monthLabel(month)}のレポートを送る</SubmitButton></div>
+            </ActionForm>
+          )}
+          {history.length > 0 && (
+            <>
+              <h3 style={{ fontSize: "var(--fs-md)" }}>この月の送付記録</h3>
+              <ul className="small">{history.map((h) => <li key={h.at}>{fmtDateTime(h.at)}　{h.actor_email ?? "—"} が送付（{h.detail.replace(`${month}：`, "")}）</li>)}</ul>
+            </>
+          )}
+        </section>
+      )}
+    </>
+  );
+}

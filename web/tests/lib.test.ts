@@ -5,13 +5,13 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { analyze } from "../src/lib/sns/analysis.ts";
+import { analyze, bestTimes } from "../src/lib/sns/analysis.ts";
 import { checkConnection, isTokenError, metaExchangeCode, needsRefresh, threadsExchangeCode, xVerify } from "../src/lib/sns/connect.ts";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { aiMarkdown, crc32, downloads, toCsv, zip, type DownloadName } from "../src/lib/sns/export.ts";
 import { parseCsv, parseDateTime, readCsv } from "../src/lib/sns/importers.ts";
 import { CONSENT_VERSION, consentState, parseSignedRequest } from "../src/lib/sns/privacy.ts";
-import { emptyMetrics, type Post } from "../src/lib/sns/models.ts";
+import { emptyMetrics, nextWeekdayAt, type Post } from "../src/lib/sns/models.ts";
 import type { AiResult } from "../src/lib/sns/ai.ts";
 
 const b64url = (b: Buffer) => b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -195,4 +195,23 @@ test("この期間のポイント：フォロワーが±0人のときは「伸�
   assert.ok(mixed.some((i) => i.kind === "warn" && i.text.includes("Facebookのフォロワーが減っています（-4人")));
   const one = generateInsights(make({ instagram: sum("Instagram", 12, 0.01) }));
   assert.ok(one.some((i) => i.text.startsWith("Instagramのフォロワーが伸びました（+12人")));
+});
+
+test("予約時刻のおすすめ：件数が足りて普段より良い枠だけを、良い順に選ぶ", () => {
+  const grid = <T,>(v: T) => Array.from({ length: 7 }, () => Array.from({ length: 8 }, () => v));
+  const score = grid<number | null>(null), count = grid(0);
+  score[2][6] = 150; count[2][6] = 4; // 水 18〜21時
+  score[5][4] = 130; count[5][4] = 3; // 土 12〜15時
+  score[0][3] = 200; count[0][3] = 2; // 件数不足
+  score[1][7] = 105; count[1][7] = 9; // 普段とほぼ同じ
+  const r = bestTimes({ all: undefined, instagram: { score, count } } as never, ["instagram", "x"]);
+  assert.deepEqual(r.map((b) => [b.label, b.hour, b.ratio]), [["水曜 18〜21時", 18, 1.5], ["土曜 12〜15時", 12, 1.3]]);
+});
+
+test("次のその曜日・時刻（日本時間）を返し、間に合わなければ翌週にする", () => {
+  const now = new Date("2026-10-14T08:00:00+09:00").getTime(); // 水曜 8:00
+  assert.equal(nextWeekdayAt(2, 18, now), "2026-10-14T18:00");
+  assert.equal(nextWeekdayAt(2, 6, now), "2026-10-21T06:00");
+  assert.equal(nextWeekdayAt(2, 8, now), "2026-10-21T08:00");
+  assert.equal(nextWeekdayAt(5, 12, now), "2026-10-17T12:00");
 });

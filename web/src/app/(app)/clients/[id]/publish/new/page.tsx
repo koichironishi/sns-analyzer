@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { publishContext } from "@/lib/publish-page";
+import { publishBestTimes, publishContext } from "@/lib/publish-page";
 import { PageHead } from "@/components/report-ui";
 import { PostComposer } from "@/components/post-composer";
 
@@ -11,7 +11,7 @@ export default async function NewPostPage({ params }: PageProps<"/clients/[id]/p
   return (
     <>
       <PageHead lead="本文と画像を入れ、投稿先とタイミングを選んでください。" />
-      <PostComposer clientId={id} connections={connections} needsApproval={needsApproval} />
+      <PostComposer clientId={id} connections={connections} needsApproval={needsApproval} bestTimes={await publishBestTimes(id)} />
     </>
   );
 }

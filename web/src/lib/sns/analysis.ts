@@ -378,3 +378,26 @@ export function generateInsights(d: AnalysisResult): Insight[] {
   }
   return out;
 }
+
+export type BestTime = { platform: Platform; weekday: number; hour: number; label: string; ratio: number; n: number };
+
+/**
+ * 曜日×時間帯の結果から、反応の良い枠を SNS ごとに上位 per 件まで選ぶ（投稿の予約時刻のおすすめ）。
+ * 件数が少ない枠（MIN_SAMPLES 未満）と、普段（100）より1割以上良くない枠は出さない
+ */
+export function bestTimes(heatmap: AnalysisResult["heatmap"], platforms: readonly Platform[], per = 2): BestTime[] {
+  const out: BestTime[] = [];
+  for (const p of platforms) {
+    const h = heatmap[p];
+    if (!h) continue;
+    const cells: BestTime[] = [];
+    h.score.forEach((row, w) => row.forEach((sc, sl) => {
+      const n = h.count[w][sl];
+      if (sc !== null && n >= MIN_SAMPLES && sc >= 110) {
+        cells.push({ platform: p, weekday: w, hour: sl * SLOT_HOURS, label: `${WEEKDAYS[w]}曜 ${SLOTS[sl]}`, ratio: sc / 100, n });
+      }
+    }));
+    out.push(...cells.sort((a, b) => b.ratio - a.ratio).slice(0, per));
+  }
+  return out;
+}

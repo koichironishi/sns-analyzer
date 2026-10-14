@@ -24,6 +24,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
   const workItems = [
     { href: "/publish", label: "投稿", keepQuery: false, prefix: true },
     { href: "/ai", label: "AI分析" },
+    { href: "/monthly", label: "月次レポート", keepQuery: false },
   ];
   const clientItems = v.kind === "staff" ? [
     // 設定の画面からレポートへ戻れるように。レポートの画面（インサイトなど）ではこの項目を選択中にする

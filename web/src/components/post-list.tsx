@@ -76,11 +76,20 @@ export function PostList({ report: r, sp, anchor }: { report: Report; sp: SP; an
 
   return (
     <>
-      <p className="sub">
-        {posts.length}件・{SORTS[sort].label}の{dirWord(sort)}。見出しを押すと並べ替え、もう一度押すと逆順になります。
-        指数＝SNSの規模差を補正したパフォーマンス指数（100＝そのSNSの普段の投稿）。アクセス数＝投稿を見たアカウント数（リーチ）、インプレッション数＝表示された回数、フォロワーの閲覧数＝そのうちフォロワーによる表示（Facebook のみ）。
-        ストーリーズは公開中の24時間に収集できたものを表示します（指数の計算には含めません）。「—」はそのSNSでは取得できない数値です。
-      </p>
+      <div className="list-head">
+        <p className="sub">{posts.length}件・{SORTS[sort].label}の{dirWord(sort)}（見出しを押すと並べ替え）</p>
+        <details className="help-note">
+          <summary>数字の見方</summary>
+          <dl>
+            <div><dt>指数</dt><dd>SNSの規模の差を補正したパフォーマンス指数。100＝そのSNSの普段の投稿</dd></div>
+            <div><dt>アクセス数</dt><dd>投稿を見たアカウント数（リーチ）</dd></div>
+            <div><dt>インプレッション数</dt><dd>表示された回数</dd></div>
+            <div><dt>フォロワーの閲覧数</dt><dd>表示のうちフォロワーによるもの（Facebook のみ）</dd></div>
+            <div><dt>ストーリーズ</dt><dd>公開中の24時間に収集できたもの（指数の計算には含めません）</dd></div>
+            <div><dt>—</dt><dd>そのSNSでは取得できない数値</dd></div>
+          </dl>
+        </details>
+      </div>
       {posts.length === 0 ? (
         <EmptyState title="この期間の投稿はありません" body="期間を広げるか、別のSNSを選ぶと表示される場合があります。" />
       ) : (

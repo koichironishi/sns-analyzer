@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { publishContext } from "@/lib/publish-page";
 import { listConnections, listScheduledPosts, type ScheduledPost } from "@/lib/sns/store";
-import { PLATFORM_LABELS } from "@/lib/sns/models";
+import { PLATFORM_LABELS, accountLabel } from "@/lib/sns/models";
 import { textFor } from "@/lib/sns/publish/run";
 import { resolveTargets } from "@/lib/sns/publish/targets";
 import type { Platform } from "@/lib/sns/models";
@@ -10,6 +10,7 @@ import { fmtDateTime, truncate } from "@/lib/format";
 import { Flash } from "@/components/flash";
 import { PageHead } from "@/components/report-ui";
 import { PostActions } from "@/components/post-actions";
+import { PublishViewSwitch } from "@/components/publish-view-switch";
 
 export const metadata: Metadata = { title: "投稿" };
 
@@ -24,7 +25,7 @@ const OK: Record<string, [kind: "ok" | "error", text: string]> = {
   pending: ["ok", "担当者に承認を依頼しました。承認されると投稿されます。"],
 };
 
-type Conn = { platform: Platform; external_id: string; username: string | null; connected_at: string };
+type Conn = { platform: Platform; external_id: string; username: string | null; nickname?: string | null; connected_at: string };
 
 function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; clientId: string; isStaff: boolean; conns: Conn[] }) {
   const [label, kind] = STATUS[post.status];
@@ -32,7 +33,7 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
     ? (post.requested_mode === "now" ? "希望：承認されたらすぐ投稿" : `希望の予約：${fmtDateTime(post.scheduled_at)}`)
     : post.status === "scheduled" ? `予約：${fmtDateTime(post.scheduled_at)}` : post.published_at ? `投稿：${fmtDateTime(post.published_at)}` : `作成：${fmtDateTime(post.created_at)}`;
   return (
-    <li className="card post-card">
+    <li className="card post-card" id={`post-${post.id}`}>
       <div className="row">
         <span className={`badge ${kind}`}>{label}</span>
         <span className="small muted">{when}</span>
@@ -52,7 +53,8 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
         {resolveTargets(post, conns).map((t) => {
           const p = t.platform;
           const r = post.results?.[t.key];
-          const name = conns.find((c) => c.platform === p && c.external_id === t.externalId)?.username;
+          const conn = conns.find((c) => c.platform === p && c.external_id === t.externalId);
+          const name = conn ? accountLabel(p, conn.username, conn.nickname) : null;
           return (
             <li key={t.key}>
               <i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" />
@@ -109,6 +111,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
     <>
       <PageHead lead="Instagram・Facebook・Threads・X への投稿を作成し、今すぐ投稿または予約できます。" />
       {ok && <Flash kind={ok[0]}>{ok[1]}</Flash>}
+      <PublishViewSwitch clientId={id} current="list" />
       <div className="row" style={{ marginBottom: 16 }}>
         {canPost ? <Link className="btn primary" href={`/clients/${id}/publish/new`}>新しい投稿を作成</Link>
           : <p className="msg" role="status" style={{ margin: 0 }}>投稿できるSNSがありません。スタッフが「設定・連携」で、投稿の許可を含めて SNS を連携すると使えるようになります。</p>}
