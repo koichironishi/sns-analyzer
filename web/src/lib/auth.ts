@@ -33,7 +33,8 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 
 export async function requireViewer(): Promise<Viewer> {
   const v = await getViewer();
-  if (!v) redirect("/login?e=noaccess");
+  // ログアウトさせてから案内する（ログインしたままだと、別のアカウントで入り直せない）
+  if (!v) redirect("/noaccess");
   return v;
 }
 

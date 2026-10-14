@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <h1 className="rw-auth-title">ログイン</h1>
           <p className="rw-auth-lead">スタッフは MEO と同じアカウントでログインできます。</p>
           {sp.e === "noaccess" && (
-            <div className="rw-msg error" role="alert">このアカウントには、SNS分析の利用権限がありません。管理者にお問い合わせください。</div>
+            <div className="rw-msg error" role="alert">このアカウントでは SNS分析をご利用いただけません。ご利用をご希望の場合は、担当者にお問い合わせください。</div>
           )}
           <LoginForm next={next} />
         </div>
