@@ -1,7 +1,8 @@
 import "server-only";
 import { getReport, type Report } from "@/lib/report";
-import { addDays, todayIn } from "@/lib/sns/models";
-import { fmtNum, fmtPct, fmtSigned } from "@/lib/format";
+import { addDays, todayIn, PLATFORM_LABELS } from "@/lib/sns/models";
+import { PRIORITY_LABELS, platformLabel } from "@/lib/sns/ai";
+import { fmtNum, fmtPct, fmtSigned, slash, truncate } from "@/lib/format";
 
 /** 月次レポートの対象月（YYYY-MM）。指定がなければ先月。今月は今日までの途中経過 */
 export function parseMonth(v: string | string[] | undefined): string {
@@ -58,19 +59,51 @@ export function monthlyTotals(r: Report) {
   ];
 }
 
-/** クライアントへ送るメールの本文 */
+/** この月を対象に実行したAI分析（期間の終わりがこの月の中にあるもの）。なければ null */
+export function monthlyAi(r: Report, month: string) {
+  const { start } = monthRange(month);
+  return r.ai && r.ai.period_end >= start && r.ai.period_end <= `${month}-31` ? r.ai.result : null;
+}
+
+const PRI = ["high", "medium", "low"] as const;
+
+/**
+ * クライアントへ送るメールの本文。ログインしなくても報告として読めるように、画面の主な内容を文章で載せる
+ * （パスワードを覚えていない担当者がリンクの先に進めなくても、メールだけで中身が分かるように）
+ */
 export function monthlyMailLines(r: Report, month: string, url: string): string[] {
-  const ins = [...r.analysis.insights].sort((a, b) => (a.kind === "good" ? -1 : 0) - (b.kind === "good" ? -1 : 0)).slice(0, 4);
+  const d = r.analysis;
+  const ins = [...d.insights].sort((a, b) => (a.kind === "good" ? -1 : 0) - (b.kind === "good" ? -1 : 0)).slice(0, 4);
+  const ai = monthlyAi(r, month);
+  const recs = ai ? [...ai.recommendations].sort((a, b) => PRI.indexOf(a.priority) - PRI.indexOf(b.priority)).slice(0, 3) : [];
+  const comp = r.competitors ? Object.entries(r.competitors.platforms).flatMap(([p, x]) => {
+    const rows = x!.rows.filter((row) => row.erFollowers !== null);
+    const i = rows.findIndex((row) => row.isOwn);
+    return i >= 0 && rows.length > 1
+      ? [`・${PLATFORM_LABELS[p as keyof typeof PLATFORM_LABELS]}：フォロワーあたりの反応は${rows.length}アカウント中${[...rows].sort((a, b) => b.erFollowers! - a.erFollowers!).indexOf(rows[i]) + 1}位`]
+      : [];
+  }) : [];
+  const { start, end } = monthRange(month);
   return [
     `${r.client.name} ご担当者さま`,
     "",
-    `${monthLabel(month)}のSNSレポートをお送りします。`,
+    `${monthLabel(month)}のSNSレポートをお送りします（対象：${slash(start)}〜${slash(end)}）。`,
     "",
     "■ 主な数字",
     ...monthlyTotals(r).map((x) => `・${x.label}：${x.value}（${x.note}）`),
+    ...(ai ? ["", "■ まとめ", ai.headline, ai.summary] : []),
     ...(ins.length ? ["", "■ この月のポイント", ...ins.map((i) => `・${i.text}`)] : []),
+    "", "■ SNS別",
+    ...d.platforms.map((p) => {
+      const s = d.summary[p]!;
+      return `・${PLATFORM_LABELS[p]}：フォロワー ${fmtNum(s.followers)}人（${fmtSigned(s.followersDelta)}）／投稿 ${fmtNum(s.posts)}件／エンゲージメント ${fmtNum(s.engagements)}／ER ${fmtPct(s.erFollowers)}`;
+    }),
+    ...(d.topPosts.length ? ["", "■ 反応の良かった投稿",
+      ...d.topPosts.slice(0, 3).map((t, i) => `${i + 1}. ${PLATFORM_LABELS[t.platform]} ${slash(t.date)}「${truncate(t.text.replace(/\s+/g, " ").trim(), 40) || "本文なし"}」エンゲージメント ${fmtNum(t.engagements)}${t.permalink ? `\n   ${t.permalink}` : ""}`)] : []),
+    ...(comp.length ? ["", "■ 競合との比較", ...comp] : []),
+    ...(recs.length ? ["", "■ 来月の提案", ...recs.map((x, i) => `${i + 1}. ${x.action}（優先度 ${PRIORITY_LABELS[x.priority]}・${platformLabel(x.platform)}）`)] : []),
     "",
-    "SNS別の結果、反応の良かった投稿、競合との比較は、こちらからご覧いただけます（ログインが必要です）。",
+    "グラフや競合との比較の詳しい表は、こちらのページでご覧いただけます（ログインが必要です）。",
     url,
     "",
     "ご不明な点があれば、このメールにご返信ください。",

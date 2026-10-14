@@ -16,6 +16,8 @@ export const SLOTS = Array.from({ length: 24 / SLOT_HOURS }, (_, i) => `${i * SL
 export const HASHTAG_RE = /[#＃]([\p{L}\p{N}\p{M}_]+)/gu;
 /** 傾向を語るのに必要な最低投稿数 */
 export const MIN_SAMPLES = 3;
+/** 時間帯のおすすめに使う枠の最低件数。3件では偶然の差が大きく、おすすめとして出すと確かな結果に見えてしまうため */
+export const BEST_TIME_MIN_POSTS = 5;
 
 export type Row = {
   post: Post;
@@ -380,9 +382,6 @@ export function generateInsights(d: AnalysisResult): Insight[] {
 }
 
 export type BestTime = { platform: Platform; weekday: number; hour: number; label: string; ratio: number; n: number };
-
-/** 予約時刻のおすすめに使う枠の最低件数。3件では偶然の差が大きく、おすすめとして出すと確かな結果に見えてしまうため */
-export const BEST_TIME_MIN_POSTS = 5;
 
 /**
  * 曜日×時間帯の結果から、反応の良い枠を SNS ごとに上位 per 件まで選ぶ（投稿の予約時刻のおすすめ）。

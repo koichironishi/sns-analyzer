@@ -79,7 +79,7 @@ export default async function PublishCalendarPage({ params, searchParams }: Page
 
   return (
     <>
-      <PageHead lead="この画面で作った投稿（予約・承認待ち・投稿済み）と、SNSで直接出した投稿を、月ごとに並べます。" />
+      <PageHead lead="この画面で作った投稿（予約・承認待ち・投稿済み）と、SNSで直接出した投稿を、月ごとに並べます。SNSで直接出した投稿は毎日の収集で集めるため、前日までの分が並びます。" />
       <PublishViewSwitch clientId={id} current="calendar" />
       <div className="cal-head">
         <Link className="btn" href={`?month=${prevMonth}`} scroll={false}>‹ 前の月</Link>
@@ -91,7 +91,7 @@ export default async function PublishCalendarPage({ params, searchParams }: Page
         <li><span className="badge info">予約・承認待ち</span></li>
         <li><span className="badge good">投稿済み</span></li>
         <li><span className="badge warn">失敗・差し戻し</span></li>
-        <li><span className="cal-direct">SNSで直接投稿</span></li>
+        <li><span className="cal-direct">SNSで直接投稿</span><span className="muted">（前日までの収集分）</span></li>
       </ul>
       <ol className="cal-grid" aria-label={`${y}年${m}月の投稿`}>
         {WEEKDAYS.map((w, i) => <li key={w} className={`cal-wd${i >= 5 ? " weekend" : ""}`} aria-hidden="true">{w}</li>)}

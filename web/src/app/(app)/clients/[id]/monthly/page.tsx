@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
-import { monthLabel, monthRange, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { monthLabel, monthRange, monthlyAi, monthlyMailLines, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listViewers } from "@/lib/sns/store";
 import { PLATFORM_LABELS } from "@/lib/sns/models";
@@ -11,6 +12,7 @@ import { Chip, Delta, Insights, PageHead } from "@/components/report-ui";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { EmptyState } from "@/components/empty-state";
+import { Legend, Sparkline, StackedDaily } from "@/components/charts";
 import { sendMonthlyReport } from "./actions";
 
 export const metadata: Metadata = { title: "月次レポート" };
@@ -38,7 +40,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
   const to = viewers.filter((u) => u.is_active && u.email);
   const history = (sent.data ?? []) as { at: string; actor_email: string | null; detail: string }[];
   // AI分析は、この月を対象に実行したもの（期間の終わりがこの月の中にあるもの）だけを載せる
-  const ai = r.ai && r.ai.period_end >= range.start && r.ai.period_end <= `${month}-31` ? r.ai.result : null;
+  const ai = monthlyAi(r, month);
   const comp = r.competitors;
 
   return (
@@ -89,16 +91,23 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                   <caption className="sr-only">SNS別の結果</caption>
                   <thead><tr>
                     <th scope="col">SNS</th><th scope="col" className="num">フォロワー</th><th scope="col" className="num">増減</th>
+                    <th scope="col">フォロワーの推移</th>
                     <th scope="col" className="num">投稿</th><th scope="col" className="num">エンゲージメント</th><th scope="col" className="num">ER（フォロワー比）</th>
                   </tr></thead>
                   <tbody>
                     {d.platforms.map((p) => {
                       const s = d.summary[p]!;
+                      const vals = d.daily.byPlatform[p]?.followers ?? [];
+                      const known = vals.filter((v): v is number => v !== null);
                       return (
                         <tr key={p}>
                           <th scope="row"><Chip platform={p} /> <span className="small muted">{s.account}</span></th>
                           <td className="num">{fmtNum(s.followers)}</td>
                           <td className="num">{fmtSigned(s.followersDelta)}</td>
+                          <td className="monthly-spark">
+                            <Sparkline values={vals} platform={p}
+                              label={`${PLATFORM_LABELS[p]}のフォロワー推移：${known.length ? `${fmtNum(known[0])}人から${fmtNum(known.at(-1))}人` : "データなし"}`} />
+                          </td>
                           <td className="num">{fmtNum(s.posts)}<Delta value={s.change.posts} /></td>
                           <td className="num">{fmtNum(s.engagements)}<Delta value={s.change.engagements} /></td>
                           <td className="num">{fmtPct(s.erFollowers)}</td>
@@ -107,6 +116,16 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                     })}
                   </tbody>
                 </table>
+              </div>
+            </section>
+
+            <section aria-labelledby="h-m-daily">
+              <h3 id="h-m-daily">日別の反応</h3>
+              <div className="card">
+                <Legend platforms={d.platforms} />
+                <StackedDaily dates={d.daily.dates} label={`${monthLabel(month)}の日別エンゲージメント（SNS別の積み上げ）。合計 ${fmtNum(d.total.engagements)}`}
+                  series={d.platforms.map((p) => ({ platform: p, values: d.daily.byPlatform[p]?.engagements ?? [] }))} />
+                <p className="small muted" style={{ marginBottom: 0 }}>投稿日ごとのエンゲージメント（いいね・コメント・シェア・保存など）の合計です。</p>
               </div>
             </section>
 
@@ -196,8 +215,12 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
               <input type="hidden" name="client_id" value={id} />
               <input type="hidden" name="month" value={month} />
               <p style={{ marginTop: 0 }}>送り先：{to.map((u) => `${u.name}（${u.email}）`).join("、")}</p>
-              <p className="hint">主な数字とポイントをメールの本文に書き、このページへのリンクを添えます（見るにはログインが必要です）。1人ずつ別のメールで送ります。</p>
-              <label className="check"><input type="checkbox" name="confirm" required />上のレポートの内容を確認しました</label>
+              <p className="hint">主な数字・ポイント・SNS別・反応の良かった投稿・競合との比較・来月の提案をメールの本文に書き、ログインしなくても読めるようにします。グラフと詳しい表は、添えるリンク先（ログインが必要）で見られます。1人ずつ別のメールで送ります。</p>
+              <details className="more">
+                <summary>メールの文面を見る</summary>
+                <pre className="mail-preview">{monthlyMailLines(r, month, `${siteUrl()}/clients/${id}/monthly?month=${month}`).join("\n")}</pre>
+              </details>
+              <label className="check"><input type="checkbox" name="confirm" required />上のレポートとメールの文面を確認しました</label>
               <div className="form-actions"><SubmitButton pendingText="送っています…">{monthLabel(month)}のレポートを送る</SubmitButton></div>
             </ActionForm>
           )}
