@@ -5,6 +5,10 @@ import { clientIp, siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { xExchangeCode } from "@/lib/sns/connect";
 import { audit, saveConnection } from "@/lib/sns/store";
+import { collectSoon } from "@/lib/collect-after";
+
+// 連携の直後に、そのまま最初の収集を行うため（collectSoon）
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -29,5 +33,6 @@ export async function GET(req: Request) {
     await audit(admin, v, "connect.x.failed", flow.clientId, e instanceof Error ? e.message : "", await clientIp());
     redirect(`${back}?e=exchange#connections`);
   }
+  collectSoon(flow.clientId, maxDuration);
   redirect(`${back}?ok=x#connections`);
 }

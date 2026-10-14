@@ -10,6 +10,7 @@ import { getViewer, UUID_RE } from "@/lib/auth";
 import { checkPending, clearPages } from "@/lib/connect-flow";
 import { clientIp } from "@/lib/http";
 import { saveMetaPage } from "@/lib/meta-pages";
+import { collectSoon } from "@/lib/collect-after";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cleanHandle } from "@/lib/sns/collectors/types";
 import { checkConnection, listMetaPages, xVerify } from "@/lib/sns/connect";
@@ -57,6 +58,7 @@ export async function connectX(_: ActionState, form: FormData): Promise<ActionSt
     const user = await xVerify(token, username);
     await saveConnection(admin, clientId, "x", { externalId: user.userId, username: user.username, accessToken: token, expiresAt: null, connectedUserId: null });
     await audit(admin, v, "connect.x", clientId, `@${user.username}`, await clientIp());
+    collectSoon(clientId, 300);
     return done(clientId, `X（@${user.username}）を連携しました。`);
   } catch (e) {
     return fail(e);
@@ -115,6 +117,7 @@ export async function selectMetaPage(form: FormData): Promise<void> {
   if (!page) redirect(`/clients/${clientId}/settings/connections?e=expired&r=nopage-${pages.length}#connections`);
   await saveMetaPage(admin, v, clientId, page, pending.metaUserId, pending.granted ?? []);
   await clearPages();
+  collectSoon(clientId, 300);
   revalidatePath(`/clients/${clientId}`, "layout");
   redirect(`/clients/${clientId}/settings/connections?ok=meta#connections`);
 }

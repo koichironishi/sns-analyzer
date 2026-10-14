@@ -6,6 +6,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { metaExchangeCode } from "@/lib/sns/connect";
 import { audit, getAppSettings } from "@/lib/sns/store";
 import { saveMetaPage } from "@/lib/meta-pages";
+import { collectSoon } from "@/lib/collect-after";
+
+// 連携の直後に、そのまま最初の収集を行うため（collectSoon）
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -31,6 +35,7 @@ export async function GET(req: Request) {
   if (!result.pages.length) redirect(`${back}?e=nopages#connections`);
   if (result.pages.length === 1) {
     await saveMetaPage(admin, v, flow.clientId, result.pages[0], result.userId, result.granted);
+    collectSoon(flow.clientId, maxDuration);
     redirect(`${back}?ok=meta#connections`);
   }
   // 複数のページを管理している場合は、どのページを連携するか選んでもらう

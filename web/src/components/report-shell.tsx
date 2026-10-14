@@ -8,6 +8,9 @@ import { PeriodForm } from "./period-form";
 import { PlatformSwitch } from "./platform-switch";
 import { PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import { EmptyState } from "./empty-state";
+import { CollectButton } from "./collect-button";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listConnections } from "@/lib/sns/store";
 import { PageHead } from "./report-ui";
 
 /** 各レポートページの見出しと、データがないときの案内 */
@@ -30,6 +33,8 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
   const eyebrow = `${sns ? `${PLATFORM_LABELS[sns]} ・ ` : ""}${slash(start)}〜${slash(end)}（${days}日間）`;
   const v = await getViewer();
   const empty = needsData && !report.data.hasData;
+  // 連携済みなのにデータがない＝まだ収集が終わっていない。その場で収集できるようにする（スタッフのみ）
+  const connected = empty && v?.kind === "staff" ? (await listConnections(createAdminClient(), report.client.id)).length > 0 : false;
   return (
     <>
       {/* 見出し（クライアント名 / 画面名）はレイアウトの ClientHead が出す。title は画面の名前としてだけ受け取る */}
@@ -41,7 +46,11 @@ export async function ReportPage({ report, lead, children, needsData = true, pla
           )}
         </div>
       </PageHead>
-      {emptyOverride ?? (empty ? (
+      {emptyOverride ?? (empty && connected ? (
+        <EmptyState title="まだデータを収集していません"
+          body="SNSは連携済みです。連携の直後は自動で収集が始まり、数分で表示されます。すぐに見たいときは、ここから収集してください（期間を変えると表示される場合もあります）。"
+          action={<CollectButton clientId={report.client.id} disabled={false} />} />
+      ) : empty ? (
         <EmptyState title="この期間のデータがありません"
           body={v?.kind === "staff"
             ? "SNSを連携するか、CSVを取り込むと表示されます。連携後は、毎日自動でデータを収集します。"

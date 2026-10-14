@@ -10,6 +10,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { selectMetaPage } from "../actions";
 
 export const metadata: Metadata = { title: "連携する Facebook ページの選択" };
+// ページを選んだ直後に、そのまま最初の収集を行うため（collectSoon）
+export const maxDuration = 300;
 
 export default async function MetaPagesPage({ params }: PageProps<"/clients/[id]/settings/meta-pages">) {
   const v = await requireStaff();
