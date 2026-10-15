@@ -213,6 +213,8 @@ export async function linkMeoAction(_: ActionState, form: FormData): Promise<Act
     if (!UUID_RE.test(id) || !(await getClient(admin, id))) return { error: "クライアントの指定が正しくありません" };
     const meo = String(form.get("meo_client_id") ?? "");
     if (meo && !UUID_RE.test(meo)) return { error: "MEO のクライアントの指定が正しくありません" };
+    // 別の会社を結び付けると、その会社の口コミの数字がこのクライアントの利用者に見えるため、確認を必須にする
+    if (meo && form.get("confirm_same") !== "on") return { error: "同じ会社であることを確かめて、確認のチェックを入れてください" };
     let label = "（なし）";
     if (meo) {
       const { data } = await admin.from("clients").select("name").eq("id", meo).maybeSingle();

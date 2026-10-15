@@ -212,6 +212,11 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                   </div>
                 )}
                 <p className="small muted">Google での閲覧数・電話・経路検索の回数は、MEO のレポートでご覧いただけます。</p>
+                {isStaff && (
+                  <p className="msg no-print" role="note">
+                    スタッフだけに表示：MEO の「{meo.clientName}」の結果です。クライアントの利用者もこの欄を見るため、別の会社になっていないか確かめてください（変更は「<Link href={`/clients/${id}/settings`}>クライアント情報</Link>」から）。
+                  </p>
+                )}
               </section>
             )}
 

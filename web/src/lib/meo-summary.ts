@@ -24,10 +24,22 @@ export type MeoMonthly = {
 
 type Db = SupabaseClient;
 
-export async function meoClients(admin: Db): Promise<{ id: string; name: string }[]> {
-  const { data } = await admin.from("clients").select("id,name").order("name");
-  return (data ?? []) as { id: string; name: string }[];
+export type MeoClientOption = { id: string; name: string; locations: string[] };
+
+/** MEO のクライアントと店舗名（結び付けるときに、同じ会社かを店舗名で確かめられるように） */
+export async function meoClients(admin: Db): Promise<MeoClientOption[]> {
+  const [{ data: cs }, { data: ls }] = await Promise.all([
+    admin.from("clients").select("id,name").order("name"),
+    admin.from("locations").select("client_id,name").order("name"),
+  ]);
+  const locs = new Map<string, string[]>();
+  for (const l of (ls ?? []) as { client_id: string; name: string }[]) locs.set(l.client_id, [...(locs.get(l.client_id) ?? []), l.name]);
+  return ((cs ?? []) as { id: string; name: string }[]).map((c) => ({ ...c, locations: locs.get(c.id) ?? [] }));
 }
+
+/** 「会社名（本店・駅前店）」の形。店舗が多いときは先頭3つ */
+export const meoLabel = (c: MeoClientOption) =>
+  `${c.name}${c.locations.length ? `（${c.locations.slice(0, 3).join("・")}${c.locations.length > 3 ? ` ほか${c.locations.length - 3}店舗` : ""}）` : "（店舗なし）"}`;
 
 export async function getMeoLink(admin: Db, snsClientId: string): Promise<string | null> {
   const { data } = await admin.from("sns_clients").select("meo_client_id").eq("id", snsClientId).maybeSingle();

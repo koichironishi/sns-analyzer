@@ -8,7 +8,7 @@ import { PLATFORMS, PLATFORM_LABELS, accountLabel, todayIn } from "@/lib/sns/mod
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
 import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
 import { addViewerAction, deleteClientAction, linkMeoAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
-import { getMeoLink, meoClients } from "@/lib/meo-summary";
+import { getMeoLink, meoClients, meoLabel } from "@/lib/meo-summary";
 import { ActionForm } from "@/components/action-form";
 import { Flash } from "@/components/flash";
 import { CollectButton } from "@/components/collect-button";
@@ -111,12 +111,24 @@ export async function SettingsView({ params, searchParams, part }: {
           <div className="card" style={{ marginTop: 12 }}>
             <ActionForm action={linkMeoAction}>
               <Hidden id={id} />
+              {(() => {
+                const cur = meo.list.find((m) => m.id === meo.linked);
+                return meo.linked && (
+                  <p className="msg" role="status" style={{ marginTop: 0 }}>
+                    いまの結び付け先：<strong>{cur ? meoLabel(cur) : "（MEO 側で削除されたクライアント）"}</strong>
+                  </p>
+                );
+              })()}
               <label htmlFor="cl-meo">MEO のクライアント（任意）</label>
               <select id="cl-meo" name="meo_client_id" defaultValue={meo.linked ?? ""} aria-describedby="cl-meo-hint">
                 <option value="">結び付けない</option>
-                {meo.list.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {meo.list.map((m) => <option key={m.id} value={m.id}>{meoLabel(m)}</option>)}
               </select>
-              <p className="hint" id="cl-meo-hint">同じ会社の MEO（Googleマップ）のクライアントを選ぶと、月次レポートに口コミ・Googleの投稿・検索キーワードの結果も載ります。</p>
+              <p className="hint" id="cl-meo-hint">
+                同じ会社の MEO（Googleマップ）のクライアントを選ぶと、月次レポートに口コミ・Googleの投稿・検索キーワードの結果も載ります。
+                <strong>月次レポートはクライアントの利用者も見るため、別の会社を選ぶと、その会社の口コミの数字が見えてしまいます。</strong>店舗名で同じ会社かを確かめてください。
+              </p>
+              <label className="check"><input type="checkbox" name="confirm_same" />選んだ MEO のクライアントが、この会社（{client.name}）と同じであることを店舗名で確かめました</label>
               <div className="form-actions"><SubmitButton className="btn" pendingText="保存しています…">保存</SubmitButton></div>
             </ActionForm>
           </div>
