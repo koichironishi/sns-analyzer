@@ -67,7 +67,7 @@ export function mediaCsv(data: AnalysisResult): string {
 
 export function hashtagsCsv(data: AnalysisResult): string {
   return toCsv(["ハッシュタグ", "使用数", "SNS", "平均パフォーマンス指数"],
-    data.hashtags.map((h) => [`#${h.tag}`, h.count, h.platforms.map((p) => PLATFORM_LABELS[p]).join(" / "), Math.round(h.score)]));
+    data.hashtags.map((h) => [`#${h.display}`, h.count, h.platforms.map((p) => PLATFORM_LABELS[p]).join(" / "), Math.round(h.score)]));
 }
 
 export function competitorsCsv(c: CompareResult): string {

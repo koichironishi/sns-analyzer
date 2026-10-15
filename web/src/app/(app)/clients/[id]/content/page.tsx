@@ -44,7 +44,7 @@ export default async function ContentPage({ params, searchParams }: PageProps<"/
               <tbody>
                 {d.hashtags.map((h) => (
                   <tr key={h.tag}>
-                    <td>#{h.tag}</td><td className="num">{h.count}</td>
+                    <td>#{h.display}</td><td className="num">{h.count}</td>
                     <td>{h.platforms.map((p) => PLATFORM_LABELS[p]).join("・")}</td>
                     <td className="bar-cell"><Bar value={h.score} max={mxTag} color="var(--seq)" label={fmtNum(h.score)} /></td>
                   </tr>

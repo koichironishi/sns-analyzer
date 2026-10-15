@@ -255,3 +255,15 @@ test("リンクに計測用の印（UTM）を付ける：SNSごと・既存の�
   assert.equal(hasLink("詳しくは https://example.com"), true);
   assert.equal(hasLink("詳しくはプロフィールから"), false);
 });
+
+test("ハッシュタグは小文字にそろえて数え、いちばん多く使われた書き方で出す", () => {
+  const mk = (id: string, text: string, day: number): Post => ({
+    id, accountId: "a", platform: "instagram", externalId: id, postedAt: `2026-09-${String(day).padStart(2, "0")}T03:00:00Z`, text,
+    mediaType: "image", permalink: null, metrics: { ...emptyMetrics(), likes: 10 }, contentType: "post",
+  });
+  const posts = [mk("1", "新作 #Web制作", 1), mk("2", "実績 #Web制作", 2), mk("3", "告知 #web制作", 3)];
+  const a = analyze(posts, {}, { days: 30, end: "2026-09-30" });
+  const h = a.hashtags.find((x) => x.tag === "web制作")!;
+  assert.equal(h.count, 3);
+  assert.equal(h.display, "Web制作");
+});

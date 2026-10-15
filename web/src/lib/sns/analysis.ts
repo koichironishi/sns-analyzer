@@ -65,7 +65,8 @@ export type AnalysisResult = {
   media: { platform: Platform; mediaType: MediaType; label: string; count: number;
     avgEngagements: number | null; erViews: number | null; score: number | null }[];
   heatmap: Record<"all" | Platform, Heat | undefined>;
-  hashtags: { tag: string; count: number; score: number; platforms: Platform[] }[];
+  /** tag は小文字にそろえた集計用。display は実際にいちばん多く使われた書き方 */
+  hashtags: { tag: string; display: string; count: number; score: number; platforms: Platform[] }[];
   topPosts: { platform: Platform; date: string; text: string; media: string; permalink: string | null;
     engagements: number; views: number | null; erViews: number | null; score: number }[];
   /** 投稿ごとのエンゲージメント・ER・パフォーマンス指数（投稿の ID → 値。投稿一覧で使う） */
@@ -252,8 +253,16 @@ export function analyze(posts: Post[], followers: FollowerSeries, opts: AnalyzeO
 
   // ---- ハッシュタグ ----
   const tagRows = new Map<string, Row[]>();
+  // 集計は大文字・小文字をそろえて行い、表示には実際の投稿でいちばん多く使われた書き方を使う（「#Web制作」が「#web制作」にならないように）
+  const forms = new Map<string, Map<string, number>>();
   for (const r of cur) {
-    const tags = new Set([...r.post.text.matchAll(HASHTAG_RE)].map((m) => m[1].toLowerCase()));
+    const found = [...r.post.text.matchAll(HASHTAG_RE)].map((m) => m[1]);
+    for (const f of found) {
+      const m = forms.get(f.toLowerCase()) ?? new Map<string, number>();
+      m.set(f, (m.get(f) ?? 0) + 1);
+      forms.set(f.toLowerCase(), m);
+    }
+    const tags = new Set(found.map((t) => t.toLowerCase()));
     for (const t of tags) {
       const list = tagRows.get(t) ?? [];
       list.push(r);
@@ -264,6 +273,7 @@ export function analyze(posts: Post[], followers: FollowerSeries, opts: AnalyzeO
     .filter(([, items]) => items.length >= 2)
     .map(([tag, items]) => ({
       tag, count: items.length, score: mean(items.map((x) => x.score)) ?? 0,
+      display: [...(forms.get(tag) ?? new Map([[tag, 0]])).entries()].sort((a, b) => b[1] - a[1])[0][0],
       platforms: PLATFORMS.filter((p) => items.some((x) => x.post.platform === p)),
     }))
     .sort((a, b) => b.score - a.score)
@@ -388,7 +398,7 @@ export type TagHint = { tag: string; count: number; ratio: number; platforms: Pl
  */
 export function tagHints(hashtags: AnalysisResult["hashtags"], n = 8): TagHint[] {
   return hashtags.filter((h) => h.count >= 3 && h.score >= 110).sort((a, b) => b.score - a.score).slice(0, n)
-    .map((h) => ({ tag: h.tag, count: h.count, ratio: h.score / 100, platforms: h.platforms }));
+    .map((h) => ({ tag: h.display, count: h.count, ratio: h.score / 100, platforms: h.platforms }));
 }
 
 export type BestTime = { platform: Platform; weekday: number; hour: number; label: string; ratio: number; n: number };

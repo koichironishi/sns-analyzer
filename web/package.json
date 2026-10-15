@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "e2e:supabase": "node --experimental-strip-types --no-warnings tests/e2e/fake-supabase.ts",
+    "e2e:smoke": "node --experimental-strip-types --no-warnings tests/e2e/smoke.ts",
     "test": "node --test --experimental-strip-types --no-warnings 'tests/**/*.test.ts'"
   },
   "dependencies": {
