@@ -48,10 +48,17 @@ export function monthRange(month: string): { start: string; end: string; days: n
 export async function monthlyReport(clientId: string, month: string): Promise<Report> {
   const { start, end, days } = monthRange(month);
   const r = await getReport(clientId, days, end);
-  const q = (await createClient()).from("sns_ai_results").select("id,period_end,days,result,model,created_at")
+  const q = (await createClient()).from("sns_ai_results").select("id,period_end,days,result,model,created_at,created_by")
     .eq("client_id", clientId).gte("period_end", start).lte("period_end", end).order("created_at", { ascending: false }).limit(1);
   const { data } = await q.maybeSingle();
   return { ...r, ai: (data as StoredAi | null) ?? null };
+}
+
+/** AI分析の作り方の説明（「2026/11/01 月初に自動で作成」「2026/10/20 スタッフが作成」） */
+export function aiMadeBy(ai: StoredAi | null): string | null {
+  if (!ai) return null;
+  const at = new Date(ai.created_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" });
+  return `${at} ${ai.created_by ? "スタッフが作成" : "月初に自動で作成"}`;
 }
 
 export type AccountBreakdown = { id: string; name: string; summary: PlatformSummary; followers: (number | null)[] };
@@ -94,7 +101,15 @@ export function meoLines(m: MeoMonthly): string[] {
   ];
 }
 
-/** 主要な数字（画面とメールで同じものを出す） */
+/**
+ * 前月と比べてよいか。前月の投稿が少ない（運用を始めた月の翌月など）と、「+700%」のような誤解を招く割合になるため、
+ * MIN_PREV_POSTS 件未満なら割合を出さない
+ */
+export const MIN_PREV_POSTS = 3;
+export const comparable = (prev: { posts: number }) => prev.posts >= MIN_PREV_POSTS;
+export const NOT_COMPARABLE = "前月はほぼ投稿がないため比較なし";
+
+/** 主要な数字（画面とメールで同じものを出す）。フォロワーの記録がない月は、フォロワーの項目を出さない */
 export function monthlyTotals(r: Report) {
   const d = r.analysis;
   const t = d.total;
@@ -102,13 +117,16 @@ export function monthlyTotals(r: Report) {
   const fdel = d.platforms.map((p) => d.summary[p]!.followersDelta).filter((v): v is number => v !== null);
   const folSum = fol.reduce((a, b) => a + b, 0);
   const delSum = fdel.reduce((a, b) => a + b, 0);
-  const pct = (v: number | null | undefined) => (v === null || v === undefined ? "前月のデータなし" : `前月比 ${v > 0 ? "+" : ""}${fmtPct(v, 1)}`);
+  const ok = comparable(t.prev);
+  const item = (label: string, value: string, v: number | null | undefined) => {
+    const change = ok && v !== null && v !== undefined ? v : null;
+    return { label, value, change, note: change !== null ? `前月比 ${change > 0 ? "+" : ""}${fmtPct(change, 1)}` : ok ? "前月のデータなし" : NOT_COMPARABLE };
+  };
   return [
-    { label: "エンゲージメント", value: fmtNum(t.engagements), change: t.change.engagements, note: pct(t.change.engagements) },
-    { label: "表示回数", value: fmtNum(t.views), change: t.change.views, note: pct(t.change.views) },
-    { label: "投稿数", value: fmtNum(t.posts), change: t.change.posts, note: pct(t.change.posts) },
-    { label: "フォロワー合計", value: fol.length ? `${fmtNum(folSum)}人` : "—", change: null,
-      note: fdel.length ? `この月 ${fmtSigned(delSum)}人` : "記録なし" },
+    item("エンゲージメント", fmtNum(t.engagements), t.change.engagements),
+    item("表示回数", fmtNum(t.views), t.change.views),
+    item("投稿数", fmtNum(t.posts), t.change.posts),
+    ...(fol.length ? [{ label: "フォロワー合計", value: `${fmtNum(folSum)}人`, change: null, note: fdel.length ? `この月 ${fmtSigned(delSum)}人` : "増減の記録なし" }] : []),
   ];
 }
 

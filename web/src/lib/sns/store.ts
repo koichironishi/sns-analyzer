@@ -651,7 +651,7 @@ export async function revokeConsent(admin: Db, clientId: string, version: string
   return res.count ?? 0;
 }
 
-export type StoredAi = { id: string; period_end: string; days: number; result: AiResult; model: string | null; created_at: string };
+export type StoredAi = { id: string; period_end: string; days: number; result: AiResult; model: string | null; created_at: string; created_by?: string | null };
 
 export async function latestAiResult(db: Db, clientId: string): Promise<StoredAi | null> {
   return check(await db.from("sns_ai_results").select("id,period_end,days,result,model,created_at").eq("client_id", clientId)

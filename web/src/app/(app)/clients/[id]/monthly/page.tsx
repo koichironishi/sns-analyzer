@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
-import { monthLabel, monthRange, monthlyAccounts, monthlyAi, monthlyMailLines, monthlyMeo, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { MIN_PREV_POSTS, aiMadeBy, comparable, monthLabel, monthRange, monthlyAccounts, monthlyAi, monthlyMailLines, monthlyMeo, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
 import type { PlatformSummary } from "@/lib/sns/analysis";
 import { siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,6 +44,22 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
   // AI分析は、この月を対象に実行したもの（期間の終わりがこの月の中にあるもの）だけを載せる
   const ai = monthlyAi(r, month);
   const comp = r.competitors;
+  // SNS別の行（同じSNSに複数アカウントがあるときは、合計の行のあとにアカウントごとの行）。表とスマホのカードで同じものを出す
+  const snsRows = d.platforms.flatMap((p) => {
+    const subs = accts[p] ?? [];
+    const s = d.summary[p]!;
+    const row = (key: string, name: string, who: string, sum: PlatformSummary, vals: (number | null)[], sub: boolean) => {
+      const known = vals.filter((v): v is number => v !== null);
+      return {
+        key, platform: p, name, s: sum, vals, sub, ok: comparable(sum.prev),
+        sparkLabel: `${who}のフォロワー推移：${known.length ? `${fmtNum(known[0])}人から${fmtNum(known.at(-1))}人` : "データなし"}`,
+      };
+    };
+    return [
+      row(p, subs.length ? "合計" : s.account, PLATFORM_LABELS[p], s, d.daily.byPlatform[p]?.followers ?? [], false),
+      ...subs.map((a) => row(a.id, a.name, `${PLATFORM_LABELS[p]}（${a.name}）`, a.summary, a.followers, true)),
+    ];
+  });
 
   return (
     <>
@@ -88,7 +104,8 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
 
             <section aria-labelledby="h-m-sns">
               <h3 id="h-m-sns">SNS別</h3>
-              <div className="card flush scroll">
+              {/* 広い画面と印刷は表、スマホはSNSごとのカード（表の見出しが1文字ずつ折り返して読めなくなるため） */}
+              <div className="card flush scroll monthly-sns-table">
                 <table>
                   <caption className="sr-only">SNS別の結果</caption>
                   <thead><tr>
@@ -97,35 +114,35 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
                     <th scope="col" className="num">投稿</th><th scope="col" className="num">エンゲージメント</th><th scope="col" className="num">ER（フォロワー比）</th>
                   </tr></thead>
                   <tbody>
-                    {d.platforms.flatMap((p) => {
-                      const subs = accts[p] ?? [];
-                      // 同じSNSに複数アカウントがあるときは、合計の行のあとにアカウントごとの行を続ける
-                      const row = (key: string, head: React.ReactNode, who: string, s: PlatformSummary, vals: (number | null)[], sub = false) => {
-                        const known = vals.filter((v): v is number => v !== null);
-                        return (
-                          <tr key={key} className={sub ? "sub-row" : undefined}>
-                            <th scope="row">{head}</th>
-                            <td className="num">{fmtNum(s.followers)}</td>
-                            <td className="num">{fmtSigned(s.followersDelta)}</td>
-                            <td className="monthly-spark">
-                              <Sparkline values={vals} platform={p}
-                                label={`${who}のフォロワー推移：${known.length ? `${fmtNum(known[0])}人から${fmtNum(known.at(-1))}人` : "データなし"}`} />
-                            </td>
-                            <td className="num">{fmtNum(s.posts)}<Delta value={s.change.posts} /></td>
-                            <td className="num">{fmtNum(s.engagements)}<Delta value={s.change.engagements} /></td>
-                            <td className="num">{fmtPct(s.erFollowers)}</td>
-                          </tr>
-                        );
-                      };
-                      const s = d.summary[p]!;
-                      return [
-                        row(p, <><Chip platform={p} /> <span className="small muted">{subs.length ? "合計" : s.account}</span></>, PLATFORM_LABELS[p], s, d.daily.byPlatform[p]?.followers ?? []),
-                        ...subs.map((a) => row(a.id, <span className="sub-name">{a.name}</span>, `${PLATFORM_LABELS[p]}（${a.name}）`, a.summary, a.followers, true)),
-                      ];
-                    })}
+                    {snsRows.map((x) => (
+                      <tr key={x.key} className={x.sub ? "sub-row" : undefined}>
+                        <th scope="row">{x.sub ? <span className="sub-name">{x.name}</span> : <><Chip platform={x.platform} /> <span className="small muted">{x.name}</span></>}</th>
+                        <td className="num">{fmtNum(x.s.followers)}</td>
+                        <td className="num">{fmtSigned(x.s.followersDelta)}</td>
+                        <td className="monthly-spark"><Sparkline values={x.vals} platform={x.platform} label={x.sparkLabel} /></td>
+                        <td className="num">{fmtNum(x.s.posts)}{x.ok && <Delta value={x.s.change.posts} />}</td>
+                        <td className="num">{fmtNum(x.s.engagements)}{x.ok && <Delta value={x.s.change.engagements} />}</td>
+                        <td className="num">{fmtPct(x.s.erFollowers)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
+              <ul className="monthly-sns-cards" aria-label="SNS別の結果">
+                {snsRows.map((x) => (
+                  <li key={x.key} className={`card${x.sub ? " sub" : ""}`}>
+                    <p className="monthly-sns-name">{x.sub ? <span className="sub-name">{x.name}</span> : <><Chip platform={x.platform} /> <span className="small muted">{x.name}</span></>}</p>
+                    <dl className="monthly-sns-dl">
+                      <div><dt>フォロワー</dt><dd>{x.s.followers !== null ? `${fmtNum(x.s.followers)}人` : "記録なし"}{x.s.followersDelta !== null && <span className="small muted">（{fmtSigned(x.s.followersDelta)}）</span>}</dd></div>
+                      <div><dt>投稿</dt><dd>{fmtNum(x.s.posts)}件{x.ok && <Delta value={x.s.change.posts} />}</dd></div>
+                      <div><dt>エンゲージメント</dt><dd>{fmtNum(x.s.engagements)}{x.ok && <Delta value={x.s.change.engagements} />}</dd></div>
+                      <div><dt>ER（フォロワー比）</dt><dd>{fmtPct(x.s.erFollowers)}</dd></div>
+                    </dl>
+                    {x.vals.some((v) => v !== null) && <div className="monthly-spark"><Sparkline values={x.vals} platform={x.platform} label={x.sparkLabel} /></div>}
+                  </li>
+                ))}
+              </ul>
+              {snsRows.some((x) => !x.ok) && <p className="small muted">前月の投稿が{MIN_PREV_POSTS}件未満のSNSは、前月比を出していません（運用を始めた直後は割合が大きく出て、実態と合わないため）。</p>}
             </section>
 
             <section aria-labelledby="h-m-daily">
@@ -221,7 +238,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
             )}
 
             <section aria-labelledby="h-m-ai">
-              <h3 id="h-m-ai">AIのまとめと来月の提案</h3>
+              <h3 id="h-m-ai">AIのまとめと来月の提案{ai && <span className="muted small monthly-ai-made">（{aiMadeBy(r.ai)}）</span>}</h3>
               {ai ? (
                 <div className="card">
                   <p className="ai-headline" style={{ marginTop: 0 }}>{ai.headline}</p>

@@ -761,3 +761,22 @@ body:has(.side) .app-drawer { display: none; }
 @media (max-width: 760px) { .cal-add { opacity: 1; } }
 /* 投稿一覧の「もとに作る」 */
 .reuse-link { display: inline-block; margin-left: 8px; font-size: var(--fs-xs); white-space: nowrap; }
+
+/* 月次レポート：表の幅にページ全体が引っぱられて横にはみ出さないように（グリッドの子は既定で中身の幅より縮まない） */
+.monthly, .monthly > *, .monthly section { min-width: 0; }
+.monthly-ai-made { font-weight: 400; margin-left: 6px; }
+.monthly-sns-cards { display: none; list-style: none; padding: 0; margin: 0; gap: var(--s2); }
+.monthly-sns-cards .card.sub { margin-left: var(--s3); background: var(--bg); }
+.monthly-sns-name { margin: 0 0 var(--s2); font-weight: 700; }
+.monthly-sns-dl { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2) var(--s3); margin: 0; }
+.monthly-sns-dl dt { font-size: var(--fs-xs); color: var(--text-2); }
+.monthly-sns-dl dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.monthly-sns-cards .monthly-spark { width: 100%; margin-top: var(--s2); }
+@media (max-width: 640px) {
+  .monthly-sns-table { display: none; }
+  .monthly-sns-cards { display: grid; }
+}
+@media print {
+  .monthly-sns-table { display: block; }
+  .monthly-sns-cards { display: none; }
+}
