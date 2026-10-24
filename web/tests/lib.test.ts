@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { analyze, bestTimes } from "../src/lib/sns/analysis.ts";
 import { monthlyReminder, prepWindow, tokenStage, tokenWindowDays } from "../src/lib/sns/alert-rules.ts";
 import { addUtm, hasLink } from "../src/lib/sns/publish/utm.ts";
+import { readBulkCsv } from "../src/lib/sns/publish/bulk.ts";
 import { checkConnection, isTokenError, metaExchangeCode, needsRefresh, threadsExchangeCode, xVerify } from "../src/lib/sns/connect.ts";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { aiMarkdown, crc32, downloads, toCsv, zip, type DownloadName } from "../src/lib/sns/export.ts";
@@ -266,4 +267,26 @@ test("ハッシュタグは小文字にそろえて数え、いちばん多く�
   const h = a.hashtags.find((x) => x.tag === "web制作")!;
   assert.equal(h.count, 3);
   assert.equal(h.display, "Web制作");
+});
+
+test("CSV一括予約：見出し・改行入りの本文・日本時間・過去や空欄のエラー・同じ日時の注意", () => {
+  const now = new Date("2026-10-24T09:00:00+09:00").getTime();
+  const csv = "配信日時,本文\r\n2026/11/01 12:00,\"1行目\r\n2行目\"\r\n2026/10/01 12:00,過去\r\n,日時なし\r\n2026/11/01 12:00,\r\n2026-11-01 12:00,同じ日時\r\nあした,読めない\r\n";
+  const rows = readBulkCsv(new TextEncoder().encode(csv), now);
+  assert.equal(rows.length, 6);
+  assert.deepEqual([rows[0].line, rows[0].local, rows[0].text, rows[0].errors], [2, "2026-11-01T12:00", "1行目\n2行目", []]);
+  assert.equal(rows[0].at, "2026-11-01T03:00:00.000Z");
+  assert.match(rows[1].errors[0], /過去/);
+  assert.match(rows[2].errors[0], /配信日時がありません/);
+  assert.match(rows[3].errors.join(), /本文がありません/);
+  assert.deepEqual(rows[4].errors, []);
+  assert.match(rows[4].warnings[0], /2行目と同じ日時/);
+  assert.match(rows[5].errors[0], /読み取れません/);
+});
+
+test("CSV一括予約：見出しがなければ1列目＝日時・2列目＝本文。見出しが片方だけならエラー", () => {
+  const now = new Date("2026-10-24T09:00:00+09:00").getTime();
+  const rows = readBulkCsv(new TextEncoder().encode("2026/11/02 08:30,朝の投稿\n"), now);
+  assert.deepEqual([rows[0].line, rows[0].local, rows[0].text], [1, "2026-11-02T08:30", "朝の投稿"]);
+  assert.throws(() => readBulkCsv(new TextEncoder().encode("配信日時,メモ\n2026/11/02 08:30,x\n"), now), /両方/);
 });

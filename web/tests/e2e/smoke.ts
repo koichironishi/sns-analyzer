@@ -86,7 +86,7 @@ const ADMIN_PAGES = [
   "/", "/admin", "/admin/audit", "/admin/audit?all=1", "/help", "/account",
   client(""), client("?days=90"), client("/insights"), client("/insights/content"), client("/insights/audience"),
   client("/sns"), client("/competitors"), client("/content"), client("/downloads"), client("/ai"),
-  client("/publish"), client("/publish/calendar"), client("/publish/calendar?month=2026-09"), client("/publish/new"), client("/publish/new?at=2026-12-01T12:00"),
+  client("/publish"), client("/publish/calendar"), client("/publish/calendar?month=2026-09"), client("/publish/new"), client("/publish/new?at=2026-12-01T12:00"), client("/publish/bulk"), client("/publish?tab=done"),
   client("/monthly"), client("/monthly?month=2026-09"),
   client("/settings"), client("/settings/connections"), client("/settings/users"),
 ];

@@ -815,3 +815,13 @@ body:has(.side) .app-drawer { display: none; }
 .post-card.compact .post-preview > summary { min-height: 44px; font-size: var(--fs-sm); }
 .post-card.compact .post-preview[open] { padding-bottom: var(--s3); background: var(--surface-2); }
 .post-foot > a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* CSV一括予約 */
+.bulk-step { display: flex; align-items: center; gap: 10px; font-size: var(--fs-lg); margin: 0 0 var(--s3); }
+.bulk-step > span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: var(--fs-sm); }
+.bulk-table { max-height: 560px; overflow: auto; }
+.bulk-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; max-width: 46em; }
+.bulk-bad td { background: var(--warn-bg); }
+.bulk-errors { margin: 0; padding-left: 1.1em; color: var(--warn); font-size: var(--fs-sm); }
+.warn-text { color: var(--warn); margin-left: 4px; }
+.link-button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; min-height: 24px; }

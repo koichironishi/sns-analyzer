@@ -22,6 +22,7 @@ const TABS = [
 function pageLabel(rest: string): string {
   if (rest === "publish/new") return "新しい投稿";
   if (rest === "publish/calendar") return "投稿カレンダー";
+  if (rest === "publish/bulk") return "CSVで一括予約";
   if (rest.startsWith("publish/")) return "投稿の編集";
   // 左メニューに置いた作業の画面（レポートのタブには出さない）
   if (rest === "publish") return "投稿";

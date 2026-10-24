@@ -11,7 +11,8 @@ import { clientIp } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedToUtc } from "@/lib/sns/importers";
 import { DEFAULT_TZ, isPlatform, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
-import { validatePost } from "@/lib/sns/publish/rules";
+import { LIMITS, validatePost } from "@/lib/sns/publish/rules";
+import { BULK_MAX_ROWS, readBulkCsv, type BulkRow } from "@/lib/sns/publish/bulk";
 import { parseTargetKey, platformsOf, resolveTargets, type Target } from "@/lib/sns/publish/targets";
 import { AIError } from "@/lib/sns/ai";
 import { writePerPlatform } from "@/lib/sns/ai-write";
@@ -292,6 +293,106 @@ export async function aiWritePost(clientId: string, source: string, platformList
     return { ok: true, texts: r.texts, warnings: r.warnings };
   } catch (e) {
     if (e instanceof AIError) return { ok: false, errors: [e.message] };
+    return fail(e);
+  }
+}
+
+// ---- CSV一括予約 ----------------------------------------------------------------
+
+export type BulkPreviewRow = BulkRow & { draft: boolean };
+
+/** 選んだ投稿先のうち、画像が要るSNS（Instagram）と、本文だけで出せるSNSに分ける */
+function splitByImage(platforms: Platform[]) {
+  return { needImage: platforms.filter((p) => LIMITS[p].minImages > 0), textOnly: platforms.filter((p) => LIMITS[p].minImages === 0) };
+}
+
+async function bulkTargets(admin: ReturnType<typeof createAdminClient>, clientId: string, keys: string[]) {
+  const conns = await listConnections(admin, clientId);
+  const targets: Target[] = [];
+  for (const k of new Set(keys.map(String))) {
+    const t = parseTargetKey(k);
+    const c = t && conns.find((x) => x.platform === t.platform && x.external_id === t.external_id);
+    if (t && c && c.can_publish) targets.push(t);
+  }
+  return targets;
+}
+
+/** 行ごとの、SNSのきまり（文字数など）の確認。画像が要るSNSがあれば、その投稿は下書きで入る */
+function checkBulkRow(row: BulkRow, platforms: Platform[], addUtmOn: boolean): BulkPreviewRow {
+  const { needImage, textOnly } = splitByImage(platforms);
+  const errors = [...row.errors];
+  if (row.text) {
+    const textOf = (p: Platform) => (addUtmOn ? addUtm(row.text, p, "00000000") : row.text);
+    // validatePost は投稿先が空だと「選んでください」を返すため、選んだSNSがあるときだけ確かめる
+    if (textOnly.length) errors.push(...validatePost(textOnly, textOf, 0));
+    // 画像が要るSNSは画像以外（文字数など）だけを確かめる
+    if (needImage.length) errors.push(...validatePost(needImage, textOf, 1).filter((e) => !e.includes("画像")));
+  }
+  return { ...row, errors, draft: needImage.length > 0 };
+}
+
+/** CSV を読み、取り込む前の確認用の一覧を返す（まだ保存しない） */
+export async function previewBulk(form: FormData): Promise<Result<{ rows: BulkPreviewRow[] }>> {
+  try {
+    const clientId = String(form.get("client_id") ?? "");
+    const { admin } = await poster(clientId);
+    const file = form.get("file");
+    if (!(file instanceof File) || !file.size) return { ok: false, errors: ["CSV ファイルを選んでください"] };
+    if (file.size > 1_000_000) return { ok: false, errors: ["CSV が大きすぎます（1MB まで）"] };
+    const targets = await bulkTargets(admin, clientId, form.getAll("targets").map(String));
+    if (!targets.length) return { ok: false, errors: ["投稿先のアカウントを1つ以上選んでください"] };
+    const rows = readBulkCsv(new Uint8Array(await file.arrayBuffer()));
+    const platforms = platformsOf(targets);
+    return { ok: true, rows: rows.map((r) => checkBulkRow(r, platforms, form.get("add_utm") === "on")) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type BulkCommitInput = { clientId: string; targets: string[]; rows: { local: string; text: string }[]; mode: "schedule" | "draft"; addUtm: boolean };
+
+/**
+ * 確認した行を保存する。予約を選んだときも、画像が要るSNS（Instagram）を含む投稿は下書きで入れる（画面で画像を足して予約する）。
+ * クライアントの利用者で承認が必要な設定なら、予約の代わりに承認待ちにする
+ */
+export async function commitBulk(input: BulkCommitInput): Promise<Result<{ scheduled: number; drafts: number; pending: number }>> {
+  try {
+    const { v, admin } = await poster(input.clientId);
+    const targets = await bulkTargets(admin, input.clientId, input.targets ?? []);
+    if (!targets.length) return { ok: false, errors: ["投稿先のアカウントを1つ以上選んでください"] };
+    const rows = (input.rows ?? []).slice(0, BULK_MAX_ROWS + 1);
+    if (!rows.length) return { ok: false, errors: ["取り込む行がありません"] };
+    if (rows.length > BULK_MAX_ROWS) return { ok: false, errors: [`一度に取り込めるのは${BULK_MAX_ROWS}件までです`] };
+    const platforms = platformsOf(targets);
+    const addUtmOn = Boolean(input.addUtm);
+    // 画面から届いた行を、もう一度同じきまりで確かめる（画面を通さない呼び出しにも備える）
+    const checked = rows.map((r, i) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(r.local ?? ""));
+      const at = m ? new Date(zonedToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], 0, DEFAULT_TZ)).toISOString() : null;
+      const text = String(r.text ?? "").trim();
+      const errors: string[] = [];
+      if (!at) errors.push("配信日時が正しくありません");
+      else if (Date.parse(at) < Date.now() + 60_000) errors.push("配信日時が過去です");
+      if (!text) errors.push("本文がありません");
+      return checkBulkRow({ line: i + 1, local: String(r.local), at, text, errors, warnings: [] }, platforms, addUtmOn);
+    });
+    const bad = checked.filter((r) => r.errors.length);
+    if (bad.length) return { ok: false, errors: bad.slice(0, 5).map((r) => `${r.local.replace("T", " ")}：${r.errors[0]}`) };
+    const needsApproval = v.kind === "client" && (await getRequireApproval(admin, input.clientId));
+    let scheduled = 0, drafts = 0, pending = 0;
+    for (const r of checked) {
+      const draft = input.mode === "draft" || r.draft;
+      const status: PostStatus = draft ? "draft" : needsApproval ? "pending" : "scheduled";
+      await insertScheduledPost(admin, {
+        client_id: input.clientId, text: r.text, platform_texts: {}, platforms, targets, media: [], status, scheduled_at: r.at,
+        created_by: v.id, created_by_name: v.name || v.email, requested_mode: status === "pending" ? "schedule" : null, add_utm: addUtmOn,
+      });
+      if (status === "draft") drafts++; else if (status === "pending") pending++; else scheduled++;
+    }
+    await audit(admin, v, "post.bulk", input.clientId, `CSV一括：予約${scheduled}件・承認待ち${pending}件・下書き${drafts}件・${targets.map((t) => `${t.platform}:${t.external_id}`).join(",")}`, await clientIp());
+    revalidatePath(`/clients/${input.clientId}/publish`);
+    return { ok: true, scheduled, drafts, pending };
+  } catch (e) {
     return fail(e);
   }
 }

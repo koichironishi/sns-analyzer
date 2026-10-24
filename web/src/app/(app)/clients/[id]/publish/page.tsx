@@ -23,6 +23,7 @@ const OK: Record<string, [kind: "ok" | "error", text: string]> = {
   failed: ["error", "投稿に失敗しました。下の一覧で理由を確認してください。"], publish_error: ["error", "投稿の処理を始められませんでした。一覧で状態を確認してください。"],
   scheduled: ["ok", "予約しました。予約時刻から数分以内に投稿します。"], draft: ["ok", "下書きを保存しました。"],
   pending: ["ok", "担当者に承認を依頼しました。承認されると投稿されます。"],
+  bulk: ["ok", "CSVから取り込みました。"],
 };
 
 type Conn = { platform: Platform; external_id: string; username: string | null; nickname?: string | null; connected_at: string };
@@ -173,10 +174,15 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
   return (
     <>
       <PageHead lead="Instagram・Facebook・Threads・X への投稿を作成し、今すぐ投稿または予約できます。" />
-      {ok && <Flash kind={ok[0]}>{ok[1]}</Flash>}
+      {ok && <Flash kind={ok[0]}>{sp.ok === "bulk" ? `CSVから${Number(sp.n) || 0}件を取り込みました。${Number(sp.d) ? `そのうち${Number(sp.d)}件は下書きです（画像が必要な投稿は、画像を足してから予約してください）。` : ""}` : ok[1]}</Flash>}
       <div className="publish-bar">
         <PublishViewSwitch clientId={id} current="list" />
-        {canPost && <Link className="btn primary" href={`/clients/${id}/publish/new`}>新しい投稿を作成</Link>}
+        {canPost && (
+          <div className="row">
+            <Link className="btn" href={`/clients/${id}/publish/bulk`}>CSVで一括予約</Link>
+            <Link className="btn primary" href={`/clients/${id}/publish/new`}>新しい投稿を作成</Link>
+          </div>
+        )}
       </div>
       {!canPost && <p className="msg" role="status">投稿できるSNSがありません。スタッフが「設定・連携」で、投稿の許可を含めて SNS を連携すると使えるようになります。</p>}
       {needsApproval && <p className="note-top">この画面で作成した投稿は、担当者の承認を経てから公開されます。</p>}
