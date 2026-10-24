@@ -3,6 +3,7 @@ import type { Viewer } from "@/lib/auth";
 import { PRODUCTS } from "@/lib/products";
 import { MenuBackdrop, MenuButton } from "./mobile-menu";
 import { DrawerHead, DrawerNav, DrawerUser } from "./drawer-parts";
+import { AppFooter } from "./app-footer";
 
 /** 上バー・左メニュー（全体）・フッターの外枠。(app) のレイアウトとアカウント設定で共通 */
 export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNode }) {
@@ -32,13 +33,8 @@ export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNod
         <aside className="app-drawer no-print" aria-label="メニュー"><DrawerHead /><DrawerNav v={v} /><DrawerUser v={v} /></aside>
         <div className="frame-main">
           {children}
-          {/* 画面の下の注記（3製品共通の形） */}
-          <footer className="rw-footer footer no-print">
-            <span>© Rhythmos</span>
-            <Link href="/privacy">プライバシーポリシー</Link>
-            <Link href="/terms">利用規約</Link>
-            <span>本サービスは Meta Platforms, Inc. および X Corp. が提供・承認するものではありません。</span>
-          </footer>
+          {/* 画面の下の注記。クライアントの画面では main.content の中に入れるため、ここのものは出さない（CSS） */}
+          <AppFooter />
         </div>
       </div>
       <MenuBackdrop />

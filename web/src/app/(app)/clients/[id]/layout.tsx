@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { UUID_RE, requireClientAccess } from "@/lib/auth";
 import { SideNav } from "@/components/side-nav";
 import { ClientHead } from "@/components/client-head";
+import { AppFooter } from "@/components/app-footer";
 import { DrawerHead, DrawerNav, DrawerUser } from "@/components/drawer-parts";
 
 /** タブを並べても区別できるよう、ページ名にクライアント名を添える */
@@ -53,6 +54,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/c
       <main className="content" id="main" tabIndex={-1}>
         <Suspense><ClientHead clientId={id} clientName={name} /></Suspense>
         {children}
+        <AppFooter />
       </main>
     </div>
   );

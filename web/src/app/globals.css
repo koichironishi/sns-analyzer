@@ -837,3 +837,7 @@ body:has(.side) .app-drawer { display: none; }
 @media (max-width: 600px) {
   .post-main { grid-template-columns: 44px 72px minmax(0, 1fr); }
 }
+
+/* クライアントの画面では、フッターを本文（main.content）の一番下に入れる。外側（.frame-main）のフッターは出さない */
+body:has(.content > .footer) .frame-main > .footer { display: none; }
+.content > .footer { max-width: none; margin: var(--s7) 0 0; padding: var(--s4) 0 0; }
