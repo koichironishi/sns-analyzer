@@ -5,7 +5,7 @@ import "./rhythmos-ui.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "SNS分析", template: "%s | SNS分析" },
+  title: { default: "SNS", template: "%s | SNS" },
   description: "Instagram・Facebook・Threads・X の運用分析",
   robots: { index: false, follow: false },
 };

@@ -11,7 +11,7 @@ import { DrawerHead, DrawerNav, DrawerUser } from "@/components/drawer-parts";
 /** タブを並べても区別できるよう、ページ名にクライアント名を添える */
 export async function generateMetadata({ params }: LayoutProps<"/clients/[id]">): Promise<Metadata> {
   const name = await clientName((await params).id);
-  return { title: { template: name ? `%s｜${name} | SNS分析` : "%s | SNS分析", default: name || "SNS分析" } };
+  return { title: { template: name ? `%s｜${name} | SNS` : "%s | SNS", default: name || "SNS" } };
 }
 
 export default async function ClientLayout({ children, params }: LayoutProps<"/clients/[id]">) {

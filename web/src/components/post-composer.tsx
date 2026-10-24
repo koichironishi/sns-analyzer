@@ -57,7 +57,8 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
   const [text, setText] = useState(initial?.text ?? "");
   const [perText, setPerText] = useState<Partial<Record<Platform, string>>>(initial?.platformTexts ?? {});
   const [images, setImages] = useState<Img[]>(initial?.media.map((m, i) => ({ key: `i${i}`, path: m.path, previewUrl: m.url, width: 0, height: 0, uploading: false, copied: Boolean(initial.copy) })) ?? []);
-  const [mode, setMode] = useState<SavePostInput["mode"]>(initial?.scheduledLocal ? "schedule" : "now");
+  // 複製したときは「今すぐ投稿」で始めない（日時を選ぶ前に保存して、すぐ公開されてしまうのを防ぐ）
+  const [mode, setMode] = useState<SavePostInput["mode"]>(initial?.scheduledLocal || initial?.copy ? "schedule" : "now");
   const [when, setWhen] = useState(initial?.scheduledLocal ?? localNow(60));
   const [utm, setUtm] = useState(initial?.addUtm ?? true);
   const withLink = hasLink(text) || Object.values(perText).some((t) => t && hasLink(t));

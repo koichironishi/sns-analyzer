@@ -10,7 +10,7 @@ import { PostList } from "@/components/post-list";
 // レイアウトのタイトルの型は同じ階層のページには効かないため、ここで組み立てる
 export async function generateMetadata({ params }: PageProps<"/clients/[id]">): Promise<Metadata> {
   const name = await clientName((await params).id);
-  return { title: { absolute: name ? `ダッシュボード｜${name} | SNS分析` : "ダッシュボード | SNS分析" } };
+  return { title: { absolute: name ? `ダッシュボード｜${name} | SNS` : "ダッシュボード | SNS" } };
 }
 
 export default async function OverviewPage({ params, searchParams }: PageProps<"/clients/[id]">) {

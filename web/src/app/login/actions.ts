@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 /** SNS分析の利用権限がないアカウントへの案内（ログインが MEO と共通のため、MEO だけの契約でもログインは通る） */
-const NO_ACCESS_MESSAGE = "このアカウントでは SNS分析をご利用いただけません。ご利用をご希望の場合は、担当者にお問い合わせください。";
+const NO_ACCESS_MESSAGE = "このアカウントでは SNS をご利用いただけません。ご利用をご希望の場合は、担当者にお問い合わせください。";
 
 export type LoginState = { error?: string; email?: string };
 

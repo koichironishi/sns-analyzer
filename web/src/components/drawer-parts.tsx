@@ -17,7 +17,7 @@ import { AppNav } from "./app-nav";
 export function DrawerHead() {
   return (
     <div className="drawer-head">
-      <span className="drawer-brand"><span className="app-mark" aria-hidden="true">S</span>SNS分析</span>
+      <span className="drawer-brand"><span className="app-mark" aria-hidden="true">S</span>SNS</span>
       <MenuClose />
     </div>
   );

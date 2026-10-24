@@ -34,7 +34,7 @@ export default async function NewPostPage({ params, searchParams }: PageProps<"/
         text: src.text, platformTexts: src.platform_texts, media: src.media, scheduledLocal: at, copy: true, addUtm: Boolean(src.add_utm),
         targets: resolveTargets(src, conns).filter((t) => t.externalId).map((t) => targetKey(t.platform, t.externalId!)),
       };
-      note = "もとの投稿の本文・画像・投稿先を入れました。内容と日時を確かめてから保存してください。";
+      note = "投稿を複製しました（本文・画像・投稿先を入れています）。日時を選び、内容を確かめてから保存してください。もとの投稿はそのまま残ります。";
     }
   } else if (UUID_RE.test(post)) {
     const { data } = await admin.from("sns_posts").select("text,client_id").eq("id", post).maybeSingle();

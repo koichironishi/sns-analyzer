@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "ご利用ガイド", description: "SNS分析の画面の見方と操作方法をご案内します。" };
+export const metadata: Metadata = { title: "ご利用ガイド", description: "SNS の画面の見方と操作方法をご案内します。" };
 
 /**
  * ご利用ガイド（MEO と同じ形：章立てと、開いて読む項目）。
@@ -31,14 +31,14 @@ export default async function HelpPage() {
   return (
     <main id="main" className="app-main narrow guide" tabIndex={-1}>
       <h1 className="page-title">ご利用ガイド</h1>
-      <p className="sub">SNS分析の画面の見方と、よく使う操作をまとめています。</p>
+      <p className="sub">SNS の画面の見方と、よく使う操作をまとめています。</p>
       <nav className="guide-toc" aria-label="ガイドの目次">
         {NAV.map((n) => <a key={n.id} href={`#${n.id}`}>{n.label}</a>)}
       </nav>
 
       <section id="start" aria-labelledby="h-start">
         <h2 id="h-start">はじめに</h2>
-        <p>SNS分析は、Instagram・Facebook・Threads・X の数値を毎日自動で集め、反応の良い投稿や時間帯を分かりやすく示すツールです。データは毎朝自動で更新されます。</p>
+        <p>このツールは、Instagram・Facebook・Threads・X の数値を毎日自動で集め、反応の良い投稿や時間帯を分かりやすく示すツールです。データは毎朝自動で更新されます。</p>
         <p><Link className="btn primary" href={base}>{v.kind === "client" ? "ダッシュボードを開く" : "クライアントの一覧を開く"}</Link></p>
       </section>
 

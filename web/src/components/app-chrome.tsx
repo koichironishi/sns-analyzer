@@ -12,7 +12,7 @@ export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNod
       <header className="app-bar">
         <div className="app-bar-in">
           <MenuButton />
-          <Link className="app-brand" href="/"><span className="app-mark" aria-hidden="true">S</span>SNS分析</Link>
+          <Link className="app-brand" href="/"><span className="app-mark" aria-hidden="true">S</span>SNS</Link>
           <span className="spacer" />
           {/* 製品の切り替えはスタッフのみ（クライアントは SNS分析 だけを使う） */}
           {v.kind === "staff" && (

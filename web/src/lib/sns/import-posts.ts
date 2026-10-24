@@ -142,7 +142,7 @@ export function resolveImportTargets(platforms: Platform[], accounts: ImportPost
   const errors: string[] = [];
   const targets: Target[] = [];
   const add = (c: (typeof conns)[number]) => {
-    if (!c.can_publish) errors.push(`${PLATFORM_LABELS[c.platform]}（${c.username ?? c.external_id}）：投稿の許可がありません（SNS分析の「SNS連携」で連携し直してください）`);
+    if (!c.can_publish) errors.push(`${PLATFORM_LABELS[c.platform]}（${c.username ?? c.external_id}）：投稿の許可がありません（SNS の「SNS連携」で連携し直してください）`);
     else if (!targets.some((t) => t.platform === c.platform && t.external_id === c.external_id)) targets.push({ platform: c.platform, external_id: c.external_id });
   };
   for (const p of platforms) {

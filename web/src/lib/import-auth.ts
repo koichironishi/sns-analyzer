@@ -11,7 +11,7 @@ import { verifyImportKey } from "@/lib/sns/import-posts";
 export async function importAuth(req: Request, id: string) {
   const admin = createAdminClient();
   if (!UUID_RE.test(id) || !(await verifyImportKey(admin, id, req.headers.get("authorization")))) {
-    return { admin, denied: json({ error: "認証に失敗しました。SNS分析の「SNS連携」で発行した合言葉を確認してください" }, 401) };
+    return { admin, denied: json({ error: "認証に失敗しました。SNS の「SNS連携」で発行した合言葉を確認してください" }, 401) };
   }
   return { admin, denied: null };
 }

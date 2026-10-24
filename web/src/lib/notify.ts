@@ -39,7 +39,7 @@ export async function deliver(admin: SupabaseClient, subject: string, lines: str
   if (!mailConfigured()) throw new Error("メールの設定（SMTP_HOST・SMTP_USER・SMTP_PASS）がありません");
   const to = await recipients(admin);
   if (!to.length) throw new Error("送り先がありません（ALERT_TO も、メールアドレスのある有効な管理者もいません）");
-  await sendMail(to, `【SNS分析】${subject}`, [...lines, "", `SNS分析：${siteUrl()}`, "（このメールは自動で送っています）"]);
+  await sendMail(to, `【SNS】${subject}`, [...lines, "", `SNS：${siteUrl()}`, "（このメールは自動で送っています）"]);
   await audit(admin, null, "alert.mail", null, `${subject}（${to.length}人）`);
   return to.length;
 }

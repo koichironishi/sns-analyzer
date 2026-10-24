@@ -39,7 +39,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/">) {
   return (
     <main id="main" className="app-main" tabIndex={-1}>
       <h1 className="page-title">クライアント一覧</h1>
-      <p className="sub">SNS分析のクライアントです（MEO のクライアントとは別に管理します）。スタッフは MEO と同じアカウントでログインできます。</p>
+      <p className="sub">SNS のクライアントです（MEO のクライアントとは別に管理します）。スタッフは MEO と同じアカウントでログインできます。</p>
       {clients.length > 0 && (
         <p className={`msg ${attention ? "error" : "ok"}`} role="status">
           {attention ? `対応が必要なクライアントが${attention}件あります（一覧の上に並べています）。` : "対応が必要なクライアントはありません。"}

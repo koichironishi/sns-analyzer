@@ -133,10 +133,11 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
         ))}
       </details>
       <div className="post-foot">
-        <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
-        {["published", "partial", "failed", "canceled"].includes(post.status) && (
-          <Link className="small" href={`/clients/${clientId}/publish/new?from=${post.id}`}>これをもとに新しい投稿を作る<span className="sr-only">（本文・画像・投稿先を入れた状態で始めます）</span></Link>
+        {/* 複製：本文・画像・投稿先を入れた新しい投稿を作る（画像は保存時に複製する。日時は入れない）。削除より前に置く */}
+        {post.status !== "publishing" && (
+          <Link className="btn" href={`/clients/${clientId}/publish/new?from=${post.id}`}>複製<span className="sr-only">（「{title || "本文なし"}」の本文・画像・投稿先を入れた新しい投稿を作ります）</span></Link>
         )}
+        <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
       </div>
     </li>
   );
