@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { UUID_RE } from "@/lib/auth";
 import { publishContext, publishHints } from "@/lib/publish-page";
-import { getScheduledPost, listConnections } from "@/lib/sns/store";
+import { getScheduledPost, listConnections, type ScheduledPost } from "@/lib/sns/store";
 import { resolveTargets, targetKey } from "@/lib/sns/publish/targets";
 import { PageHead } from "@/components/report-ui";
 import { PostComposer } from "@/components/post-composer";
@@ -13,6 +13,17 @@ function toLocal(iso: string | null): string | null {
   if (!iso) return null;
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/**
+ * 編集画面で最初に入れる予約の日時。予定の日時があれば、下書き（CSVの一括予約で画像待ちのものなど）でも
+ * 「日時を指定して予約」の状態で開く。下書きの過ぎた日時は入れない（保存すると「過去の日時」で止まるため、選び直してもらう）
+ */
+function editWhen(post: ScheduledPost, now = Date.now()): string | null {
+  if (!post.scheduled_at) return null;
+  if (["scheduled", "pending", "rejected"].includes(post.status)) return toLocal(post.scheduled_at);
+  if (["draft", "canceled"].includes(post.status) && Date.parse(post.scheduled_at) > now + 60_000) return toLocal(post.scheduled_at);
+  return null;
 }
 
 export default async function EditPostPage({ params }: PageProps<"/clients/[id]/publish/[postId]">) {
@@ -33,7 +44,7 @@ export default async function EditPostPage({ params }: PageProps<"/clients/[id]/
         id: post.id, text: post.text, platformTexts: post.platform_texts, media: post.media,
         // 以前の投稿（SNS名だけ）は、そのSNSで最初に連携したアカウントを選んだ状態にする
         targets: resolveTargets(post, conns).filter((t) => t.externalId).map((t) => targetKey(t.platform, t.externalId!)),
-        scheduledLocal: ["scheduled", "pending", "rejected"].includes(post.status) && post.scheduled_at ? toLocal(post.scheduled_at) : null,
+        scheduledLocal: editWhen(post),
         addUtm: Boolean(post.add_utm),
       }} />
     </>
