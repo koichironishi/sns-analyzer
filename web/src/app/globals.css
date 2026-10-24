@@ -825,3 +825,15 @@ body:has(.side) .app-drawer { display: none; }
 .bulk-errors { margin: 0; padding-left: 1.1em; color: var(--warn); font-size: var(--fs-sm); }
 .warn-text { color: var(--warn); margin-left: 4px; }
 .link-button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; min-height: 24px; }
+
+/* 投稿の選択とまとめて削除 */
+.post-main { grid-template-columns: 44px 96px minmax(0, 1fr); }
+.post-check { display: grid; place-items: center; width: 44px; height: 44px; margin: -6px 0 0 -10px; cursor: pointer; }
+.post-check input { width: 20px; height: 20px; margin: 0; cursor: pointer; }
+.select-bar { position: sticky; top: calc(var(--appbar-h) + 4px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+  padding: 6px var(--s3); margin-bottom: var(--s3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow); }
+.select-bar .check { margin: 0; min-height: 44px; display: inline-flex; align-items: center; }
+.select-bar .btn.danger { margin-left: auto; }
+@media (max-width: 600px) {
+  .post-main { grid-template-columns: 44px 72px minmax(0, 1fr); }
+}

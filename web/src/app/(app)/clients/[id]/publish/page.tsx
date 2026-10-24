@@ -11,6 +11,7 @@ import { Flash } from "@/components/flash";
 import { PageHead } from "@/components/report-ui";
 import { PostActions } from "@/components/post-actions";
 import { PublishViewSwitch } from "@/components/publish-view-switch";
+import { PostSelection } from "@/components/post-selection";
 
 export const metadata: Metadata = { title: "投稿" };
 
@@ -52,13 +53,19 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
   const when = post.status === "pending"
     ? (post.requested_mode === "now" ? "承認されたらすぐ投稿" : `希望 ${fmtDateTime(post.scheduled_at)}`)
     : post.status === "scheduled" || post.status === "publishing" ? fmtDateTime(post.scheduled_at)
-    : post.published_at ? fmtDateTime(post.published_at) : `作成 ${fmtDateTime(post.created_at)}`;
+    : post.published_at ? fmtDateTime(post.published_at)
+    // 下書きに予定の日時があれば（CSVの一括予約など）それを出す。並べ替えの目安になるため
+    : post.scheduled_at ? `予定 ${fmtDateTime(post.scheduled_at)}` : `作成 ${fmtDateTime(post.created_at)}`;
   const { title, rest } = splitText(post.text);
   const targets = resolveTargets(post, conns);
   const first = post.media[0];
   return (
     <li className="card post-card compact" id={`post-${post.id}`}>
       <div className="post-main">
+        <label className="post-check">
+          <input type="checkbox" className="post-select" value={post.id} disabled={post.status === "publishing"} />
+          <span className="sr-only">「{title || "本文なし"}」を選ぶ</span>
+        </label>
         <div className="post-thumb">
           {first
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -148,7 +155,9 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
   const lists: Record<TabKey, ScheduledPost[]> = {
     pending: posts.filter((p) => p.status === "pending"),
     scheduled: posts.filter((p) => ["scheduled", "publishing"].includes(p.status)).sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? "")),
-    draft: posts.filter((p) => ["draft", "rejected", "canceled"].includes(p.status)),
+    // 下書きは予定の日時の順（日時のないものは最後に、作成の新しい順）
+    draft: posts.filter((p) => ["draft", "rejected", "canceled"].includes(p.status))
+      .sort((a, b) => (a.scheduled_at ?? "9999").localeCompare(b.scheduled_at ?? "9999") || b.created_at.localeCompare(a.created_at)),
     done: posts.filter((p) => ["published", "partial", "failed"].includes(p.status))
       .sort((a, b) => (b.published_at ?? b.updated_at).localeCompare(a.published_at ?? a.updated_at)),
   };
@@ -197,12 +206,16 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
       </nav>
       <section aria-labelledby="h-posts">
         <h2 id="h-posts" className="sr-only">{current.label}（{lists[tab].length}件）</h2>
-        {shown.length === 0 ? <p className="muted">{current.empty}</p> : groups.map((list) => (
-          <div key={list[0].id} className="post-group">
-            {tab === "scheduled" && <h3 className="post-day">{dayLabel(list[0].scheduled_at ?? list[0].created_at)}<span className="muted small">（{list.length}件）</span></h3>}
-            <ul className="post-list">{list.map((p) => <PostCard key={p.id} post={p} clientId={id} isStaff={isStaff} conns={conns} />)}</ul>
-          </div>
-        ))}
+        {shown.length === 0 ? <p className="muted">{current.empty}</p> : (
+          <PostSelection clientId={id} total={shown.length}>
+            {groups.map((list) => (
+              <div key={list[0].id} className="post-group">
+                {tab === "scheduled" && <h3 className="post-day">{dayLabel(list[0].scheduled_at ?? list[0].created_at)}<span className="muted small">（{list.length}件）</span></h3>}
+                <ul className="post-list">{list.map((p) => <PostCard key={p.id} post={p} clientId={id} isStaff={isStaff} conns={conns} />)}</ul>
+              </div>
+            ))}
+          </PostSelection>
+        )}
         {tab === "done" && !all && lists.done.length > DONE_PAGE && (
           <p><Link className="btn" href={`${href("done")}&more=1`} scroll={false}>残りの{lists.done.length - DONE_PAGE}件も表示する</Link></p>
         )}

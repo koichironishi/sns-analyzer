@@ -220,6 +220,30 @@ export async function deletePost(clientId: string, postId: string): Promise<Resu
   }
 }
 
+/** 選んだ投稿をまとめて削除する（一括予約の取り込み直しなどで、件数が多いときのため）。投稿の処理中のものは残す */
+export async function deletePosts(clientId: string, postIds: string[]): Promise<Result<{ deleted: number; skipped: number }>> {
+  try {
+    const { v, admin } = await poster(clientId);
+    const ids = [...new Set((postIds ?? []).map(String))].filter((id) => UUID_RE.test(id));
+    if (!ids.length) return { ok: false, errors: ["削除する投稿を選んでください"] };
+    if (ids.length > 300) return { ok: false, errors: ["一度に削除できるのは300件までです"] };
+    let deleted = 0, skipped = 0;
+    for (const id of ids) {
+      const post = await getScheduledPost(admin, id);
+      // ほかのクライアントの投稿と、投稿の処理中の投稿は消さない
+      if (!post || post.client_id !== clientId || post.status === "publishing") { skipped++; continue; }
+      await removeMedia(admin, post.media.map((m) => m.path));
+      await deleteScheduledPost(admin, id);
+      deleted++;
+    }
+    await audit(admin, v, "post.delete_bulk", clientId, `${deleted}件を削除${skipped ? `（${skipped}件は削除できず）` : ""}`, await clientIp());
+    revalidatePath(`/clients/${clientId}/publish`);
+    return { ok: true, deleted, skipped };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 // ---- 承認（スタッフのみ） -------------------------------------------------------------
 
 async function reviewer(clientId: string, postId: string) {
