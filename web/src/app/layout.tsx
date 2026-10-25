@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "SNS", template: "%s | SNS" },
-  description: "Instagram・Facebook・Threads・X の運用分析",
+  description: "Instagram・Facebook・Threads の運用と分析",
   robots: { index: false, follow: false },
 };
 

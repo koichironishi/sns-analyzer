@@ -192,7 +192,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
             リンクに計測用の印（UTM）を付ける
           </label>
         )}
-        {withLink && <p className="hint" id="utm-hint" style={{ marginTop: 0 }}>Facebook・Threads・X のリンクに「どのSNSの、どの投稿から来たか」の印を付けて投稿します。Google アナリティクスの「集客」で、SNSからの訪問を見分けられます（Instagram は本文のリンクを押せないため付けません）。</p>}
+        {withLink && <p className="hint" id="utm-hint" style={{ marginTop: 0 }}>Facebook・Threads のリンクに「どのSNSの、どの投稿から来たか」の印を付けて投稿します。Google アナリティクスの「集客」で、SNSからの訪問を見分けられます（Instagram は本文のリンクを押せないため付けません）。</p>}
         {tags.length > 0 && (
           <div className="tag-hints">
             <p className="hint" id="tag-hint" style={{ margin: 0 }}>反応が良かったハッシュタグ（直近90日・3件以上使ったもの）。押すと本文の最後に足します。</p>

@@ -4,7 +4,8 @@ import { metaApp, threadsApp, xApp } from "@/lib/connect-flow";
 import { fmtDateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { daysLeft } from "@/lib/sns/connect";
-import { PLATFORMS, PLATFORM_LABELS, accountLabel, todayIn } from "@/lib/sns/models";
+import { PLATFORM_LABELS, accountLabel, todayIn, type Platform } from "@/lib/sns/models";
+import { visiblePlatforms } from "@/lib/platforms";
 import { CONSENT_VERSION, consentState, consentText } from "@/lib/sns/privacy";
 import { getAppSettings, getBrandContext, getClient, getConsentRow, getRequireApproval, listCollectState, listCompetitors, listConnections, listViewers } from "@/lib/sns/store";
 import { addViewerAction, deleteClientAction, linkMeoAction, removeViewerAction, resetViewerPasswordAction, setApprovalAction, updateClientAction } from "../../../client-actions";
@@ -70,6 +71,8 @@ export async function SettingsView({ params, searchParams, part }: {
     getBrandContext(admin, id), getAppSettings(admin), listViewers(admin, id), getRequireApproval(admin, id),
     part === "connections" ? getImportKey(admin, id).catch(() => null) : null,
   ]);
+  // 画面に出すSNS（X は使わないため、X の連携・競合の登録があるときだけ出す）
+  const shown = visiblePlatforms(conns.some((c) => c.platform === "x") || competitors.some((c) => Boolean(c.handles?.x)));
   // MEO のクライアント（同じ Supabase）。MEO の表が読めない環境では出さない
   const meo = part === "client"
     ? await Promise.all([meoClients(admin), getMeoLink(admin, id)]).then(([list, linked]) => ({ list, linked })).catch(() => null)
@@ -196,7 +199,7 @@ export async function SettingsView({ params, searchParams, part }: {
           <ActionForm action={deleteData}>
             <Hidden id={id} />
             <label htmlFor="d-platform">SNS</label>
-            <select id="d-platform" name="platform">{PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}</select>
+            <select id="d-platform" name="platform">{shown.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}</select>
             <label htmlFor="d-scope">対象</label>
             <select id="d-scope" name="scope"><option value="own">自社のデータ</option><option value="competitor">競合のデータ</option><option value="all">自社と競合のデータ</option></select>
             <label className="check"><input type="checkbox" name="disconnect" />連携も解除する</label>
@@ -227,7 +230,7 @@ export async function SettingsView({ params, searchParams, part }: {
         <p className="sub">連携すると、毎日自動でデータを収集します（直近{settings.collect_days}日間の投稿・1回あたり最大{settings.max_posts_per_run}件）。</p>
         {notice("connections")}
         <div className="card">
-          {PLATFORMS.map((p) => {
+          {shown.map((p) => {
             // 同じSNSで複数のアカウントを連携できる。1アカウント＝1行
             const list = conns.filter((c) => c.platform === p);
             const has = list.length > 0;
@@ -315,8 +318,8 @@ export async function SettingsView({ params, searchParams, part }: {
               </div>
             );
           })}
-          {(!hasMeta || !hasThreads || !hasX) && (
-            <p className="note">{!hasMeta && "Facebook・Instagram の連携には Meta アプリの設定（META_APP_ID / META_APP_SECRET）が必要です。"}{!hasThreads && "Threads の連携には THREADS_APP_ID / THREADS_APP_SECRET が必要です。"}{!hasX && "X への投稿には X_CLIENT_ID / X_CLIENT_SECRET が必要です。"}手順は README をご覧ください。</p>
+          {(!hasMeta || !hasThreads || (!hasX && shown.includes("x"))) && (
+            <p className="note">{!hasMeta && "Facebook・Instagram の連携には Meta アプリの設定（META_APP_ID / META_APP_SECRET）が必要です。"}{!hasThreads && "Threads の連携には THREADS_APP_ID / THREADS_APP_SECRET が必要です。"}{!hasX && shown.includes("x") && "X への投稿には X_CLIENT_ID / X_CLIENT_SECRET が必要です。"}手順は README をご覧ください。</p>
           )}
         </div>
         <div className="card" style={{ marginTop: 16 }}>
@@ -333,12 +336,12 @@ export async function SettingsView({ params, searchParams, part }: {
         {competitors.length > 0 && (
           <div className="card flush scroll">
             <table>
-              <thead><tr><th scope="col">競合</th>{PLATFORMS.map((p) => <th scope="col" key={p}>{PLATFORM_LABELS[p]}</th>)}<th scope="col"><span className="sr-only">操作</span></th></tr></thead>
+              <thead><tr><th scope="col">競合</th>{shown.map((p) => <th scope="col" key={p}>{PLATFORM_LABELS[p]}</th>)}<th scope="col"><span className="sr-only">操作</span></th></tr></thead>
               <tbody>
                 {competitors.map((c) => (
                   <tr key={c.id}>
                     <th scope="row">{c.name}</th>
-                    {PLATFORMS.map((p) => <td key={p} className="small">{c.handles?.[p] ?? "—"}</td>)}
+                    {shown.map((p) => <td key={p} className="small">{c.handles?.[p] ?? "—"}</td>)}
                     <td className="nowrap">
                       <a className="btn sm" href={`?edit=${c.id}#competitor-form`}>編集<span className="sr-only">：{c.name}</span></a>
                     </td>
@@ -356,7 +359,7 @@ export async function SettingsView({ params, searchParams, part }: {
             <input id="c-name" name="name" type="text" required aria-required="true" maxLength={80} defaultValue={editing?.name ?? ""} />
             <fieldset>
               <legend>アカウント（ユーザー名またはURL）</legend>
-              {PLATFORMS.map((p) => (
+              {shown.map((p) => (
                 <div key={p}>
                   <label htmlFor={`c-${p}`}>{PLATFORM_LABELS[p]}{p === "facebook" ? "（ページIDまたはユーザー名）" : ""}</label>
                   <input id={`c-${p}`} name={p} type="text" autoComplete="off" defaultValue={editing?.handles?.[p] ?? ""} />
@@ -389,7 +392,7 @@ export async function SettingsView({ params, searchParams, part }: {
             <h3>投稿のCSVを取り込む</h3>
             <ActionForm action={importCsv} resetOnSuccess>
               <Hidden id={id} />
-              <OwnerFields competitors={competitors} prefix="i" />
+              <OwnerFields competitors={competitors} prefix="i" platforms={shown} />
               <label htmlFor="i-file">CSVファイル<span className="req">必須</span></label>
               <input id="i-file" name="file" type="file" accept=".csv,text/csv" required aria-describedby="i-hint" />
               <p className="hint" id="i-hint">日時の列は必須です。本文・いいね・コメントなどの列名は日本語・英語の代表的な表記を自動で判別します（4MBまで）。</p>
@@ -400,7 +403,7 @@ export async function SettingsView({ params, searchParams, part }: {
             <h3>フォロワー数を記録する</h3>
             <ActionForm action={recordFollowerCount} resetOnSuccess>
               <Hidden id={id} />
-              <OwnerFields competitors={competitors} prefix="f" />
+              <OwnerFields competitors={competitors} prefix="f" platforms={shown} />
               <label htmlFor="f-count">フォロワー数<span className="req">必須</span></label>
               <input id="f-count" name="followers" type="number" min={0} step={1} required inputMode="numeric" />
               <label htmlFor="f-date">日付</label>
@@ -514,7 +517,7 @@ export async function SettingsView({ params, searchParams, part }: {
   );
 }
 
-function OwnerFields({ competitors, prefix }: { competitors: { id: string; name: string }[]; prefix: string }) {
+function OwnerFields({ competitors, prefix, platforms }: { competitors: { id: string; name: string }[]; prefix: string; platforms: Platform[] }) {
   return (
     <>
       <label htmlFor={`${prefix}-owner`}>記録先</label>
@@ -523,7 +526,7 @@ function OwnerFields({ competitors, prefix }: { competitors: { id: string; name:
         {competitors.map((c) => <option key={c.id} value={c.id}>競合：{c.name}</option>)}
       </select>
       <label htmlFor={`${prefix}-platform`}>SNS</label>
-      <select id={`${prefix}-platform`} name="platform">{PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}</select>
+      <select id={`${prefix}-platform`} name="platform">{platforms.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}</select>
       <label htmlFor={`${prefix}-user`}>アカウント名（ユーザー名）<span className="req">必須</span></label>
       <input id={`${prefix}-user`} name="username" type="text" required aria-required="true" autoComplete="off" />
     </>

@@ -183,7 +183,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
   const current = TABS.find((t) => t.key === tab)!;
   return (
     <>
-      <PageHead lead="Instagram・Facebook・Threads・X への投稿を作成し、今すぐ投稿または予約できます。" />
+      <PageHead lead="Instagram・Facebook・Threads への投稿を作成し、今すぐ投稿または予約できます。" />
       {ok && <Flash kind={ok[0]}>{sp.ok === "bulk" ? `CSVから${Number(sp.n) || 0}件を取り込みました。${Number(sp.d) ? `そのうち${Number(sp.d)}件は下書きです（画像が必要な投稿は、画像を足してから予約してください）。` : ""}` : ok[1]}</Flash>}
       <div className="publish-bar">
         <PublishViewSwitch clientId={id} current="list" />

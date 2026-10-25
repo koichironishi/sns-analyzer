@@ -7,7 +7,7 @@ export function AppFooter() {
       <span>© Rhythmos</span>
       <Link href="/privacy">プライバシーポリシー</Link>
       <Link href="/terms">利用規約</Link>
-      <span>本サービスは Meta Platforms, Inc. および X Corp. が提供・承認するものではありません。</span>
+      <span>本サービスは Meta Platforms, Inc. が提供・承認するものではありません。</span>
     </footer>
   );
 }

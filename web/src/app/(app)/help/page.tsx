@@ -38,7 +38,7 @@ export default async function HelpPage() {
 
       <section id="start" aria-labelledby="h-start">
         <h2 id="h-start">はじめに</h2>
-        <p>このツールは、Instagram・Facebook・Threads・X の数値を毎日自動で集め、反応の良い投稿や時間帯を分かりやすく示すツールです。データは毎朝自動で更新されます。</p>
+        <p>このツールは、Instagram・Facebook・Threads の数値を毎日自動で集め、反応の良い投稿や時間帯を分かりやすく示すツールです。データは毎朝自動で更新されます。</p>
         <p><Link className="btn primary" href={base}>{v.kind === "client" ? "ダッシュボードを開く" : "クライアントの一覧を開く"}</Link></p>
       </section>
 
