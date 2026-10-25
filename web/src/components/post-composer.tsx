@@ -239,7 +239,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
       </div>
 
       <div className="card">
-        <label htmlFor="post-images" style={{ marginTop: 0 }}>画像（10枚まで。X は4枚まで、Instagram は1枚以上必要）</label>
+        <label htmlFor="post-images" style={{ marginTop: 0 }}>画像（10枚まで。Instagram は1枚以上必要）</label>
         <input id="post-images" type="file" accept="image/*" multiple disabled={images.length >= 10} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} aria-describedby="img-hint" />
         <p className="hint" id="img-hint">JPEG に変換し、長い辺を1440pxまでに縮小してからアップロードします。Instagram は縦横比 4:5〜1.91:1 の画像だけ投稿できます。</p>
         {images.length > 0 && (
