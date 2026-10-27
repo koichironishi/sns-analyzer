@@ -5,7 +5,11 @@
 import { ApiError, HttpClient, str, type HttpOptions } from "../collectors/http.ts";
 import type { Platform } from "../models.ts";
 
-export type PublishInput = { text: string; imageUrls: string[] };
+/**
+ * kind：post＝通常の投稿、story＝ストーリーズ（Instagram・Facebook ページのみ。画像1枚＝1つのストーリーズ。本文は使わない）。
+ * skip：ストーリーズを途中まで出したあとの再投稿で、すでに出した枚数（同じ画像を二重に出さないため）
+ */
+export type PublishInput = { text: string; imageUrls: string[]; kind?: "post" | "story"; skip?: number };
 export type PublishResult = { externalId: string; permalink: string | null };
 export type PublishConfig = { platform: Platform; externalId: string; accessToken: string };
 export type PublishDeps = { graphVersion?: string; http?: HttpOptions; sleep?: (ms: number) => Promise<void>; fetchImage?: (url: string) => Promise<Blob> };
@@ -38,12 +42,44 @@ async function waitReady(http: HttpClient, containerId: string, field: "status_c
   throw new ApiError("画像の処理に時間がかかっています。しばらくしてから再投稿してください");
 }
 
+/** ストーリーズが途中で失敗したときの例外。ids はそれまでに出せたストーリーズ（再投稿で続きから出すため） */
+export class StoryPartialError extends ApiError {
+  readonly ids: string[];
+  constructor(message: string, ids: string[]) {
+    super(message);
+    this.ids = ids;
+  }
+}
+
+/** ストーリーズを画像1枚ずつ順に出す。途中で失敗したら、出せた分の ID を持った StoryPartialError を投げる */
+async function publishStories(imageUrls: string[], skip: number, one: (url: string) => Promise<string>): Promise<PublishResult> {
+  if (!imageUrls.length) throw new ApiError("ストーリーズには画像が必要です");
+  const ids: string[] = [];
+  for (let i = skip; i < imageUrls.length; i++) {
+    try {
+      ids.push(await one(imageUrls[i]));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "不明なエラー";
+      throw new StoryPartialError(`${i + 1}枚目で失敗しました（${msg}）${i > 0 ? `。${i}枚目までは公開済みです` : ""}`, ids);
+    }
+  }
+  return { externalId: ids.join(","), permalink: null };
+}
+
 // ---- Instagram -------------------------------------------------------------------
 
 export async function publishInstagram(cfg: PublishConfig, input: PublishInput, deps: PublishDeps = {}): Promise<PublishResult> {
   const http = new HttpClient(`https://graph.facebook.com/${deps.graphVersion ?? "v26.0"}`, { ...deps.http, queryAuth: { access_token: cfg.accessToken } });
   const sleep = deps.sleep ?? defaultSleep;
   const ig = cfg.externalId;
+  if (input.kind === "story") {
+    // ストーリーズ：画像ごとに media_type=STORIES の入れ物を作って公開する（キャプションは表示されないため送らない）
+    return publishStories(input.imageUrls, input.skip ?? 0, async (url) => {
+      const c = str((await http.post(`${ig}/media`, { media_type: "STORIES", image_url: url })).id);
+      await waitReady(http, c, "status_code", sleep);
+      return str((await http.post(`${ig}/media_publish`, { creation_id: c })).id);
+    });
+  }
   if (!input.imageUrls.length) throw new ApiError("Instagram には画像が必要です");
   let creationId: string;
   if (input.imageUrls.length === 1) {
@@ -67,6 +103,14 @@ export async function publishInstagram(cfg: PublishConfig, input: PublishInput, 
 export async function publishFacebook(cfg: PublishConfig, input: PublishInput, deps: PublishDeps = {}): Promise<PublishResult> {
   const http = new HttpClient(`https://graph.facebook.com/${deps.graphVersion ?? "v26.0"}`, { ...deps.http, queryAuth: { access_token: cfg.accessToken } });
   const page = cfg.externalId;
+  if (input.kind === "story") {
+    // ページのストーリーズ：非公開の写真として上げてから、photo_stories で公開する
+    return publishStories(input.imageUrls, input.skip ?? 0, async (url) => {
+      const photo = str((await http.post(`${page}/photos`, { url, published: "false" })).id);
+      const r = await http.post(`${page}/photo_stories`, { photo_id: photo });
+      return str(r.post_id) || photo;
+    });
+  }
   let postId: string;
   if (input.imageUrls.length === 1) {
     const r = await http.post(`${page}/photos`, { url: input.imageUrls[0], caption: input.text, published: "true" });
@@ -140,6 +184,7 @@ export async function publishX(cfg: PublishConfig & { username: string }, input:
 }
 
 export async function publishTo(cfg: PublishConfig & { username: string }, input: PublishInput, deps: PublishDeps = {}): Promise<PublishResult> {
+  if (input.kind === "story" && cfg.platform !== "instagram" && cfg.platform !== "facebook") throw new ApiError("ストーリーズは Instagram と Facebook だけに投稿できます");
   switch (cfg.platform) {
     case "instagram": return publishInstagram(cfg, input, deps);
     case "facebook": return publishFacebook(cfg, input, deps);

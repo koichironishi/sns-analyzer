@@ -841,3 +841,6 @@ body:has(.side) .app-drawer { display: none; }
 /* クライアントの画面では、フッターを本文（main.content）の一番下に入れる。外側（.frame-main）のフッターは出さない */
 body:has(.content > .footer) .frame-main > .footer { display: none; }
 .content > .footer { max-width: none; margin: var(--s7) 0 0; padding: var(--s4) 0 0; }
+
+/* ストーリーズの札（通常の投稿と見分ける） */
+.badge.story { background: var(--accent-bg); color: var(--accent); }

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ApiError } from "../src/lib/sns/collectors/http.ts";
 import { pkcePair, xAuthorizeUrl, xNeedsRefresh } from "../src/lib/sns/connect.ts";
-import { isPermissionError, publishErrorMessage, publishFacebook, publishInstagram, publishThreads, publishX } from "../src/lib/sns/publish/publishers.ts";
-import { validatePost, xLength } from "../src/lib/sns/publish/rules.ts";
+import { StoryPartialError, isPermissionError, publishErrorMessage, publishFacebook, publishInstagram, publishThreads, publishTo, publishX } from "../src/lib/sns/publish/publishers.ts";
+import { validatePost, validateStory, xLength } from "../src/lib/sns/publish/rules.ts";
 import { overallStatus, textFor } from "../src/lib/sns/publish/run.ts";
 
 type Call = { method: string; path: string; query: URLSearchParams; body: string | FormData | undefined; headers: Record<string, string> };
@@ -157,4 +157,54 @@ test("複数アカウント：外部ツールからの登録は、同じSNSに�
   assert.deepEqual(ok.errors, []);
   assert.deepEqual(ok.targets, [{ platform: "instagram", external_id: "ig2" }, { platform: "facebook", external_id: "fb1" }]);
   assert.ok(resolveImportTargets(["instagram"], [{ platform: "instagram", username: "nope" }], conns).errors[0].includes("nope"));
+});
+
+test("ストーリーズ（Instagram）：画像ごとに STORIES の入れ物を作って公開し、キャプションは送らない", async () => {
+  const { deps, calls } = fake((c) => {
+    if (c.path.endsWith("/ID1/media") && c.method === "POST") return { id: `S${calls.length}` };
+    if (c.path.endsWith("/media_publish")) return { id: `PUB${calls.length}` };
+    return { status_code: "FINISHED" };
+  });
+  const r = await publishInstagram(cfg("instagram"), { text: "メモ", imageUrls: ["https://img/1.jpg", "https://img/2.jpg"], kind: "story" }, deps);
+  const made = calls.filter((c) => c.method === "POST" && c.path.endsWith("/ID1/media")).map(form);
+  assert.deepEqual(made.map((f) => [f.get("media_type"), f.get("image_url"), f.get("caption")]), [["STORIES", "https://img/1.jpg", null], ["STORIES", "https://img/2.jpg", null]]);
+  assert.equal(calls.filter((c) => c.path.endsWith("/media_publish")).length, 2);
+  assert.equal(r.externalId.split(",").length, 2);
+});
+
+test("ストーリーズ（Facebook）：非公開の写真を上げてから photo_stories で公開する", async () => {
+  const { deps, calls } = fake((c) => {
+    if (c.path.endsWith("/ID1/photos")) return { id: "PH1" };
+    if (c.path.endsWith("/ID1/photo_stories")) return { success: true, post_id: "ST1" };
+    return {};
+  });
+  const r = await publishFacebook(cfg("facebook"), { text: "", imageUrls: ["u1"], kind: "story" }, deps);
+  assert.equal(form(calls[0]).get("published"), "false");
+  assert.equal(form(calls[1]).get("photo_id"), "PH1");
+  assert.equal(r.externalId, "ST1");
+});
+
+test("ストーリーズ：途中で失敗したら出せた分を返し、再投稿では続きから出す。出せないSNSと画像なしは止める", async () => {
+  let n = 0;
+  const { deps, calls } = fake((c) => {
+    if (c.path.endsWith("/ID1/photos")) return { id: `PH${++n}` };
+    if (c.path.endsWith("/ID1/photo_stories")) return n === 2 ? new Response(JSON.stringify({ error: { message: "boom", code: 1 } }), { status: 500 }) : { post_id: `ST${n}` };
+    return {};
+  });
+  const err = await publishFacebook(cfg("facebook"), { text: "", imageUrls: ["u1", "u2", "u3"], kind: "story" }, deps).catch((e) => e);
+  assert.ok(err instanceof StoryPartialError);
+  assert.deepEqual(err.ids, ["ST1"]);
+  assert.match(err.message, /2枚目で失敗.*1枚目までは公開済み/);
+  calls.length = 0; n = 2;
+  const r = await publishFacebook(cfg("facebook"), { text: "", imageUrls: ["u1", "u2", "u3"], kind: "story", skip: 1 }, deps);
+  assert.deepEqual(calls.filter((c) => c.path.endsWith("/photos")).map((c) => form(c).get("url")), ["u2", "u3"]);
+  assert.equal(r.externalId.split(",").length, 2);
+  await assert.rejects(publishTo(cfg("threads"), { text: "", imageUrls: ["u1"], kind: "story" }, deps), /Instagram と Facebook だけ/);
+  await assert.rejects(publishInstagram(cfg("instagram"), { text: "", imageUrls: [], kind: "story" }, deps), /画像が必要/);
+});
+
+test("ストーリーズの確認：出せるSNSだけ・画像1枚以上", () => {
+  assert.deepEqual(validateStory(["instagram", "facebook"], 2), []);
+  assert.match(validateStory(["threads"], 1)[0], /Threads：ストーリーズは投稿できません/);
+  assert.match(validateStory(["instagram"], 0)[0], /画像が1枚以上/);
 });

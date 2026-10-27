@@ -731,6 +731,8 @@ export type ScheduledPost = {
   reviewed_by_name: string | null; reviewed_at: string | null;
   /** リンクに計測用の印（UTM）を付けて投稿する */
   add_utm?: boolean;
+  /** post＝通常の投稿、story＝ストーリーズ */
+  kind?: "post" | "story";
 };
 
 export async function listScheduledPosts(db: Db, clientId: string, limit = 200): Promise<ScheduledPost[]> {

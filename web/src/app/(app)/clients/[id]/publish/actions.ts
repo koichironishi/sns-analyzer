@@ -11,7 +11,7 @@ import { clientIp } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedToUtc } from "@/lib/sns/importers";
 import { DEFAULT_TZ, isPlatform, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
-import { LIMITS, validatePost } from "@/lib/sns/publish/rules";
+import { LIMITS, validatePost, validateStory } from "@/lib/sns/publish/rules";
 import { BULK_MAX_ROWS, readBulkCsv, type BulkRow } from "@/lib/sns/publish/bulk";
 import { parseTargetKey, platformsOf, resolveTargets, type Target } from "@/lib/sns/publish/targets";
 import { AIError } from "@/lib/sns/ai";
@@ -65,6 +65,8 @@ export type SavePostInput = {
   copyMedia?: string[];
   /** リンクに計測用の印（UTM）を付けて投稿する */
   addUtm?: boolean;
+  /** post＝通常の投稿、story＝ストーリーズ */
+  kind?: "post" | "story";
   mode: "draft" | "schedule" | "now";
   scheduledLocal?: string; // "YYYY-MM-DDTHH:mm"（日本時間）
 };
@@ -96,7 +98,10 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
     let media = toMedia(mediaPaths);
 
     const errors: string[] = [];
-    if (input.mode !== "draft") {
+    const kind = input.kind === "story" ? "story" : "post";
+    if (input.mode !== "draft" && kind === "story") {
+      errors.push(...validateStory(platforms, media.length));
+    } else if (input.mode !== "draft") {
       // 文字数は、計測用の印を付けたあとの本文で確かめる（Threads などは URL も文字数に入るため）
       const addUtmOn = Boolean(input.addUtm);
       errors.push(...validatePost(platforms, (p) => (addUtmOn ? addUtm(platformTexts[p] ?? text, p, "00000000") : platformTexts[p] ?? text), media.length));
@@ -151,14 +156,14 @@ export async function savePost(input: SavePostInput): Promise<Result<{ id: strin
       await removeMedia(admin, cur.media.map((m) => m.path).filter((p) => !mediaPaths.includes(p)));
       await updateScheduledPost(admin, id, {
         text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt, results: {}, requested_mode: requestedMode,
-        add_utm: Boolean(input.addUtm),
+        add_utm: Boolean(input.addUtm), kind,
         // 依頼し直したら、前回の差し戻しの記録は消す（下書き保存のときは、理由を見ながら直せるよう残す）
         ...(status !== "draft" ? { review_note: null, reviewed_by: null, reviewed_by_name: null, reviewed_at: null } : {}),
       });
     } else {
       id = await insertScheduledPost(admin, {
         client_id: input.clientId, text, platform_texts: platformTexts, platforms, targets, media, status, scheduled_at: scheduledAt,
-        add_utm: Boolean(input.addUtm),
+        add_utm: Boolean(input.addUtm), kind,
         created_by: v.id, created_by_name: v.name || v.email, requested_mode: requestedMode,
       });
     }

@@ -11,7 +11,7 @@ import {
   claimScheduledPost, duePostIds, getAppSettings, getConnectionSecrets, getScheduledPost, stalePublishing, updateConnection,
   updateScheduledPost, type PlatformResult, type PostStatus, type ScheduledPost,
 } from "../store.ts";
-import { publishErrorMessage, publishTo, type PublishDeps } from "./publishers.ts";
+import { StoryPartialError, publishErrorMessage, publishTo, type PublishDeps } from "./publishers.ts";
 import { resolveTargets } from "./targets.ts";
 import { addUtm } from "./utm.ts";
 
@@ -60,14 +60,18 @@ export async function publishClaimedPost(admin: SupabaseClient, post: ScheduledP
           await updateConnection(admin, post.client_id, "threads", conn.external_id, { access_token: t.accessToken, token_expires_at: t.expiresAt });
         }
       }
+      // ストーリーズを途中まで出して失敗していたら、出せた枚数の続きから出す
+      const done = post.kind === "story" ? (results[t.key]?.id ?? "").split(",").filter(Boolean) : [];
       const r = await publishTo(
         { platform: p, externalId: conn.external_id, accessToken: token, username: conn.username ?? "" },
-        { text: publishTextFor(post, p), imageUrls },
+        { text: publishTextFor(post, p), imageUrls, kind: post.kind ?? "post", skip: done.length },
         { ...deps, graphVersion: settings.graph_api_version },
       );
-      results[t.key] = { state: "published", id: r.externalId, permalink: r.permalink, error: null, at };
+      results[t.key] = { state: "published", id: [...done, r.externalId].filter(Boolean).join(","), permalink: r.permalink, error: null, at };
     } catch (e) {
-      results[t.key] = { state: "failed", id: null, permalink: null, error: publishErrorMessage(e).slice(0, 500), at };
+      const prev = post.kind === "story" ? (results[t.key]?.id ?? "").split(",").filter(Boolean) : [];
+      const ids = e instanceof StoryPartialError ? [...prev, ...e.ids] : prev;
+      results[t.key] = { state: "failed", id: ids.length ? ids.join(",") : null, permalink: null, error: publishErrorMessage(e).slice(0, 500), at };
     }
     // 1つ終わるごとに保存する（途中で処理が止まっても、出せたSNSに二重に出さない）
     await updateScheduledPost(admin, post.id, { results });

@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
-import { LIMITS, textLength } from "@/lib/sns/publish/rules";
+import { LIMITS, STORY_PLATFORMS, textLength } from "@/lib/sns/publish/rules";
 import { hasLink } from "@/lib/sns/publish/utm";
 import { PLATFORMS, PLATFORM_LABELS, accountLabel, nextWeekdayAt, type Platform } from "@/lib/sns/models";
 import type { BestTime, TagHint } from "@/lib/sns/analysis";
@@ -48,11 +48,18 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
   connections: ComposerConnection[];
   needsApproval?: boolean;
   /** id なし＝新しい投稿（「これをもとに作る」やカレンダーからの作成）。copy：画像は別の投稿のもの（保存時に複製する） */
-  initial?: { id?: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets?: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null; copy?: boolean; addUtm?: boolean };
+  initial?: { id?: string; text: string; platformTexts: Partial<Record<Platform, string>>; targets?: string[]; media: { path: string; url: string }[]; scheduledLocal: string | null; copy?: boolean; addUtm?: boolean; kind?: "post" | "story" };
 }) {
   const router = useRouter();
   // 投稿先はアカウント単位（"instagram:<id>"）。新しい投稿では、投稿できるアカウントをすべて選んだ状態で始める
+  const [kind, setKind] = useState<"post" | "story">(initial?.kind ?? "post");
+  const story = kind === "story";
   const [targets, setTargets] = useState<string[]>(initial?.targets ?? connections.filter((c) => c.canPublish && c.key).map((c) => c.key!));
+  /** ストーリーズに切り替えたら、ストーリーズを出せないSNS（Threads など）の選択を外す */
+  const switchKind = (k: "post" | "story") => {
+    setKind(k);
+    if (k === "story") setTargets((cur) => cur.filter((key) => STORY_PLATFORMS.includes(key.split(":")[0] as Platform)));
+  };
   const platforms: Platform[] = PLATFORMS.filter((p) => connections.some((c) => c.platform === p && c.key && targets.includes(c.key)));
   const [text, setText] = useState(initial?.text ?? "");
   const [perText, setPerText] = useState<Partial<Record<Platform, string>>>(initial?.platformTexts ?? {});
@@ -130,7 +137,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
       && !window.confirm(`この投稿は ${fmt(initial.scheduledLocal)} に予約されていました。今すぐ投稿します。よろしいですか？`)) return;
     setBusy("保存しています…");
     const r = await savePost({
-      clientId, id: initial?.id, text, platformTexts: perText, targets, mediaPaths: images.map((i) => i.path!), copyMedia: images.filter((i) => i.copied).map((i) => i.path!), addUtm: utm && withLink, mode, scheduledLocal: when,
+      clientId, id: initial?.id, text, platformTexts: perText, targets, mediaPaths: images.map((i) => i.path!), copyMedia: images.filter((i) => i.copied).map((i) => i.path!), addUtm: !story && utm && withLink, kind, mode, scheduledLocal: when,
     });
     if (!r.ok) { setBusy(null); return setErrors(r.errors); }
     if (r.pending) {
@@ -157,13 +164,28 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
       )}
 
       <fieldset className="card" style={{ margin: 0 }}>
+        <legend>投稿の種類</legend>
+        <div className="checks">
+          <label className="check"><input type="radio" name="kind" checked={!story} onChange={() => switchKind("post")} />通常の投稿</label>
+          <label className="check"><input type="radio" name="kind" checked={story} onChange={() => switchKind("story")} />ストーリーズ（Instagram・Facebook）</label>
+        </div>
+        {story && (
+          <p className="hint" style={{ marginBottom: 0 }}>
+            画像1枚ごとに1つのストーリーズになり、上から順に続けて投稿します。24時間で消えます。
+            リンク・アンケート・場所のスタンプや、画面で重ねる文字は付けられません。見せたい文字は画像の中に入れてください。
+          </p>
+        )}
+      </fieldset>
+
+      <fieldset className="card" style={{ margin: 0 }}>
         <legend>投稿先</legend>
         <p className="hint" style={{ marginTop: 0 }}>同じSNSに複数のアカウントがあるときは、出したいアカウントをそれぞれ選びます。</p>
         <div className="checks">
           {connections.map((c) => {
-            const disabled = !c.connected || !c.canPublish || !c.key;
+            const noStory = story && !STORY_PLATFORMS.includes(c.platform);
+            const disabled = !c.connected || !c.canPublish || !c.key || noStory;
             const name = accountLabel(c.platform, c.username, c.nickname);
-            const note = !c.connected ? "未連携" : !c.canPublish ? "投稿の許可なし（再連携が必要）" : "";
+            const note = !c.connected ? "未連携" : !c.canPublish ? "投稿の許可なし（再連携が必要）" : noStory ? "ストーリーズは投稿できません" : "";
             return (
               <label key={c.key ?? c.platform} className="check" style={{ opacity: disabled ? 0.7 : 1 }}>
                 <input type="checkbox" checked={Boolean(c.key && targets.includes(c.key))} disabled={disabled}
@@ -175,6 +197,13 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
         </div>
       </fieldset>
 
+      {story ? (
+        <div className="card">
+          <label htmlFor="post-text" style={{ marginTop: 0 }}>メモ（任意・投稿されません）</label>
+          <textarea id="post-text" value={text} onChange={(e) => setText(e.target.value)} rows={2} aria-describedby="story-memo-hint" />
+          <p className="hint" id="story-memo-hint">ストーリーズには本文が出ません。一覧やカレンダーで見分けるための名前（例：「11/1 新メニュー告知」）を書いておくと便利です。</p>
+        </div>
+      ) : (
       <div className="card">
         <label htmlFor="post-text" style={{ marginTop: 0 }}>本文</label>
         <textarea id="post-text" value={text} onChange={(e) => setText(e.target.value)} rows={7} aria-describedby="post-count" />
@@ -237,11 +266,14 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
           </details>
         )}
       </div>
+      )}
 
       <div className="card">
-        <label htmlFor="post-images" style={{ marginTop: 0 }}>画像（10枚まで。Instagram は1枚以上必要）</label>
+        <label htmlFor="post-images" style={{ marginTop: 0 }}>{story ? "画像（1枚以上・10枚まで。1枚ごとに1つのストーリーズ）" : "画像（10枚まで。Instagram は1枚以上必要）"}</label>
         <input id="post-images" type="file" accept="image/*" multiple disabled={images.length >= 10} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} aria-describedby="img-hint" />
-        <p className="hint" id="img-hint">JPEG に変換し、長い辺を1440pxまでに縮小してからアップロードします。Instagram は縦横比 4:5〜1.91:1 の画像だけ投稿できます。</p>
+        <p className="hint" id="img-hint">{story
+          ? "JPEG に変換し、長い辺を1440pxまでに縮小してからアップロードします。ストーリーズは縦長（9:16。例：1080×1920）の画像がおすすめです。縦長でない画像は、上下に余白が付いて表示されます。"
+          : "JPEG に変換し、長い辺を1440pxまでに縮小してからアップロードします。Instagram は縦横比 4:5〜1.91:1 の画像だけ投稿できます。"}</p>
         {images.length > 0 && (
           <ol className="thumbs">
             {images.map((img, i) => (
@@ -251,7 +283,7 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
                 <div className="small">
                   {img.uploading ? <span className="progress"><span className="spinner" aria-hidden="true" />アップロード中…</span>
                     : img.error ? <span style={{ color: "var(--warn)" }}>{img.error}</span>
-                    : ratioWarn(img) ? <span style={{ color: "var(--warn)" }}>この縦横比は Instagram に投稿できません</span> : `画像${i + 1}`}
+                    : !story && ratioWarn(img) ? <span style={{ color: "var(--warn)" }}>この縦横比は Instagram に投稿できません</span> : `画像${i + 1}`}
                 </div>
                 <div className="row">
                   <button type="button" className="btn sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`画像${i + 1}を前へ`}>←</button>

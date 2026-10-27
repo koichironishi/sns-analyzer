@@ -53,3 +53,17 @@ export function validatePost(platforms: Platform[], textOf: (p: Platform) => str
   }
   return errors;
 }
+
+/** ストーリーズを出せるSNS（Instagram・Facebook ページ） */
+export const STORY_PLATFORMS: Platform[] = ["instagram", "facebook"];
+export const STORY_MAX_IMAGES = 10;
+
+/** ストーリーズの確認：出せるSNSだけ・画像が1枚以上（1枚＝1つのストーリーズ）。本文は使わない */
+export function validateStory(platforms: Platform[], imageCount: number): string[] {
+  const errors: string[] = [];
+  if (!platforms.length) errors.push("投稿先のSNSを1つ以上選んでください");
+  for (const p of platforms) if (!STORY_PLATFORMS.includes(p)) errors.push(`${PLATFORM_LABELS[p]}：ストーリーズは投稿できません（Instagram と Facebook だけです）`);
+  if (imageCount < 1) errors.push("ストーリーズには画像が1枚以上必要です（1枚ごとに1つのストーリーズになります）");
+  if (imageCount > STORY_MAX_IMAGES) errors.push(`ストーリーズの画像は${STORY_MAX_IMAGES}枚までです`);
+  return errors;
+}

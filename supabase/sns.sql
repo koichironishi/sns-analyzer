@@ -364,6 +364,11 @@ create unique index if not exists idx_sns_scheduled_posts_import_ref on sns_sche
 -- 投稿のリンクに計測用の印（UTM）を付けるか。投稿するときに、SNSごとの utm_source を付けて出す（2026-10-15）
 alter table sns_scheduled_posts add column if not exists add_utm boolean not null default false;
 
+-- 投稿の種類。post＝通常の投稿、story＝ストーリーズ（Instagram・Facebook ページのみ。画像1枚ごとに1つのストーリーズ）（2026-10-27）
+alter table sns_scheduled_posts add column if not exists kind text not null default 'post';
+alter table sns_scheduled_posts drop constraint if exists sns_scheduled_posts_kind_check;
+alter table sns_scheduled_posts add constraint sns_scheduled_posts_kind_check check (kind in ('post', 'story'));
+
 -- ---------- 外部ツールから投稿を登録するための合言葉（クライアントごとに1つ） ----------
 -- 合言葉そのものは保存せず、SHA-256 の値だけを持つ。service_role 専用（ポリシーを作らない）
 create table if not exists sns_import_keys (

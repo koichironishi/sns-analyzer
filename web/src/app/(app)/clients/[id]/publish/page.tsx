@@ -76,10 +76,11 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
         <div className="post-body">
           <p className="post-meta">
             <span className={`badge ${kind}`}>{label}</span>
+            {post.kind === "story" && <span className="badge story">ストーリーズ{post.media.length > 1 ? `×${post.media.length}` : ""}</span>}
             <strong className="post-when">{when}</strong>
             <span className="small muted">作成者：{post.created_by_name ?? "—"}</span>
           </p>
-          <p className="post-title">{title || <span className="muted">（本文なし）</span>}</p>
+          <p className="post-title">{title || <span className="muted">{post.kind === "story" ? "（メモなし）" : "（本文なし）"}</span>}</p>
           {rest && <p className="post-excerpt">{rest}</p>}
           <ul className="post-targets" aria-label="投稿先">
             {/* 投稿先はアカウントごと（同じSNSの複数アカウントに出せる） */}
@@ -112,7 +113,7 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
         </div>
       </div>
       <details className="post-preview" open={post.status === "pending"}>
-        <summary>中身を確認する（画像{post.media.length}枚・全文）</summary>
+        <summary>{post.kind === "story" ? `中身を確認する（ストーリーズ${post.media.length}枚・この順に投稿）` : `中身を確認する（画像${post.media.length}枚・全文）`}</summary>
         {post.media.length > 0 && (
           <ol className="preview-grid" aria-label="投稿する画像（この順番で投稿されます）">
             {post.media.map((m, i) => (
@@ -124,7 +125,7 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
             ))}
           </ol>
         )}
-        {[...new Set(targets.map((t) => t.platform))].map((p) => (
+        {post.kind !== "story" && [...new Set(targets.map((t) => t.platform))].map((p) => (
           <div key={p} className="preview-text">
             <p className="small muted" style={{ margin: "8px 0 4px" }}><i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" /> {PLATFORM_LABELS[p]}の本文</p>
             {/* 実際に投稿する本文（計測用の印を付ける設定なら、付けたあとの文） */}

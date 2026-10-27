@@ -31,7 +31,7 @@ export default async function NewPostPage({ params, searchParams }: PageProps<"/
     if (src && src.client_id === id) {
       const conns = await listConnections(admin, id);
       initial = {
-        text: src.text, platformTexts: src.platform_texts, media: src.media, scheduledLocal: at, copy: true, addUtm: Boolean(src.add_utm),
+        text: src.text, platformTexts: src.platform_texts, media: src.media, scheduledLocal: at, copy: true, addUtm: Boolean(src.add_utm), kind: src.kind ?? "post",
         targets: resolveTargets(src, conns).filter((t) => t.externalId).map((t) => targetKey(t.platform, t.externalId!)),
       };
       note = "投稿を複製しました（本文・画像・投稿先を入れています）。日時を選び、内容を確かめてから保存してください。もとの投稿はそのまま残ります。";

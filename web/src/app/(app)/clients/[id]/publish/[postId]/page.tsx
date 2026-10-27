@@ -45,7 +45,7 @@ export default async function EditPostPage({ params }: PageProps<"/clients/[id]/
         // 以前の投稿（SNS名だけ）は、そのSNSで最初に連携したアカウントを選んだ状態にする
         targets: resolveTargets(post, conns).filter((t) => t.externalId).map((t) => targetKey(t.platform, t.externalId!)),
         scheduledLocal: editWhen(post),
-        addUtm: Boolean(post.add_utm),
+        addUtm: Boolean(post.add_utm), kind: post.kind ?? "post",
       }} />
     </>
   );

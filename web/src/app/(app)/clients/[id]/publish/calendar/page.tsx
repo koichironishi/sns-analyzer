@@ -64,7 +64,8 @@ export default async function PublishCalendarPage({ params, searchParams }: Page
     if (!when || !STATUS[p.status] || when < startIso || when >= endIso) continue;
     const editable = ["draft", "pending", "rejected", "scheduled"].includes(p.status);
     add(when, {
-      key: p.id, time: hhmm(when), platforms: p.targets?.length ? platformsOf(p.targets) : p.platforms, title: titleOf(p.text), external: false,
+      key: p.id, time: hhmm(when), platforms: p.targets?.length ? platformsOf(p.targets) : p.platforms,
+      title: p.kind === "story" ? `ストーリーズ${p.text.trim() ? `：${titleOf(p.text)}` : ""}` : titleOf(p.text), external: false,
       href: editable ? `/clients/${id}/publish/${p.id}` : `/clients/${id}/publish#post-${p.id}`,
       badge: STATUS[p.status], note: p.status === "pending" ? "希望の時刻" : undefined,
     });
