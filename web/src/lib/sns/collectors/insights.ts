@@ -18,7 +18,45 @@ export type Audience = {
   genderAge?: Record<string, Record<string, number>>;
   city?: Record<string, number>;
   country?: Record<string, number>;
+  /** 反応した人（いいね・保存などをしたアカウント。フォロワー以外も含む）の年代。今月分 */
+  engagedAge?: Record<string, number>;
+  /**
+   * フォロワーがオンラインだった数（1時間ごと）。日本時間の日付と時（0〜23）に直したもの。直近7日ほど。
+   * Meta は時を太平洋時間で返すとみられるため、日本時間に直して保存する（onlineHours を参照）
+   */
+  online?: { date: string; hours: Record<string, number> }[];
 };
+
+/**
+ * online_followers の1日分（太平洋時間のその日の 0〜23 時）を、日本時間の「日付・時」ごとの値にする。
+ * 太平洋時間の日付は end_time（その日の終わり）から求める。夏時間も Intl で正しく扱う
+ */
+export function onlineHours(endTime: string, value: Record<string, unknown>): { date: string; hour: number; count: number }[] {
+  // end_time はその日の終わり（翌日の0時）。太平洋時間でのその日の日付にする
+  const end = new Date(parseTime(endTime));
+  const ptDate = new Date(end.getTime() - 3_600_000).toLocaleDateString("sv-SE", { timeZone: "America/Los_Angeles" });
+  const out: { date: string; hour: number; count: number }[] = [];
+  for (const [h, v] of Object.entries(value)) {
+    const count = num(v);
+    const hour = Number(h);
+    if (count === null || !Number.isInteger(hour) || hour < 0 || hour > 23) continue;
+    // 太平洋時間の「その日の h 時」を UTC の時刻にする（夏時間かどうかで7〜8時間ずれる）
+    const guess = Date.UTC(+ptDate.slice(0, 4), +ptDate.slice(5, 7) - 1, +ptDate.slice(8, 10), hour);
+    const offset = (t: number) => {
+      const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric" })
+        .formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+      return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour) - t;
+    };
+    const utc = guess - offset(guess - offset(guess));
+    const jst = new Date(utc);
+    out.push({
+      date: jst.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }),
+      hour: Number(jst.toLocaleString("en-US", { timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23" })),
+      count,
+    });
+  }
+  return out;
+}
 
 export type InsightsRequest = {
   /** 取得する期間（日本時間の日付。両端を含む） */
@@ -215,6 +253,38 @@ async function instagramAudience(http: HttpClient, path: string, req: InsightsRe
   for (const key of ["city", "country"] as const) {
     const rows = await get(key);
     if (rows.length) audience[key] = Object.fromEntries(rows.map((x) => [x.dims[key] ?? "", x.value ?? 0]).filter(([k, v]) => k && (v as number) > 0));
+  }
+  // 反応した人の年代（今月分。提供されていない・期間の指定が合わないときは飛ばす）
+  for (const timeframe of ["this_month", "this_week"]) {
+    if (audience.engagedAge || Date.now() > req.deadline) break;
+    try {
+      const r = await http.get<InsightResp>(path, { metric: "engaged_audience_demographics", period: "lifetime", metric_type: "total_value", timeframe, breakdown: "age" });
+      const res = r.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+      const ages = Object.fromEntries(res.map((x) => [x.dimension_values?.[0] ?? "", num(x.value) ?? 0]).filter(([k, v]) => k && (v as number) > 0));
+      if (Object.keys(ages).length) audience.engagedAge = ages;
+    } catch (e) {
+      if (!isMetricError(e)) throw e;
+    }
+  }
+  // フォロワーがオンラインの時間帯（直近7日。フォロワー100人未満などでは提供されない）
+  if (Date.now() <= req.deadline) {
+    try {
+      const r = await http.get<InsightResp>(path, { metric: "online_followers", period: "lifetime", since: unix(addDays(req.end, -7)), until: unix(addDays(req.end, 1)) });
+      const byDate = new Map<string, Record<string, number>>();
+      for (const v of r.data?.[0]?.values ?? []) {
+        if (!v.end_time || !v.value || typeof v.value !== "object") continue;
+        for (const x of onlineHours(v.end_time, v.value as Record<string, unknown>)) {
+          const m = byDate.get(x.date) ?? {};
+          m[String(x.hour)] = (m[String(x.hour)] ?? 0) + x.count;
+          byDate.set(x.date, m);
+        }
+      }
+      // 日本時間に直すと、両端の日は一部の時間しかないため、24時間そろった日だけを残す
+      const online = [...byDate.entries()].filter(([, h]) => Object.keys(h).length === 24).sort(([a], [b]) => a.localeCompare(b)).map(([date, hours]) => ({ date, hours }));
+      if (online.length) audience.online = online;
+    } catch (e) {
+      if (!isMetricError(e)) throw e;
+    }
   }
   return Object.keys(audience).length ? audience : null;
 }

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getViewer, UUID_RE } from "@/lib/auth";
 import { clientIp, siteUrl } from "@/lib/http";
-import { monthLabel, monthlyAccounts, monthlyMailLines, monthlyMeo, monthlyReport, parseMonth } from "@/lib/monthly";
+import { monthLabel, monthlyAccounts, monthlyAudience, monthlyMailLines, monthlyMeo, monthlyReport, parseMonth } from "@/lib/monthly";
 import { mailConfigured, sendMail } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit, listViewers } from "@/lib/sns/store";
@@ -21,8 +21,8 @@ export async function sendMonthlyReport(_: ActionState, form: FormData): Promise
   if (!to.length) return { error: "送り先がありません。「利用者管理」でクライアントの利用者を登録してください。" };
   try {
     const r = await monthlyReport(clientId, month);
-    const [accts, meo] = await Promise.all([monthlyAccounts(r, month), monthlyMeo(clientId, month)]);
-    const lines = monthlyMailLines(r, month, `${siteUrl()}/clients/${clientId}/monthly?month=${month}`, accts, meo);
+    const [accts, meo, aud] = await Promise.all([monthlyAccounts(r, month), monthlyMeo(clientId, month), monthlyAudience(r)]);
+    const lines = monthlyMailLines(r, month, `${siteUrl()}/clients/${clientId}/monthly?month=${month}`, accts, meo, aud);
     // 利用者どうしにほかの人のアドレスが見えないよう、1人ずつ送る
     for (const addr of to) await sendMail([addr], `【SNSレポート】${r.client.name} ${monthLabel(month)}`, lines);
     await audit(admin, v, "monthly.sent", clientId, `${month}：${to.join(", ")}`, await clientIp());

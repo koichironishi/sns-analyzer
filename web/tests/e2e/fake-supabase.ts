@@ -135,7 +135,13 @@ async function seed() {
     }
     const data = platform === "instagram"
       ? { genderAge: { F: { "18-24": 8, "25-34": 30, "35-44": 22, "45-54": 9 }, M: { "18-24": 5, "25-34": 18, "35-44": 25, "45-54": 12, "65+": 2 } },
-          city: { "Otsu, Shiga": 88, "Kyoto, Kyoto": 7, "Kusatsu, Shiga": 5, "Osaka, Osaka": 4 }, country: { JP: 128, US: 2 } }
+          city: { "Otsu, Shiga": 88, "Kyoto, Kyoto": 7, "Kusatsu, Shiga": 5, "Osaka, Osaka": 4 }, country: { JP: 128, US: 2 },
+          engagedAge: { "18-24": 20, "25-34": 55, "35-44": 30, "45-54": 8 },
+          // 夜（20〜22時）と昼（12時）に多い形
+          online: Array.from({ length: 7 }, (_, d) => ({
+            date: new Date(Date.now() - (d + 1) * 86_400_000).toISOString().slice(0, 10),
+            hours: Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h), Math.round(20 + 60 * Math.exp(-((h - 21) ** 2) / 6) + 25 * Math.exp(-((h - 12) ** 2) / 2) - (h < 6 ? 15 : 0) + d * 2)])),
+          })).reverse() }
       : { city: { "Otsu, Shiga": 40, "Moriyama, Shiga": 3 } };
     await db.query("insert into sns_audience (account_id, client_id, platform, fetched_date, data) values ($1,$2,$3,$4,$5)", [accountId, CLIENT_A, platform, today, data]);
   }

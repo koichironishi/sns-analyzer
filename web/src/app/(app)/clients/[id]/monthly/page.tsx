@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
-import { MIN_PREV_POSTS, aiMadeBy, comparable, monthLabel, monthRange, monthlyAccounts, monthlyAi, monthlyMailLines, monthlyMeo, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
+import { MIN_PREV_POSTS, aiMadeBy, comparable, monthLabel, monthRange, audienceLines, monthlyAccounts, monthlyAi, monthlyAudience, monthlyMailLines, monthlyMeo, monthlyReport, monthlyTotals, parseMonth, recentMonths } from "@/lib/monthly";
 import type { PlatformSummary } from "@/lib/sns/analysis";
 import { siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -31,7 +31,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
   const v = await getViewer();
   const isStaff = v?.kind === "staff";
   const d = r.analysis;
-  const [accts, meo] = await Promise.all([monthlyAccounts(r, month), monthlyMeo(id, month)]);
+  const [accts, meo, aud] = await Promise.all([monthlyAccounts(r, month), monthlyMeo(id, month), monthlyAudience(r)]);
   const admin = createAdminClient();
   const [viewers, sent] = isStaff
     ? await Promise.all([
@@ -206,6 +206,19 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
               </section>
             )}
 
+            {aud && (
+              <section aria-labelledby="h-m-aud">
+                <h3 id="h-m-aud">見られている時間と年代（Instagram）</h3>
+                <div className="card">
+                  <ul className="monthly-aud">{audienceLines(aud).map((l) => <li key={l}>{l.replace(/^・/, "")}</li>)}</ul>
+                  <p className="small muted" style={{ marginBottom: 0 }}>
+                    最新の集計です（月ごとの値ではありません）。年代別の時間帯は Meta が提供していないため、時間帯はフォロワー全体の数です。
+                    詳しくはインサイトの「オーディエンス」で見られます。
+                  </p>
+                </div>
+              </section>
+            )}
+
             {meo && (
               <section aria-labelledby="h-m-meo">
                 <h3 id="h-m-meo">Googleマップ（{meo.locations}店舗）</h3>
@@ -275,7 +288,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
               <p className="hint">主な数字・ポイント・SNS別・反応の良かった投稿・競合との比較・来月の提案をメールの本文に書き、ログインしなくても読めるようにします。グラフと詳しい表は、添えるリンク先（ログインが必要）で見られます。1人ずつ別のメールで送ります。</p>
               <details className="more">
                 <summary>メールの文面を見る</summary>
-                <pre className="mail-preview">{monthlyMailLines(r, month, `${siteUrl()}/clients/${id}/monthly?month=${month}`, accts, meo).join("\n")}</pre>
+                <pre className="mail-preview">{monthlyMailLines(r, month, `${siteUrl()}/clients/${id}/monthly?month=${month}`, accts, meo, aud).join("\n")}</pre>
               </details>
               <label className="check"><input type="checkbox" name="confirm" required />上のレポートとメールの文面を確認しました</label>
               <div className="form-actions"><SubmitButton pendingText="送っています…">{monthLabel(month)}のレポートを送る</SubmitButton></div>

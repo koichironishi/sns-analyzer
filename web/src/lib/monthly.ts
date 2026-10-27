@@ -3,7 +3,8 @@ import { getReport, type Report } from "@/lib/report";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMeoLink, meoMonthly, type MeoMonthly } from "@/lib/meo-summary";
-import type { StoredAi } from "@/lib/sns/store";
+import { latestAudience, type StoredAi } from "@/lib/sns/store";
+import { ageShares, onlineSummary } from "@/lib/insights-view";
 import { addDays, todayIn, PLATFORM_LABELS, type Platform } from "@/lib/sns/models";
 import type { PlatformSummary } from "@/lib/sns/analysis";
 import { PRIORITY_LABELS, platformLabel } from "@/lib/sns/ai";
@@ -82,6 +83,35 @@ export async function monthlyAccounts(r: Report, month: string): Promise<Partial
   return out;
 }
 
+export type MonthlyAudience = { account: string; peaks: number[]; days: number; followerAges: [string, number][]; engagedAges: [string, number][] };
+
+/**
+ * Instagram の「見られている時間と年代」（最新の集計）。フォロワーがオンラインの時間帯の上位と、
+ * フォロワー・反応した人それぞれの多い年代。年代別の時間帯は Meta が提供していないため、別々に出す
+ */
+export async function monthlyAudience(r: Report): Promise<MonthlyAudience | null> {
+  if (!r.analysis.platforms.includes("instagram")) return null;
+  const acct = r.accounts.find((a) => a.platform === "instagram");
+  const latest = await latestAudience(await createClient(), r.client.id, "instagram", acct?.id ?? null).catch(() => null);
+  if (!latest) return null;
+  const online = onlineSummary(latest.data.online);
+  const fol: Record<string, number> = {};
+  for (const byAge of Object.values(latest.data.genderAge ?? {})) for (const [age, v] of Object.entries(byAge)) fol[age] = (fol[age] ?? 0) + v;
+  const top = (m: Record<string, number>) => Object.entries(ageShares(m)).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  const out = { account: acct?.name ?? "Instagram", peaks: online?.peaks ?? [], days: online?.days.length ?? 0, followerAges: top(fol), engagedAges: top(latest.data.engagedAge ?? {}) };
+  return out.peaks.length || out.followerAges.length || out.engagedAges.length ? out : null;
+}
+
+/** 「見られている時間と年代」の文（画面とメールで使う） */
+export function audienceLines(a: MonthlyAudience): string[] {
+  const ages = (xs: [string, number][]) => xs.map(([age, s]) => `${age}歳（${fmtPct(s, 0)}）`).join("・");
+  return [
+    ...(a.peaks.length ? [`・フォロワーが多くオンラインの時間帯：${a.peaks.map((h) => `${h}時台`).join("・")}（直近${a.days}日の平均）`] : []),
+    ...(a.followerAges.length ? [`・フォロワーに多い年代：${ages(a.followerAges)}`] : []),
+    ...(a.engagedAges.length ? [`・反応した人に多い年代：${ages(a.engagedAges)}`] : []),
+  ];
+}
+
 /** 結び付けた MEO クライアントの、この月の Googleマップの結果（結び付けていなければ null） */
 export async function monthlyMeo(clientId: string, month: string): Promise<MeoMonthly | null> {
   const admin = createAdminClient();
@@ -142,7 +172,7 @@ const PRI = ["high", "medium", "low"] as const;
  * クライアントへ送るメールの本文。ログインしなくても報告として読めるように、画面の主な内容を文章で載せる
  * （パスワードを覚えていない担当者がリンクの先に進めなくても、メールだけで中身が分かるように）
  */
-export function monthlyMailLines(r: Report, month: string, url: string, accounts: Partial<Record<Platform, AccountBreakdown[]>> = {}, meo: MeoMonthly | null = null): string[] {
+export function monthlyMailLines(r: Report, month: string, url: string, accounts: Partial<Record<Platform, AccountBreakdown[]>> = {}, meo: MeoMonthly | null = null, aud: MonthlyAudience | null = null): string[] {
   const d = r.analysis;
   const ins = [...d.insights].sort((a, b) => (a.kind === "good" ? -1 : 0) - (b.kind === "good" ? -1 : 0)).slice(0, 4);
   const ai = monthlyAi(r, month);
@@ -176,6 +206,7 @@ export function monthlyMailLines(r: Report, month: string, url: string, accounts
     ...(d.topPosts.length ? ["", "■ 反応の良かった投稿",
       ...d.topPosts.slice(0, 3).map((t, i) => `${i + 1}. ${PLATFORM_LABELS[t.platform]} ${slash(t.date)}「${truncate(t.text.replace(/\s+/g, " ").trim(), 40) || "本文なし"}」エンゲージメント ${fmtNum(t.engagements)}${t.permalink ? `\n   ${t.permalink}` : ""}`)] : []),
     ...(comp.length ? ["", "■ 競合との比較", ...comp] : []),
+    ...(aud ? ["", `■ 見られている時間と年代（Instagram）`, ...audienceLines(aud)] : []),
     ...(meo ? ["", `■ Googleマップ（${meo.locations}店舗）`, ...meoLines(meo)] : []),
     ...(recs.length ? ["", "■ 来月の提案", ...recs.map((x, i) => `${i + 1}. ${x.action}（優先度 ${PRIORITY_LABELS[x.priority]}・${platformLabel(x.platform)}）`)] : []),
     "",

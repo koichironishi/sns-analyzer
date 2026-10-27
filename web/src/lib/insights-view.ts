@@ -195,3 +195,29 @@ export function topShare(counts: Record<string, number> | undefined, n = 10) {
   const total = entries.reduce((s, [, v]) => s + v, 0);
   return entries.sort((a, b) => b[1] - a[1]).slice(0, n).map(([key, value]) => ({ key, value, share: total ? value / total : 0 }));
 }
+
+// ---- フォロワーがオンラインの時間帯・反応した人の年代 ------------------------------------------------
+
+export type OnlineSummary = {
+  /** 日本時間の 0〜23 時の、1日あたりの平均 */
+  avg: number[];
+  /** 平均の多い順に上位3つの時（0〜23） */
+  peaks: number[];
+  /** 日ごとの値（表で見せる） */
+  days: { date: string; hours: number[] }[];
+};
+
+/** online_followers（日本時間に直したもの）を、時間帯ごとの平均と上位の時にまとめる。年代別ではない */
+export function onlineSummary(online: Audience["online"]): OnlineSummary | null {
+  if (!online?.length) return null;
+  const days = online.map((d) => ({ date: d.date, hours: Array.from({ length: 24 }, (_, h) => d.hours[String(h)] ?? 0) }));
+  const avg = Array.from({ length: 24 }, (_, h) => days.reduce((s, d) => s + d.hours[h], 0) / days.length);
+  const peaks = avg.map((v, h) => [v, h] as const).sort((a, b) => b[0] - a[0]).slice(0, 3).map(([, h]) => h);
+  return { avg, peaks, days };
+}
+
+/** 年代ごとの割合（合計に対する）。フォロワーの年代（性別をまとめたもの）と、反応した人の年代を比べるため */
+export function ageShares(counts: Record<string, number> | undefined): Record<string, number> {
+  const total = Object.values(counts ?? {}).reduce((s, v) => s + v, 0);
+  return total ? Object.fromEntries(Object.entries(counts!).map(([k, v]) => [k, v / total])) : {};
+}

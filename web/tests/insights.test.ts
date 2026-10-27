@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HttpClient } from "../src/lib/sns/collectors/http.ts";
-import { endTimeToDate, facebookInsights, instagramInsights } from "../src/lib/sns/collectors/insights.ts";
+import { endTimeToDate, facebookInsights, instagramInsights, onlineHours } from "../src/lib/sns/collectors/insights.ts";
 
 type Hit = { status?: number; body: unknown } | undefined;
 function client(route: (u: URL) => Hit) {
@@ -66,8 +66,37 @@ test("Instagram: 1日ずつの合計・リーチの時系列・属性を取り�
   assert.deepEqual(views, ["2026-10-09", "2026-10-10", "2026-10-11", "2026-10-12"]);
   assert.ok(r.daily.some((d) => d.metric === "viewers" && d.date === "2026-10-12" && d.value === 5));
   assert.ok(!r.daily.some((d) => d.metric === "link_clicks"));
-  assert.deepEqual(r.audience, { genderAge: { F: { "25-34": 12 } }, city: { "Otsu, Shiga": 30 } });
+  assert.deepEqual(r.audience, { genderAge: { F: { "25-34": 12 } }, city: { "Otsu, Shiga": 30 } }); // 反応した人の年代・オンラインの時間帯は提供なし（err）の想定
   // 提供されていない指標を見つけたあとは、まとめて問い合わせる指標から外す
-  const later = calls.filter((u) => u.searchParams.get("metric_type") === "total_value" && u.searchParams.get("metric") !== "follower_demographics").at(-1)!;
+  const later = calls.filter((u) => u.searchParams.get("metric_type") === "total_value" && !["follower_demographics", "engaged_audience_demographics"].includes(u.searchParams.get("metric")!)).at(-1)!;
   assert.equal(later.searchParams.get("metric"), "views,total_interactions,accounts_engaged");
+});
+
+test("オンラインの時間帯：太平洋時間の時を日本時間の日付・時に直す（夏時間と冬時間）", () => {
+  // 2026-10-20 07:00 UTC＝太平洋夏時間の 10/20 0時。その前日（10/19）の分
+  const pdt = onlineHours("2026-10-20T07:00:00+0000", { "0": 5, "8": 12, "23": 3 });
+  assert.deepEqual(pdt, [
+    { date: "2026-10-19", hour: 16, count: 5 },   // 10/19 0時（PDT, UTC-7）＝10/19 16時（JST）
+    { date: "2026-10-20", hour: 0, count: 12 },   // 10/19 8時（PDT）＝10/20 0時（JST）
+    { date: "2026-10-20", hour: 15, count: 3 },   // 10/19 23時（PDT）＝10/20 15時（JST）
+  ]);
+  // 冬時間（PST, UTC-8）：12/10 08:00 UTC＝12/10 0時（PST）。その前日（12/9）の分
+  assert.deepEqual(onlineHours("2026-12-10T08:00:00+0000", { "0": 1 }), [{ date: "2026-12-09", hour: 17, count: 1 }]);
+});
+
+test("Instagram: 反応した人の年代とオンラインの時間帯を属性に入れる（24時間そろった日だけ）", async () => {
+  const hours = Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h), h + 1]));
+  const { http } = client((u) => {
+    const m = u.searchParams.get("metric")!;
+    if (m === "engaged_audience_demographics") return { body: { data: [{ total_value: { breakdowns: [{ dimension_keys: ["age"], results: [{ dimension_values: ["25-34"], value: 40 }, { dimension_values: ["35-44"], value: 10 }] }] } }] } };
+    if (m === "online_followers") return { body: { data: [{ values: [
+      { value: hours, end_time: "2026-10-19T07:00:00+0000" }, { value: hours, end_time: "2026-10-20T07:00:00+0000" }, { value: hours, end_time: "2026-10-21T07:00:00+0000" },
+    ] }] } };
+    return err();
+  });
+  const r = await instagramInsights(http, "ig1", req("2026-10-20", "2026-10-21"));
+  assert.deepEqual(r.audience?.engagedAge, { "25-34": 40, "35-44": 10 });
+  // 太平洋時間の3日分（10/18〜10/20）は、日本時間では 10/18 16時〜10/21 15時。24時間そろうのは 10/19 と 10/20
+  assert.deepEqual(r.audience?.online?.map((d) => d.date), ["2026-10-19", "2026-10-20"]);
+  assert.equal(Object.keys(r.audience!.online![0].hours).length, 24);
 });

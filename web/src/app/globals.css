@@ -858,3 +858,11 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
   /* 表の見出しを1〜2文字ずつ折り返さない（数字の列が細くなりすぎるため） */
   thead th { white-space: nowrap; }
 }
+
+/* フォロワーがオンラインの時間帯（日×時の表） */
+.online-table th, .online-table td { padding: 6px 4px; font-size: var(--fs-xs); }
+.online-table thead th { text-align: right; }
+.online-cell { min-width: 34px; }
+.online-avg th, .online-avg td { border-top: 2px solid var(--border-strong); font-weight: 600; }
+
+.monthly-aud { margin: 0 0 var(--s2); padding-left: 1.2em; display: grid; gap: 4px; }
