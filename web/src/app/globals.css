@@ -845,10 +845,7 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 /* ストーリーズの札（通常の投稿と見分ける） */
 .badge.story { background: var(--accent-bg); color: var(--accent); }
 
-/* PDFのダウンロード（作成中・失敗の表示） */
-.pdf-action { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-
-/* PDF（印刷）のページ分け：セクションやカードを丸ごと次のページへ送ると大きな空白ができるため、
+/* 印刷・PDF保存のページ分け：セクションやカードを丸ごと次のページへ送ると大きな空白ができるため、
    送るのは数字のカード・表の行・項目などの小さな単位だけにし、見出しは次の内容と離さない */
 @media print {
   section, .monthly section, .card { break-inside: auto; }
