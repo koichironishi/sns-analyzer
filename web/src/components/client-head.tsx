@@ -37,6 +37,8 @@ function pageLabel(rest: string): string {
   return t?.label ?? "";
 }
 
+const PDF_PAGES = ["", "insights", "insights/content", "insights/audience", "sns", "timing", "competitors", "content", "ai", "monthly"];
+
 export function ClientHead({ clientId, clientName }: { clientId: string; clientName: string }) {
   const path = usePathname();
   const sp = useSearchParams();
@@ -46,8 +48,8 @@ export function ClientHead({ clientId, clientName }: { clientId: string; clientN
   const page = pageLabel(rest);
   // 設定の画面と、左メニューに置いた作業の画面（投稿・AI分析）ではタブを出さない
   const showTabs = !rest.startsWith("settings") && seg !== "publish" && seg !== "ai";
-  // レポートの画面（期間を選ぶ画面）と AI分析だけ印刷ボタンを出す
-  const printable = !rest.startsWith("settings") && seg !== "publish";
+  // レポートの画面・AI分析・月次レポートだけ「PDFをダウンロード」を出す（/api/clients/[id]/pdf で受け付ける画面と同じ）
+  const printable = PDF_PAGES.includes(rest);
 
   const q = new URLSearchParams();
   for (const k of ["days", "end", "sns", "acct"]) {
@@ -75,7 +77,7 @@ export function ClientHead({ clientId, clientName }: { clientId: string; clientN
             </Fragment>
           ))}
         </h1>
-        {printable && <div className="client-head-actions no-print"><PrintButton /></div>}
+        {printable && <div className="client-head-actions no-print"><PrintButton clientId={clientId} /></div>}
       </div>
       {showTabs && (
         <nav ref={navRef} className="rw-navtabs client-tabs no-print" aria-label="クライアントの画面">
