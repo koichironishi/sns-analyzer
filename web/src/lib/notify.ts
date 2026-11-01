@@ -64,8 +64,23 @@ export async function sendMail(to: string[], subject: string, lines: string[]): 
 /** 直近 days 日に知らせた単位（markAlerted の detail）。同じ問題を重ねて知らせないため */
 export async function alertedKeys(admin: SupabaseClient, kind: string, days: number): Promise<Set<string>> {
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const { data } = await admin.from("sns_audit").select("detail").eq("action", `alert.${kind}`).gte("at", since).limit(5000);
+  const { data, error } = await admin.from("sns_audit").select("detail").eq("action", `alert.${kind}`).gte("at", since).limit(5000);
+  // 読み取りに失敗したときに「まだ送っていない」と判断すると、同じ知らせを何度も送ってしまう（2026-11-01 に月次の準備の知らせが4回届いた）。
+  // 失敗は例外にして、その回は送らない
+  if (error) throw new Error(`送った記録を読めませんでした：${error.message}`);
   return new Set(((data ?? []) as { detail: string | null }[]).map((r) => r.detail ?? ""));
+}
+
+/** 直近 hours 時間に、同じ件名の知らせのメールを送ったか（送る直前の念のための確認。読み取りに失敗したら「送った」とみなす） */
+export async function sentRecently(admin: SupabaseClient, subject: string, hours: number): Promise<boolean> {
+  const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+  const { count, error } = await admin.from("sns_audit").select("id", { count: "exact", head: true })
+    .eq("action", "alert.mail").like("detail", `${subject}（%`).gte("at", since);
+  if (error) {
+    console.error("送った記録を読めませんでした", error.message);
+    return true;
+  }
+  return (count ?? 0) > 0;
 }
 
 export async function markAlerted(admin: SupabaseClient, kind: string, detail: string) {

@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { siteUrl } from "@/lib/http";
 import { monthLabel, monthRange } from "@/lib/monthly";
-import { alertedKeys, markAlerted, sendAlert } from "@/lib/notify";
+import { alertedKeys, markAlerted, sendAlert, sentRecently } from "@/lib/notify";
 import { AIError } from "@/lib/sns/ai";
 import { AiNotReady, runAiForClient } from "@/lib/sns/ai-run";
 import { PREP_MAX_TRIES, PREP_RUNNING_MIN, prepWindow } from "@/lib/sns/alert-rules";
@@ -77,7 +77,13 @@ export async function monthlyPrepStep(admin: Db, deadline: number): Promise<stri
   const reason = (id: string) => skipped(id)?.reason ?? entries.filter((e) => e.id === id && e.kind === "fail").at(-1)?.reason ?? "AI分析なし";
   const link = (id: string) => `${siteUrl()}/clients/${id}/monthly?month=${month}`;
   const label = monthLabel(month);
-  const ok = active.length === 0 || await sendAlert(admin, `${label}の月次レポートの準備ができました`, [
+  const subject = `${label}の月次レポートの準備ができました`;
+  // 念のため、送る直前にも同じ件名を送っていないか確かめる（送っていれば記録だけ付けて終える）
+  if (active.length && await sentRecently(admin, subject, 24 * 40)) {
+    await markAlerted(admin, "prep", `${month}:done`);
+    return null;
+  }
+  const ok = active.length === 0 || await sendAlert(admin, subject, [
     `${label}（${start.slice(5).replace("-", "/")}〜${end.slice(5).replace("-", "/")}）の月次レポートを準備しました。内容を確認して、クライアントに送ってください。`,
     "",
     ...(ready.length ? [`■ AI分析まで済んだクライアント（${ready.length}件）`, ...ready.map((id) => `・${name.get(id)}\n　${link(id)}`)] : []),
