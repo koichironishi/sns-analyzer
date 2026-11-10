@@ -3,7 +3,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
 import { LIMITS, STORY_PLATFORMS, textLength } from "@/lib/sns/publish/rules";
-import { hasLink } from "@/lib/sns/publish/utm";
+import { addUtm, hasLink } from "@/lib/sns/publish/utm";
+import { PostPreview } from "./post-preview";
 import { PLATFORMS, PLATFORM_LABELS, accountLabel, nextWeekdayAt, type Platform } from "@/lib/sns/models";
 import type { BestTime, TagHint } from "@/lib/sns/analysis";
 
@@ -295,6 +296,13 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
           </ol>
         )}
       </div>
+
+      <section className="card" aria-labelledby="h-preview">
+        <h2 id="h-preview" style={{ fontSize: "var(--fs-md)", margin: "0 0 var(--s2)" }}>プレビュー</h2>
+        <PostPreview story={story} images={images.filter((im) => !im.error).map((im) => im.previewUrl)}
+          targets={connections.filter((c) => c.key && targets.includes(c.key)).map((c) => ({ platform: c.platform, name: accountLabel(c.platform, c.username, c.nickname) }))}
+          textOf={(p) => (!story && utm && withLink ? addUtm(textOf(p), p, "xxxxxxxx") : textOf(p))} />
+      </section>
 
       <fieldset className="card" style={{ margin: 0 }}>
         <legend>投稿のタイミング</legend>

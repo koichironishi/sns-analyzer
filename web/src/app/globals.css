@@ -866,3 +866,41 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 .online-avg th, .online-avg td { border-top: 2px solid var(--border-strong); font-weight: 600; }
 
 .monthly-aud { margin: 0 0 var(--s2); padding-left: 1.2em; display: grid; gap: 4px; }
+
+/* 作成画面のプレビュー（各SNSのおおよその見た目） */
+.pv { display: grid; gap: var(--s2); justify-items: start; }
+.pv-tabs { margin-bottom: 0; }
+.pv-tabs .tab { display: inline-flex; align-items: center; gap: 6px; }
+.pv-tabs .tab[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow), 0 0 0 1px var(--border); }
+.pv-phone { width: min(100%, 360px); border: 1px solid var(--border); border-radius: 16px; background: #fff; color: #111; overflow: hidden; font-size: 14px; line-height: 1.5; }
+.pv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.pv-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; background: #ddd; font-weight: 700; color: #333; }
+.pv-name { font-weight: 700; font-size: 14px; }
+.pv-media { position: relative; background: #f2f2f2; aspect-ratio: 4 / 5; display: grid; place-items: center; }
+.pv-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv-instagram .pv-media img { object-fit: contain; background: #fff; }
+.pv-noimg { color: #666; font-size: 13px; padding: 16px; text-align: center; }
+.pv-count { position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, .65); color: #fff; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+.pv-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, .9); color: #111; font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.pv-nav.prev { left: 8px; } .pv-nav.next { right: 8px; }
+.pv-nav:disabled { opacity: .3; cursor: default; }
+.pv-dots { position: absolute; bottom: 8px; left: 0; right: 0; display: flex; justify-content: center; gap: 4px; }
+.pv-dots i { width: 6px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .6); }
+.pv-dots i.on { background: #3897f0; }
+.pv-actions { padding: 8px 12px 0; font-size: 18px; letter-spacing: 4px; }
+.pv-text { margin: 0; padding: 6px 12px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pv-facebook .pv-text, .pv-threads .pv-text { padding-top: 0; }
+.pv-more { border: 0; background: none; padding: 0; color: #737373; font: inherit; cursor: pointer; }
+.pv-grid { display: grid; gap: 2px; grid-template-columns: 1fr 1fr; }
+.pv-grid.n3 .pv-cell:first-child { grid-column: 1 / -1; }
+.pv-cell { position: relative; aspect-ratio: 1; background: #eee; }
+.pv-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv-more-n { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .45); color: #fff; font-size: 24px; font-weight: 700; }
+.pv-story { background: #111; }
+.pv-storyframe { position: relative; aspect-ratio: 9 / 16; display: grid; place-items: center; background: #222; }
+.pv-storyframe > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.pv-storyframe .pv-head { position: absolute; top: 14px; left: 0; right: 0; z-index: 1; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.pv-storybar { position: absolute; top: 6px; left: 8px; right: 8px; z-index: 1; display: flex; gap: 3px; }
+.pv-storybar i { flex: 1; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .4); }
+.pv-storybar i.on { background: #fff; }
+.pv-story .pv-noimg { color: #ccc; }
