@@ -8,3 +8,6 @@ __pycache__/
 *.tmp
 .DS_Store
 .env
+
+# 社内資料（リポジトリに入れない）
+docs/
