@@ -15,7 +15,7 @@ import { LIMITS, validatePost, validateStory } from "@/lib/sns/publish/rules";
 import { BULK_MAX_ROWS, readBulkCsv, type BulkRow } from "@/lib/sns/publish/bulk";
 import { parseTargetKey, platformsOf, resolveTargets, type Target } from "@/lib/sns/publish/targets";
 import { AIError } from "@/lib/sns/ai";
-import { writePerPlatform } from "@/lib/sns/ai-write";
+import { writeDraft, writePerPlatform } from "@/lib/sns/ai-write";
 import { consentState } from "@/lib/sns/privacy";
 import {
   audit, deleteScheduledPost, getBrandContext, getClient, getConsentRow, getRequireApproval, getScheduledPost, insertScheduledPost, listConnections, MEDIA_BUCKET,
@@ -320,6 +320,34 @@ export async function aiWritePost(clientId: string, source: string, platformList
     const r = await writePerPlatform({ clientName: client?.name ?? "", brandContext: await getBrandContext(admin, clientId), source: text, platforms });
     await audit(admin, v, "post.ai_write", clientId, `${platforms.join(",")}・${r.model}`, await clientIp());
     return { ok: true, texts: r.texts, warnings: r.warnings };
+  } catch (e) {
+    if (e instanceof AIError) return { ok: false, errors: [e.message] };
+    return fail(e);
+  }
+}
+
+/**
+ * 伝えたいことのメモから、AI が本文（全SNS共通）を書く。
+ * 公開はしない。結果は画面の「本文」に入れ、人が確認して直す。同意の条件は書き分けと同じ。
+ */
+export async function aiDraftPost(clientId: string, memo: string, platformList: string[]): Promise<Result<{ text: string; warnings: string[] }>> {
+  try {
+    const { v, admin } = await poster(clientId);
+    const platforms = [...new Set(platformList)].filter(isPlatform);
+    const text = String(memo ?? "").trim();
+    if (!platforms.length) return { ok: false, errors: ["投稿先のSNSを1つ以上選んでください"] };
+    if (text.length < 5) return { ok: false, errors: ["メモに、伝えたいことを書いてください（例：11/3から秋の新メニュー。栗のパフェ 980円）"] };
+    if (text.length > 3000) return { ok: false, errors: ["メモが長すぎます（3,000字まで）"] };
+    const consent = consentState(await getConsentRow(admin, clientId));
+    if (!consent.valid) {
+      return { ok: false, errors: [v.kind === "staff"
+        ? "このクライアントは AI 利用の同意がないため使えません。「クライアント情報」で同意を記録してください"
+        : "AI の利用の同意がまだないため使えません。担当者にお問い合わせください"] };
+    }
+    const client = await getClient(admin, clientId);
+    const r = await writeDraft({ clientName: client?.name ?? "", brandContext: await getBrandContext(admin, clientId), memo: text, platforms });
+    await audit(admin, v, "post.ai_draft", clientId, `${platforms.join(",")}・${r.model}`, await clientIp());
+    return { ok: true, text: r.text, warnings: r.warnings };
   } catch (e) {
     if (e instanceof AIError) return { ok: false, errors: [e.message] };
     return fail(e);

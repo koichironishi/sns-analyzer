@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
+import { aiDraftPost, aiWritePost, createUploadTarget, savePost, type SavePostInput } from "@/app/(app)/clients/[id]/publish/actions";
 import { LIMITS, STORY_PLATFORMS, textLength } from "@/lib/sns/publish/rules";
 import { addUtm, hasLink } from "@/lib/sns/publish/utm";
 import { PostPreview } from "./post-preview";
@@ -14,6 +14,7 @@ type Img = { key: string; path: string | null; previewUrl: string; width: number
 
 const MAX_SIDE = 1440;
 const AI_BUSY = "AIが書いています…";
+const AI_DRAFT_BUSY = "AIが本文を書いています…";
 
 /** 画像を JPEG（長い辺 1440px まで）に変換する。Instagram は JPEG しか受け付けないため */
 async function toJpeg(file: File): Promise<{ blob: Blob; width: number; height: number }> {
@@ -87,6 +88,21 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
     setPerText((cur) => ({ ...cur, ...r.texts }));
     setPerOpen(true);
     setAiNote(r.warnings);
+  };
+  const [memo, setMemo] = useState("");
+  const [draftNote, setDraftNote] = useState<string[] | null>(null);
+
+  /** 伝えたいことのメモから、AI に本文（全SNS共通）を書いてもらう。本文があれば置き換える前に確認する */
+  const aiDraft = async () => {
+    if (text.trim() && !window.confirm("本文を、AIが書いた文章で置き換えます。よろしいですか？")) return;
+    setBusy(AI_DRAFT_BUSY);
+    setErrors([]);
+    setDraftNote(null);
+    const r = await aiDraftPost(clientId, memo, platforms);
+    setBusy(null);
+    if (!r.ok) { setErrors(r.errors); return; }
+    setText(r.text);
+    setDraftNote(r.warnings);
   };
   const errRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (errors.length) errRef.current?.focus(); }, [errors]);
@@ -206,7 +222,27 @@ export function PostComposer({ clientId, connections, initial, needsApproval = f
         </div>
       ) : (
       <div className="card">
-        <label htmlFor="post-text" style={{ marginTop: 0 }}>本文</label>
+        {platforms.length > 0 && (
+          <details className="more ai-draft">
+            <summary>AIで本文を作る</summary>
+            <label htmlFor="ai-memo">伝えたいこと（メモ）</label>
+            <textarea id="ai-memo" rows={3} value={memo} onChange={(e) => setMemo(e.target.value)} aria-describedby="ai-memo-hint"
+              placeholder="例：11/3から秋の新メニュー。栗のパフェ 980円。数量限定" />
+            <p className="hint" id="ai-memo-hint">箇条書きで構いません。日付や価格は、メモに書いたものだけを使います。できた文章は下の「本文」に入ります。内容は必ず確認して直してください。</p>
+            <div className="ai-write">
+              <button type="button" className="btn" onClick={aiDraft} disabled={busy !== null || memo.trim().length < 5}>
+                {busy === AI_DRAFT_BUSY ? AI_DRAFT_BUSY : "AIで本文を作る"}
+              </button>
+              {draftNote && (
+                <div role="status" className="small">
+                  {draftNote.length ? draftNote.map((w) => <p key={w} style={{ color: "var(--warn)", margin: 0 }}>{w}</p>)
+                    : <p style={{ margin: 0 }}>本文に入れました。事実や表現に誤りがないか確認してください。</p>}
+                </div>
+              )}
+            </div>
+          </details>
+        )}
+        <label htmlFor="post-text" style={platforms.length > 0 ? undefined : { marginTop: 0 }}>本文</label>
         <textarea id="post-text" value={text} onChange={(e) => setText(e.target.value)} rows={7} aria-describedby="post-count" />
         <ul className="legend" id="post-count" aria-live="polite" style={{ marginTop: 8 }}>
           {platforms.map((p) => {

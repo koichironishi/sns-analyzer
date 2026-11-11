@@ -657,6 +657,8 @@ body:has(.side) .app-drawer { display: none; }
 /* 投稿作成：AIでSNSごとに書き分ける */
 .ai-write { margin-top: var(--s3); display: grid; gap: 4px; justify-items: start; }
 .ai-write .hint { margin: 0; }
+/* 本文欄の上に置く「AIで本文を作る」。カードの先頭なので上ではなく下に区切り線を引く */
+details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bottom: 1px solid var(--grid); padding-bottom: var(--s2); }
 
 /* 公開前の確認（画像を大きく、投稿される順番の番号つきで並べる） */
 .post-preview { margin: var(--s3) 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4); background: var(--surface-2, var(--surface)); }

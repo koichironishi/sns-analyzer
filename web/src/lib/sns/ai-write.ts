@@ -62,7 +62,8 @@ export function checkWritten(texts: Partial<Record<Platform, string>>, platforms
   return warnings;
 }
 
-export async function writePerPlatform(input: AiWriteInput, client?: Anthropic): Promise<AiWriteResult> {
+/** Claude に1回頼み、JSON をスキーマで読む（書き分け・本文作成で共通） */
+async function askJson<T extends z.ZodTypeAny>(system: string, prompt: string, schema: T, client?: Anthropic): Promise<{ data: z.infer<T>; model: string }> {
   if (!process.env.ANTHROPIC_API_KEY && !client) throw new AIError("AI機能が設定されていません（ANTHROPIC_API_KEY）。担当者にお問い合わせください。");
   const api = client ?? new Anthropic();
   let message: Anthropic.Messages.Message;
@@ -70,27 +71,78 @@ export async function writePerPlatform(input: AiWriteInput, client?: Anthropic):
     message = await api.messages.create({
       model: DEFAULT_MODEL,
       max_tokens: 8000,
-      system: SYSTEM,
-      output_config: { effort: "medium", format: zodOutputFormat(OutputSchema) },
-      messages: [{ role: "user", content: buildWritePrompt(input) }],
+      system,
+      output_config: { effort: "medium", format: zodOutputFormat(schema) },
+      messages: [{ role: "user", content: prompt }],
     });
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) throw new AIError("AIの利用が混み合っています。しばらく待ってから、もう一度お試しください。");
     if (e instanceof Anthropic.APIError) throw new AIError(`AIに接続できませんでした（${e.status ?? "接続エラー"}）。時間をおいて、もう一度お試しください。`);
     throw e;
   }
-  if (message.stop_reason === "refusal") throw new AIError("AIが文章の作成を控えました。本文の内容を見直してください。");
+  if (message.stop_reason === "refusal") throw new AIError("AIが文章の作成を控えました。書いた内容を見直してください。");
   const raw = message.content.filter((b): b is Anthropic.Messages.TextBlock => b.type === "text").map((b) => b.text).join("");
-  let parsed: z.infer<typeof OutputSchema>;
   try {
-    parsed = OutputSchema.parse(JSON.parse(raw));
+    return { data: schema.parse(JSON.parse(raw)), model: message.model };
   } catch {
     throw new AIError("AIの応答を読み取れませんでした。もう一度お試しください。");
   }
+}
+
+export async function writePerPlatform(input: AiWriteInput, client?: Anthropic): Promise<AiWriteResult> {
+  const { data, model } = await askJson(SYSTEM, buildWritePrompt(input), OutputSchema, client);
   const texts: Partial<Record<Platform, string>> = {};
   for (const p of input.platforms) {
-    const t = parsed.texts[p]?.trim();
+    const t = data.texts[p]?.trim();
     if (t) texts[p] = t;
   }
-  return { texts, warnings: checkWritten(texts, input.platforms), model: message.model };
+  return { texts, warnings: checkWritten(texts, input.platforms), model };
+}
+
+// ---- メモから本文（全SNS共通）を作る ------------------------------------------------
+
+const DraftSchema = z.object({ text: z.string() });
+
+export type AiDraftInput = { clientName: string; brandContext: string; memo: string; platforms: Platform[] };
+export type AiDraftResult = { text: string; warnings: string[]; model: string };
+
+/** 選んだSNSのうち、いちばん厳しいきまりに合わせた長さとハッシュタグの数 */
+export function draftRule(platforms: Platform[]): string {
+  const has = (p: Platform) => platforms.includes(p);
+  const length = has("x") ? "日本語で全角130字以内（Xに合わせる）"
+    : has("threads") ? "450字以内（Threadsに合わせる）"
+    : "200〜600字程度";
+  const tags = has("threads") ? "ハッシュタグは1個まで"
+    : has("x") || has("facebook") ? "ハッシュタグは2個まで"
+    : has("instagram") ? "末尾にハッシュタグを5〜10個（#付き・半角スペース区切り）"
+    : "ハッシュタグは2個まで";
+  return `${length}。${tags}。`;
+}
+
+const DRAFT_SYSTEM = `あなたは日本の企業・店舗の SNS 投稿を書くコピーライターです。
+担当者の「伝えたいことのメモ」から、そのまま投稿できる本文を1つ書きます。
+この本文は、選ばれたすべての SNS に同じ文章で投稿されます。
+
+守ること：
+- メモにない事実（価格・日付・数字・キャンペーン・実績・お客様の声など）を作らない。分からないことは書かない。
+- 事業内容に書かれた禁止事項・表現の注意があれば必ず守る。誇大な表現（必ず・絶対・No.1 など根拠のない言い切り）は使わない。
+- 冒頭の1〜2行で、何のお知らせかが分かるようにする。改行で読みやすくし、絵文字は控えめに使う。
+- 出力は JSON のみ（text に本文）。`;
+
+export function buildDraftPrompt(input: AiDraftInput): string {
+  return [
+    `# クライアント\n${input.clientName}`,
+    input.brandContext.trim() ? `# 事業内容・表現の注意（スタッフが登録）\n${input.brandContext.trim()}` : "",
+    `# 伝えたいことのメモ\n${input.memo.trim()}`,
+    `# 投稿するSNS\n${input.platforms.map((p) => PLATFORM_LABELS[p]).join("・")}`,
+    `# 長さとハッシュタグ\n${draftRule(input.platforms)}`,
+  ].filter(Boolean).join("\n\n");
+}
+
+export async function writeDraft(input: AiDraftInput, client?: Anthropic): Promise<AiDraftResult> {
+  const { data, model } = await askJson(DRAFT_SYSTEM, buildDraftPrompt(input), DraftSchema, client);
+  const text = data.text.trim();
+  if (!text) throw new AIError("AIが本文を作れませんでした。メモを少し詳しく書いて、もう一度お試しください。");
+  const all = Object.fromEntries(input.platforms.map((p) => [p, text])) as Partial<Record<Platform, string>>;
+  return { text, warnings: checkWritten(all, input.platforms), model };
 }

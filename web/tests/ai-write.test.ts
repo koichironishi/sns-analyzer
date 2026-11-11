@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type Anthropic from "@anthropic-ai/sdk";
-import { buildWritePrompt, checkWritten, writePerPlatform } from "../src/lib/sns/ai-write.ts";
+import { buildWritePrompt, checkWritten, draftRule, writeDraft, writePerPlatform } from "../src/lib/sns/ai-write.ts";
 
 const fake = (json: unknown, stop = "end_turn") => {
   const calls: unknown[] = [];
@@ -39,4 +39,34 @@ test("書き分け：事業内容が空ならプロンプトに見出しを出�
 test("書き分け：AIが応答を控えたらエラー", async () => {
   const { client } = fake({}, "refusal");
   await assert.rejects(writePerPlatform({ ...input, platforms: ["x"] }, client), /控えました/);
+});
+
+test("本文作成：メモから全SNS共通の本文を1つ返し、プロンプトにメモと事業内容が入る", async () => {
+  const { client, calls } = fake({ text: "  秋の点検キャンペーン、10月末まで受付中です。\n#フラット7滋賀  " });
+  const r = await writeDraft({ clientName: "フラット7滋賀", brandContext: "価格は税込で表記する。", memo: "秋の点検キャンペーン。10月末まで。", platforms: ["instagram", "facebook"] }, client);
+  assert.equal(r.text, "秋の点検キャンペーン、10月末まで受付中です。\n#フラット7滋賀");
+  assert.deepEqual(r.warnings, []);
+  const prompt = (calls[0] as { messages: { content: string }[] }).messages[0].content;
+  assert.match(prompt, /税込/);
+  assert.match(prompt, /10月末/);
+  assert.match(prompt, /Instagram・Facebook/);
+});
+
+test("本文作成：いちばん厳しいSNSに長さとハッシュタグを合わせる", () => {
+  assert.match(draftRule(["instagram", "threads"]), /450字以内.*1個まで/);
+  assert.match(draftRule(["instagram", "facebook"]), /2個まで/);
+  assert.match(draftRule(["instagram"]), /5〜10個/);
+  assert.match(draftRule(["facebook", "x"]), /130字/);
+});
+
+test("本文作成：Threadsの上限を超えた本文は注意を返す", async () => {
+  const { client } = fake({ text: "あ".repeat(600) });
+  const r = await writeDraft({ clientName: "", brandContext: "", memo: "長いメモのテスト", platforms: ["threads", "facebook"] }, client);
+  assert.ok(r.warnings.some((w) => w.startsWith("Threads：文字数")));
+  assert.equal(r.warnings.length, 1);
+});
+
+test("本文作成：空の本文が返ったらエラー", async () => {
+  const { client } = fake({ text: "  " });
+  await assert.rejects(writeDraft({ clientName: "", brandContext: "", memo: "メモです。", platforms: ["facebook"] }, client), /作れませんでした/);
 });
