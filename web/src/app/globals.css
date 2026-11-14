@@ -812,10 +812,11 @@ details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bot
   .post-main { grid-template-columns: 72px minmax(0, 1fr); }
   .post-thumb { width: 72px; }
 }
-/* 押せる領域を44px以上に（DADS：ボタン・開閉のターゲット）。閉じているときは枠を軽くして、1件の高さを抑える */
-.post-card.compact .post-preview { padding: 0 var(--s3); background: var(--surface); }
-.post-card.compact .post-preview > summary { min-height: 44px; font-size: var(--fs-sm); }
-.post-card.compact .post-preview[open] { padding-bottom: var(--s3); background: var(--surface-2); }
+/* 「確認」で開く中身（画像と全文）。ボタンの行の下に出す */
+.post-card.compact .post-preview { padding: var(--s1) var(--s3) var(--s3); background: var(--surface-2); }
+.preview-toggle::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
+.preview-toggle[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+@media (prefers-reduced-motion: reduce) { .preview-toggle::after { transition: none; } }
 .post-foot > a.btn { display: inline-flex; align-items: center; }
 
 /* CSV一括予約 */
@@ -843,9 +844,10 @@ details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bot
 /* 何も選んでいないときは、一覧の上に固定しない（スマートフォンで画面を占めないように） */
 .select-bar:not(.active) { position: static; box-shadow: none; }
 .post-section { margin-top: 0; }
-/* 削除は、編集・複製から離して右端に置く（押し間違いを防ぐ） */
-.post-foot > .stack { flex: 1 1 auto; }
-.post-foot .row > .btn.danger { margin-left: auto; }
+/* 確認・複製・（編集）・削除を1行に並べる */
+.post-foot { flex-wrap: nowrap; align-items: flex-start; }
+.post-foot > .stack { flex: 1 1 auto; min-width: 0; }
+.post-foot .row { gap: var(--s2); }
 
 /* スマートフォン：本文の列が狭くならないよう、1行目に「選択・画像・状態と日時」、その下に題名と投稿先を全幅で並べる */
 @media (max-width: 600px) {

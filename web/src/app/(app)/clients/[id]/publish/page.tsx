@@ -12,6 +12,7 @@ import { PageHead } from "@/components/report-ui";
 import { PostActions } from "@/components/post-actions";
 import { PublishViewSwitch } from "@/components/publish-view-switch";
 import { PostSelection } from "@/components/post-selection";
+import { PreviewToggle } from "@/components/preview-toggle";
 
 export const metadata: Metadata = { title: "投稿" };
 
@@ -59,6 +60,8 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
   const { title, rest } = splitText(post.text);
   const targets = resolveTargets(post, conns);
   const first = post.media[0];
+  const openPreview = post.status === "pending";
+  const previewDetail = post.kind === "story" ? `ストーリーズ${post.media.length}枚・この順に投稿` : post.media.length ? `画像${post.media.length}枚・全文` : "全文";
   return (
     <li className="card post-card compact" id={`post-${post.id}`}>
       <div className="post-main">
@@ -122,8 +125,16 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
           {post.reviewed_at && post.status !== "rejected" && post.status !== "pending" && <p className="small muted" style={{ margin: "4px 0 0" }}>承認：{post.reviewed_by_name}（{fmtDateTime(post.reviewed_at)}）</p>}
         </div>
       </div>
-      <details className="post-preview" open={post.status === "pending"}>
-        <summary>{post.kind === "story" ? `中身を確認する（ストーリーズ${post.media.length}枚・この順に投稿）` : post.media.length ? `中身を確認する（画像${post.media.length}枚・全文）` : "中身を確認する（全文）"}</summary>
+      <div className="post-foot">
+        {/* 確認：画像を順番どおり大きく並べたものと全文を、下に開く（承認待ちは最初から開く） */}
+        <PreviewToggle panelId={`pv-${post.id}`} initialOpen={openPreview} detail={previewDetail} />
+        {/* 複製：本文・画像・投稿先を入れた新しい投稿を作る（画像は保存時に複製する。日時は入れない）。削除より前に置く */}
+        {post.status !== "publishing" && (
+          <Link className="btn sm" href={`/clients/${clientId}/publish/new?from=${post.id}`}>複製<span className="sr-only">（「{title || "本文なし"}」の本文・画像・投稿先を入れた新しい投稿を作ります）</span></Link>
+        )}
+        <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
+      </div>
+      <div className="post-preview" id={`pv-${post.id}`} hidden={!openPreview}>
         {post.media.length > 0 && (
           <ol className="preview-grid" aria-label="投稿する画像（この順番で投稿されます）">
             {post.media.map((m, i) => (
@@ -142,13 +153,6 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
             <p style={{ whiteSpace: "pre-wrap", margin: 0, overflowWrap: "anywhere" }}>{publishTextFor(post, p) || <span className="muted">（本文なし）</span>}</p>
           </div>
         ))}
-      </details>
-      <div className="post-foot">
-        {/* 複製：本文・画像・投稿先を入れた新しい投稿を作る（画像は保存時に複製する。日時は入れない）。削除より前に置く */}
-        {post.status !== "publishing" && (
-          <Link className="btn sm" href={`/clients/${clientId}/publish/new?from=${post.id}`}>複製<span className="sr-only">（「{title || "本文なし"}」の本文・画像・投稿先を入れた新しい投稿を作ります）</span></Link>
-        )}
-        <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
       </div>
     </li>
   );
