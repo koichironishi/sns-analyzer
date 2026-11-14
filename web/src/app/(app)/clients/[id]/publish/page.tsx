@@ -89,11 +89,21 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
               const r = post.results?.[t.key];
               const conn = conns.find((c) => c.platform === p && c.external_id === t.externalId);
               const name = conn ? accountLabel(p, conn.username, conn.nickname) : null;
+              // 投稿済みでリンクがあるときは、SNSの名前そのものを投稿へのリンクにする（アカウント名は、同じSNSに複数出したときだけ）
+              if (r?.state === "published" && r.permalink) {
+                const dup = targets.filter((x) => x.platform === p).length > 1;
+                return (
+                  <li key={t.key}>
+                    <i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" />
+                    <a href={r.permalink} target="_blank" rel="noopener noreferrer">{PLATFORM_LABELS[p]}{dup && name && `（${name}）`}<span className="sr-only">（投稿済み・SNSの投稿を新しいタブで開きます）</span></a>
+                  </li>
+                );
+              }
               return (
                 <li key={t.key}>
                   <i className="dot" style={{ background: `var(--c-${p})` }} aria-hidden="true" />
                   {PLATFORM_LABELS[p]}{name && <span className="muted">（{name}）</span>}
-                  {r?.state === "published" && <> <span className="badge good">投稿済み</span>{r.permalink && <> <a href={r.permalink} target="_blank" rel="noopener noreferrer">SNSで見る<span className="sr-only">（{PLATFORM_LABELS[p]}・新しいタブで開きます）</span></a></>}</>}
+                  {r?.state === "published" && <> <span className="badge good">投稿済み</span></>}
                   {r?.state === "failed" && <> <span className="badge warn">失敗</span></>}
                   {!r && textFor(post, p) !== post.text && <span className="muted">（専用の本文あり）</span>}
                 </li>
