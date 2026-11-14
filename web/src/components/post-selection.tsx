@@ -32,15 +32,16 @@ export function PostSelection({ clientId, total, children }: { clientId: string;
 
   return (
     <div ref={ref} onChange={recount}>
-      <div className="select-bar" role="toolbar" aria-label="選んだ投稿の操作">
+      <div className={`select-bar${count > 0 ? " active" : ""}`} role="toolbar" aria-label="選んだ投稿の操作">
         <label className="check">
           <input type="checkbox" checked={total > 0 && count === total} ref={(el) => { if (el) el.indeterminate = count > 0 && count < total; }}
             onChange={(e) => setAll(e.target.checked)} />
           すべて選択
         </label>
         <span className="small" aria-live="polite">{count ? `${count}件を選択中` : `${total}件`}</span>
+        {/* 削除は選んでいるときだけ出す（何も選んでいないときに赤いボタンが常に目に入らないように） */}
         {count > 0 && <button type="button" className="btn" onClick={() => setAll(false)}>選択を解除</button>}
-        <button type="button" className="btn danger" onClick={remove} disabled={busy}>{busy ? "削除しています…" : "選んだ投稿を削除"}</button>
+        {(count > 0 || busy) && <button type="button" className="btn danger" onClick={remove} disabled={busy}>{busy ? "削除しています…" : `選んだ${count}件を削除`}</button>}
       </div>
       {msg && <p className={`msg ${msg.kind}`} role={msg.kind === "error" ? "alert" : "status"}>{msg.text}</p>}
       {children}

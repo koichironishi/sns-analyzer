@@ -113,7 +113,7 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
         </div>
       </div>
       <details className="post-preview" open={post.status === "pending"}>
-        <summary>{post.kind === "story" ? `中身を確認する（ストーリーズ${post.media.length}枚・この順に投稿）` : `中身を確認する（画像${post.media.length}枚・全文）`}</summary>
+        <summary>{post.kind === "story" ? `中身を確認する（ストーリーズ${post.media.length}枚・この順に投稿）` : post.media.length ? `中身を確認する（画像${post.media.length}枚・全文）` : "中身を確認する（全文）"}</summary>
         {post.media.length > 0 && (
           <ol className="preview-grid" aria-label="投稿する画像（この順番で投稿されます）">
             {post.media.map((m, i) => (
@@ -136,7 +136,7 @@ function PostCard({ post, clientId, isStaff, conns }: { post: ScheduledPost; cli
       <div className="post-foot">
         {/* 複製：本文・画像・投稿先を入れた新しい投稿を作る（画像は保存時に複製する。日時は入れない）。削除より前に置く */}
         {post.status !== "publishing" && (
-          <Link className="btn" href={`/clients/${clientId}/publish/new?from=${post.id}`}>複製<span className="sr-only">（「{title || "本文なし"}」の本文・画像・投稿先を入れた新しい投稿を作ります）</span></Link>
+          <Link className="btn sm" href={`/clients/${clientId}/publish/new?from=${post.id}`}>複製<span className="sr-only">（「{title || "本文なし"}」の本文・画像・投稿先を入れた新しい投稿を作ります）</span></Link>
         )}
         <PostActions clientId={clientId} postId={post.id} status={post.status} isStaff={isStaff} />
       </div>
@@ -206,7 +206,7 @@ export default async function PublishPage({ params, searchParams }: PageProps<"/
           </Link>
         ))}
       </nav>
-      <section aria-labelledby="h-posts">
+      <section className="post-section" aria-labelledby="h-posts">
         <h2 id="h-posts" className="sr-only">{current.label}（{lists[tab].length}件）</h2>
         {shown.length === 0 ? <p className="muted">{current.empty}</p> : (
           <PostSelection clientId={id} total={shown.length}>

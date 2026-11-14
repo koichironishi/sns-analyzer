@@ -840,6 +840,29 @@ details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bot
   .post-main { grid-template-columns: 44px 72px minmax(0, 1fr); }
 }
 
+/* 何も選んでいないときは、一覧の上に固定しない（スマートフォンで画面を占めないように） */
+.select-bar:not(.active) { position: static; box-shadow: none; }
+.post-section { margin-top: 0; }
+/* 削除は、編集・複製から離して右端に置く（押し間違いを防ぐ） */
+.post-foot > .stack { flex: 1 1 auto; }
+.post-foot .row > .btn.danger { margin-left: auto; }
+
+/* スマートフォン：本文の列が狭くならないよう、1行目に「選択・画像・状態と日時」、その下に題名と投稿先を全幅で並べる */
+@media (max-width: 600px) {
+  .publish-bar > .row { width: 100%; flex-wrap: nowrap; }
+  .publish-bar > .row > .btn { flex: 1 1 0; justify-content: center; text-align: center; padding-inline: 8px; }
+  .status-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .status-tabs .tab { justify-content: space-between; gap: 6px; padding: 8px 10px; }
+  .post-card.compact { padding: var(--s3); }
+  .post-main { grid-template-columns: 44px 64px minmax(0, 1fr); column-gap: var(--s3); row-gap: 0; }
+  .post-thumb { width: 64px; }
+  .post-check, .post-thumb { grid-row: 1; }
+  .post-body { display: contents; }
+  .post-body > * { grid-column: 1 / -1; }
+  .post-body > .post-meta { grid-column: 3; grid-row: 1; align-self: center; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .post-title { margin-top: var(--s3); }
+}
+
 /* クライアントの画面では、フッターを本文（main.content）の一番下に入れる。外側（.frame-main）のフッターは出さない */
 body:has(.content > .footer) .frame-main > .footer { display: none; }
 .content > .footer { max-width: none; margin: var(--s7) 0 0; padding: var(--s4) 0 0; }
