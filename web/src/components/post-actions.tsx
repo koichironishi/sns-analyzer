@@ -4,7 +4,7 @@ import { useState } from "react";
 import { approvePost, cancelPost, deletePost, prepareRetry, rejectPost } from "@/app/(app)/clients/[id]/publish/actions";
 
 /** 予約の取り消し・再投稿・削除 */
-export function PostActions({ clientId, postId, status, isStaff }: { clientId: string; postId: string; status: string; isStaff: boolean }) {
+export function PostActions({ clientId, postId, status, isStaff, afterDelete }: { clientId: string; postId: string; status: string; isStaff: boolean; afterDelete?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,10 @@ export function PostActions({ clientId, postId, status, isStaff }: { clientId: s
       {["failed", "partial"].includes(status) && <button type="button" className="btn sm primary" disabled={Boolean(busy)} onClick={retry}>失敗したSNSに再投稿</button>}
       {status !== "publishing" && (
         <button type="button" className="btn sm danger" disabled={Boolean(busy)} onClick={() => {
-          if (window.confirm("この投稿の記録と画像を削除します。SNS上に公開済みの投稿は削除されません。よろしいですか？")) run("削除しています…", () => deletePost(clientId, postId));
+          if (!window.confirm("この投稿の記録と画像を削除します。SNS上に公開済みの投稿は削除されません。よろしいですか？")) return;
+          // 確認のページで消したときは、投稿がなくなるので一覧に戻る
+          if (afterDelete) run("削除しています…", () => deletePost(clientId, postId), async () => { router.push(afterDelete); });
+          else run("削除しています…", () => deletePost(clientId, postId));
         }}>削除</button>
       )}
       <span aria-live="polite" className="small muted">{busy ? <><span className="spinner" aria-hidden="true" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 6 }} />{busy}</> : null}</span>

@@ -812,11 +812,8 @@ details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bot
   .post-main { grid-template-columns: 72px minmax(0, 1fr); }
   .post-thumb { width: 72px; }
 }
-/* 「確認」で開く中身（画像と全文）。ボタンの行の下に出す */
+/* 中身（画像と全文）。確認のページと、一覧の承認待ちで出す */
 .post-card.compact .post-preview { padding: var(--s1) var(--s3) var(--s3); background: var(--surface-2); }
-.preview-toggle::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
-.preview-toggle[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
-@media (prefers-reduced-motion: reduce) { .preview-toggle::after { transition: none; } }
 .post-foot > a.btn { display: inline-flex; align-items: center; }
 
 /* CSV一括予約 */
@@ -863,6 +860,15 @@ details.more.ai-draft { margin-top: 0; border-top: 0; padding-top: 0; border-bot
   .post-body > * { grid-column: 1 / -1; }
   .post-body > .post-meta { grid-column: 3; grid-row: 1; align-self: center; flex-direction: column; align-items: flex-start; gap: 2px; }
   .post-title { margin-top: var(--s3); }
+}
+
+/* 投稿の確認のページ：選ぶ欄がないので、画像と本文の2列 */
+.back-link { margin: 0 0 var(--s2); }
+.back-link a { display: inline-flex; align-items: center; min-height: 44px; }
+.post-card.detail .post-main { grid-template-columns: 96px minmax(0, 1fr); }
+@media (max-width: 600px) {
+  .post-card.detail .post-main { grid-template-columns: 64px minmax(0, 1fr); }
+  .post-card.detail .post-body > .post-meta { grid-column: 2; }
 }
 
 /* クライアントの画面では、フッターを本文（main.content）の一番下に入れる。外側（.frame-main）のフッターは出さない */
