@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { listAudit, listClients } from "@/lib/sns/store";
+import { LOGIN_RETENTION_DAYS, listAudit, listClients, loginFailures } from "@/lib/sns/store";
 import { fmtDateTime } from "@/lib/format";
 import Link from "next/link";
 
@@ -24,7 +24,11 @@ const ACTIONS: Record<string, string> = {
   "alert.prep": "月初の準備が完了", "monthly.ai": "月初の準備（AI分析）",
   "post.ai_draft": "AIで本文を作成", "post.ai_write": "AIでSNSごとに書き分け", "collect.after_connect": "連携直後の収集",
   "import.key_issue": "外部ツールの鍵を発行", "import.key_revoke": "外部ツールの鍵を無効化",
+  "auth.login": "ログイン", "auth.login_failed": "ログイン失敗", "auth.no_access": "ログイン（SNSの権限なし）",
 };
+
+/** 直近24時間のログイン失敗がこの件数以上なら、警告として目立たせる */
+const FAIL_WARN = 10;
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 const jst = (iso: string) => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -44,13 +48,15 @@ function dayAndTime(iso: string): { day: string; time: string } {
 export default async function AuditPage({ searchParams }: PageProps<"/admin/audit">) {
   await requireAdmin();
   const sp = await searchParams;
-  const all = sp.all === "1";
+  // 表示：人の操作（既定）／ログイン／自動の処理も含める
+  const view: "human" | "login" | "all" = sp.view === "login" ? "login" : sp.all === "1" || sp.view === "all" ? "all" : "human";
   const db = await createClient();
-  const clients = await listClients(db);
-  const clientId = typeof sp.client === "string" && clients.some((c) => c.id === sp.client) ? sp.client : "";
-  const rows = await listAudit(db, 500, { includeSystem: all, clientId: clientId || undefined });
+  const [clients, fails] = await Promise.all([listClients(db), loginFailures(db)]);
+  const clientId = view !== "login" && typeof sp.client === "string" && clients.some((c) => c.id === sp.client) ? sp.client : "";
+  const rows = await listAudit(db, 500, { kind: view, clientId: clientId || undefined });
   const name = new Map(clients.map((c) => [c.id, c.name]));
-  const href = (withAll: boolean) => `/admin/audit?${new URLSearchParams({ ...(withAll ? { all: "1" } : {}), ...(clientId ? { client: clientId } : {}) })}`.replace(/\?$/, "");
+  const href = (v: typeof view) => `/admin/audit?${new URLSearchParams({ ...(v !== "human" ? { view: v } : {}), ...(clientId && v !== "login" ? { client: clientId } : {}) })}`.replace(/\?$/, "");
+  const all = view === "all";
   const label = (a: string) => ACTIONS[a] ?? a;
   const clientName = (id: string | null) => (id ? name.get(id) ?? "（削除済み）" : null);
   // スマートフォン用：日付ごとにまとめる（新しい順のまま）
@@ -63,14 +69,22 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
   return (
     <main id="main" className="app-main" tabIndex={-1}>
       <h1 className="page-title">操作ログ</h1>
-      <p className="sub">直近500件。ログインは MEO と共通のため、ログインの記録は Supabase の認証ログで確認してください。</p>
+      <p className="sub">直近500件。「ログイン」には SNS のログイン画面での記録が出ます（MEO の画面からのログインは MEO の記録を見てください）。</p>
+      {/* ログインの失敗は一覧に並べるだけでは埋もれるので、件数と狙われている宛先を先頭に出す */}
+      <div className={`msg${fails.total >= FAIL_WARN ? " error" : ""}`} role={fails.total >= FAIL_WARN ? "alert" : "status"}>
+        <strong>直近24時間のログイン失敗：{fails.total}件</strong>
+        {fails.total >= FAIL_WARN && <>（{FAIL_WARN}件以上。総当たりや、流出したパスワードの使い回しを受けている可能性があります）</>}
+        {fails.top.length > 0 && <span className="small">　多い宛先：{fails.top.map((t) => `${t.email}（${t.count}件）`).join("、")}</span>}
+      </div>
       <nav className="tabs audit-tabs" aria-label="表示する記録">
-        <Link className="tab" href={href(false)} aria-current={all ? undefined : "page"}>人の操作</Link>
-        <Link className="tab" href={href(true)} aria-current={all ? "page" : undefined}>自動の処理も含める</Link>
+        <Link className="tab" href={href("human")} aria-current={view === "human" ? "page" : undefined}>人の操作</Link>
+        <Link className="tab" href={href("login")} aria-current={view === "login" ? "page" : undefined}>ログイン</Link>
+        <Link className="tab" href={href("all")} aria-current={all ? "page" : undefined}>自動の処理も含める</Link>
       </nav>
-      {!all && <p className="hint" style={{ marginTop: 0 }}>自動収集・予約投稿の処理・知らせのメール・月初の準備の記録は「自動の処理も含める」で表示します。</p>}
-      <form className="audit-filter" method="get" action="/admin/audit">
-        {all && <input type="hidden" name="all" value="1" />}
+      {view === "human" && <p className="hint" style={{ marginTop: 0 }}>自動収集・予約投稿の処理・知らせのメール・月初の準備の記録は「自動の処理も含める」で表示します。</p>}
+      {view === "login" && <p className="hint" style={{ marginTop: 0 }}>SNS のログイン画面での成功・失敗・権限なしの記録です。IP アドレスを含むため、{LOGIN_RETENTION_DAYS}日で消えます。</p>}
+      {view !== "login" && <form className="audit-filter" method="get" action="/admin/audit">
+        {all && <input type="hidden" name="view" value="all" />}
         <div>
           <label htmlFor="audit-client">クライアント</label>
           <select id="audit-client" name="client" defaultValue={clientId}>
@@ -79,7 +93,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
           </select>
         </div>
         <button type="submit" className="btn">絞り込む</button>
-      </form>
+      </form>}
       <p className="small muted" aria-live="polite">{clientId ? `${name.get(clientId)}の記録` : "すべての記録"}：{rows.length}件</p>
       {rows.length === 0 ? <p className="muted">記録はありません。</p> : (
         <>

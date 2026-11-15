@@ -478,3 +478,30 @@ end $$;
 
 -- sns_connections / sns_deletion_requests / sns_import_keys はポリシーを作らない（service_role 専用）。
 -- 接続状態を画面に出すときは、サーバー側で service_role 経由で取得し、トークンは返さない。
+
+-- ---------- 操作ログを書き換え・削除させない（2026-11-16） ----------
+-- RLS で書き込みは service_role だけにしているが、service_role（アプリ）や SQL Editor からなら書き換えも削除もできた。
+-- 記録は「後から誰が何をしたか」を確かめるためのもの。消せると意味がなくなるので、データベース側で止める。
+--   - 書き換え（update）と全消し（truncate）は、だれにもさせない
+--   - 削除は、90日を過ぎたログインの記録（auth.*）だけ許す。IP アドレスを必要以上に持たないため（日次の収集で整理する）
+-- 本当に消す必要が出たとき（法的な削除の求めなど）は、管理者が SQL Editor でこのトリガーを一時的に外して行う。
+create or replace function sns_audit_guard() returns trigger language plpgsql set search_path = '' as $$
+begin
+  if tg_op = 'DELETE' and old.action like 'auth.%' and old.at < now() - interval '90 days' then
+    return old;
+  end if;
+  raise exception '操作ログは書き換え・削除できません（%）', tg_op using errcode = '42501';
+end $$;
+
+drop trigger if exists sns_audit_no_update on sns_audit;
+create trigger sns_audit_no_update before update or delete on sns_audit
+  for each row execute function sns_audit_guard();
+
+create or replace function sns_audit_no_truncate() returns trigger language plpgsql set search_path = '' as $$
+begin
+  raise exception '操作ログは全消しできません' using errcode = '42501';
+end $$;
+
+drop trigger if exists sns_audit_no_truncate on sns_audit;
+create trigger sns_audit_no_truncate before truncate on sns_audit
+  for each statement execute function sns_audit_no_truncate();

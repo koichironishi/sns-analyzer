@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { json, siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runScheduledCollection } from "@/lib/sns/collect";
-import { audit, getConnectionSecrets } from "@/lib/sns/store";
+import { audit, getConnectionSecrets, pruneLoginRecords } from "@/lib/sns/store";
 import { alertedKeys, markAlerted, sendAlert } from "@/lib/notify";
 import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORM_LABELS, todayIn } from "@/lib/sns/models";
@@ -28,6 +28,7 @@ async function run(req: Request) {
   const started = Date.now();
   const r = await runScheduledCollection(admin, started + (maxDuration - 30) * 1000);
   const failed = r.logs.filter((l) => !l.ok).length;
+  await pruneLoginRecords(admin);
   await audit(admin, null, "cron.collect", null, `${r.logs.length}件の接続を処理（失敗 ${failed}件・残り ${r.remaining}件）${r.purge ? `・${r.purge}` : ""}`);
   // 知らせの失敗で収集の結果を返せなくならないように
   try {

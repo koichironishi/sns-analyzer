@@ -164,3 +164,15 @@ test("複数アカウント：同じSNSに別のアカウントの接続と収�
   const t = await db.query<{ targets: unknown }>(`select targets from sns_scheduled_posts where client_id = $1 limit 1`, [IDS.clientA]);
   assert.deepEqual(t.rows[0].targets, []);
 });
+
+test("操作ログ：書き換え・削除・全消しはできない。90日を過ぎたログインの記録だけ消せる", async () => {
+  await db.query(`insert into sns_audit (action, detail) values ('post.delete', 'x')`);
+  await db.query(`insert into sns_audit (action, at) values ('auth.login_failed', now() - interval '91 days'), ('auth.login', now() - interval '10 days'), ('post.save', now() - interval '400 days')`);
+  await assert.rejects(db.query(`update sns_audit set detail = 'changed' where action = 'post.delete'`), /書き換え・削除できません/);
+  await assert.rejects(db.query(`delete from sns_audit where action = 'post.delete'`), /書き換え・削除できません/);
+  await assert.rejects(db.query(`delete from sns_audit where action = 'post.save'`), /書き換え・削除できません/, "古くてもログイン以外は消せない");
+  await assert.rejects(db.query(`delete from sns_audit where action = 'auth.login'`), /書き換え・削除できません/, "90日以内のログインは消せない");
+  await assert.rejects(db.query(`truncate sns_audit`), /全消しできません/);
+  const del = await db.query(`delete from sns_audit where action like 'auth.%' and at < now() - interval '90 days'`);
+  assert.equal(del.affectedRows, 1);
+});

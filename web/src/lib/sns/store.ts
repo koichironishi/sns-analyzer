@@ -11,6 +11,7 @@ import type { Target } from "./publish/targets.ts";
 import { DEFAULT_TZ, PLATFORMS, addDays, isPlatform, todayIn, type FollowerSeries, type MediaType, type Platform, type Post, type Series } from "./models.ts";
 import type { ConsentRow, DeletionService } from "./privacy.ts";
 import { DELETION_PLATFORMS } from "./privacy.ts";
+import { openSecret, sealSecret } from "../secret-box.ts";
 import type { AiResult } from "./ai.ts";
 
 type Db = SupabaseClient;
@@ -455,7 +456,11 @@ export async function setNickname(admin: Db, clientId: string, platform: Platfor
 export async function getConnectionSecrets(admin: Db, clientId?: string): Promise<ConnectionSecret[]> {
   let q = admin.from("sns_connections").select("*");
   if (clientId) q = q.eq("client_id", clientId);
-  return check(await q, "接続情報の読み込み") as ConnectionSecret[];
+  // トークンは暗号化して保存している（lib/secret-box.ts）。読み出したここで開く。
+  // 開けないとき（鍵の入れ違いなど）は空にする。API が失敗し、「連携し直す」で回復できる
+  return (check(await q, "接続情報の読み込み") as ConnectionSecret[]).map((c) => ({
+    ...c, access_token: openSecret(c.access_token) ?? "", refresh_token: openSecret(c.refresh_token),
+  }));
 }
 
 export async function saveConnection(admin: Db, clientId: string, platform: Platform, c: {
@@ -463,9 +468,9 @@ export async function saveConnection(admin: Db, clientId: string, platform: Plat
   refreshToken?: string | null; canPublish?: boolean; authKind?: "token" | "oauth";
 }): Promise<void> {
   check(await admin.from("sns_connections").upsert({
-    client_id: clientId, platform, external_id: c.externalId, username: c.username || null, access_token: c.accessToken,
+    client_id: clientId, platform, external_id: c.externalId, username: c.username || null, access_token: sealSecret(c.accessToken),
     token_expires_at: c.expiresAt, connected_user_id: c.connectedUserId, status: "connected", last_error: null,
-    connected_at: new Date().toISOString(), refresh_token: c.refreshToken ?? null, can_publish: c.canPublish ?? false,
+    connected_at: new Date().toISOString(), refresh_token: sealSecret(c.refreshToken), can_publish: c.canPublish ?? false,
     auth_kind: c.authKind ?? "token",
   }, { onConflict: "client_id,platform,external_id" }), "接続情報の保存");
 }
@@ -475,7 +480,9 @@ export async function updateConnection(admin: Db, clientId: string, platform: Pl
   access_token: string; token_expires_at: string | null; status: "connected" | "error"; last_error: string | null;
   refresh_token: string | null;
 }>): Promise<void> {
-  check(await admin.from("sns_connections").update(patch).eq("client_id", clientId).eq("platform", platform).eq("external_id", externalId), "接続情報の更新");
+  const sealed = { ...patch, ...("access_token" in patch ? { access_token: sealSecret(patch.access_token!) } : {}),
+    ...("refresh_token" in patch ? { refresh_token: sealSecret(patch.refresh_token) } : {}) };
+  check(await admin.from("sns_connections").update(sealed).eq("client_id", clientId).eq("platform", platform).eq("external_id", externalId), "接続情報の更新");
 }
 
 export async function deleteConnection(admin: Db, clientId: string, platform: Platform, externalId: string): Promise<void> {
@@ -677,12 +684,36 @@ export type AuditRow = { id: number; at: string; actor_email: string | null; ip:
 
 /** 自動の処理が残す記録（定期処理・知らせのメール・月初の準備）。操作ログでは、人の操作が埋もれないよう既定で隠す */
 export const SYSTEM_AUDIT_PREFIXES = ["cron.", "alert.", "monthly.ai", "collect.after_connect"];
+/** ログインの記録（auth.login・auth.login_failed・auth.no_access）。件数が多く IP を含むため、ほかの操作と分けて出し、90日で消す */
+export const LOGIN_AUDIT_PREFIX = "auth.";
+export const LOGIN_RETENTION_DAYS = 90;
 
-export async function listAudit(db: Db, limit = 300, opts: { includeSystem?: boolean; clientId?: string } = {}): Promise<AuditRow[]> {
+/** kind：human＝人の操作（ログインと自動の処理を除く）／all＝自動の処理も含む（ログインは除く）／login＝ログインの記録だけ */
+export async function listAudit(db: Db, limit = 300, opts: { kind?: "human" | "all" | "login"; clientId?: string } = {}): Promise<AuditRow[]> {
+  const kind = opts.kind ?? "human";
   let q = db.from("sns_audit").select("id,at,actor_email,ip,action,client_id,detail");
   if (opts.clientId) q = q.eq("client_id", opts.clientId);
-  if (!opts.includeSystem) for (const p of SYSTEM_AUDIT_PREFIXES) q = q.not("action", "like", `${p}%`);
+  if (kind === "login") q = q.like("action", `${LOGIN_AUDIT_PREFIX}%`);
+  else q = q.not("action", "like", `${LOGIN_AUDIT_PREFIX}%`);
+  if (kind === "human") for (const p of SYSTEM_AUDIT_PREFIXES) q = q.not("action", "like", `${p}%`);
   return check(await q.order("at", { ascending: false }).limit(limit), "操作ログの読み込み") as AuditRow[];
+}
+
+/** 直近 hours 時間のログイン失敗。件数と、狙われているメールアドレスの上位 */
+export async function loginFailures(db: Db, hours = 24): Promise<{ total: number; top: { email: string; count: number }[] }> {
+  const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+  const rows = check(await db.from("sns_audit").select("actor_email").eq("action", "auth.login_failed").gte("at", since).limit(5000),
+    "ログインの記録の読み込み") as { actor_email: string | null }[];
+  const n = new Map<string, number>();
+  for (const r of rows) n.set(r.actor_email ?? "（不明）", (n.get(r.actor_email ?? "（不明）") ?? 0) + 1);
+  return { total: rows.length, top: [...n].map(([email, count]) => ({ email, count })).sort((a, b) => b.count - a.count).slice(0, 5) };
+}
+
+/** 90日より古いログインの記録を消す（IP を必要以上に持たない）。ほかの操作ログは消さない。データベース側もこれ以外の削除は止めている */
+export async function pruneLoginRecords(admin: Db): Promise<void> {
+  const cutoff = new Date(Date.now() - LOGIN_RETENTION_DAYS * 86_400_000).toISOString();
+  const { error } = await admin.from("sns_audit").delete().like("action", `${LOGIN_AUDIT_PREFIX}%`).lt("at", cutoff);
+  if (error) console.error("ログインの記録の整理に失敗", error.message);
 }
 
 /** クライアント一覧用：全クライアントの接続状況（トークンは返さない） */

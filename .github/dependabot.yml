@@ -1,0 +1,32 @@
+# 依存ライブラリの更新を自動で拾う（MEO と同じ設定。2026-11-16）。
+#
+# 脆弱性が公表されても、人が見に行かないと気づけない状態だったので入れた
+# （入れた日に Next.js の重大な脆弱性が見つかり、16.3.3 → 16.4.6 に上げた）。
+# 毎週月曜の朝にまとめて PR が立つ。開いて、壊れていないことを確かめて取り込む。
+#
+# グループにまとめているのは、小さな PR が大量に立つと見なくなるため。
+# セキュリティ修正だけは別で立ち、まとめない（埋もれさせない）。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions 自体も古くなる
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
+    commit-message:
+      prefix: "chore(ci)"

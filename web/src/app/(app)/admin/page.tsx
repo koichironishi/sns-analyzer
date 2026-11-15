@@ -7,6 +7,7 @@ import { getAppSettings } from "@/lib/sns/store";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
 import { mailConfigured, recipients } from "@/lib/notify";
+import { secretsEncrypted } from "@/lib/secret-box";
 import { saveAppSettings, sendTestAlert } from "./actions";
 
 export const metadata: Metadata = { title: "全体設定" };
@@ -69,6 +70,13 @@ export default async function AdminPage() {
           <div className="form-actions"><SubmitButton pendingText="送っています…">テスト送信</SubmitButton></div>
         </section>
       </ActionForm>
+      {/* 鍵が未設定でもアプリは平文のまま動く（止めるほうが害が大きい）。だからこそ状態を出す */}
+      <section className="card" aria-labelledby="h-secret">
+        <h2 id="h-secret" style={{ fontSize: "var(--fs-lg)", margin: 0 }}>連携トークンの保護 <span className={`badge ${secretsEncrypted() ? "good" : "warn"}`}>{secretsEncrypted() ? "有効" : "無効"}</span></h2>
+        {secretsEncrypted()
+          ? <p>Instagram・Facebook・Threads のトークンを暗号化して保存しています。鍵はデータベースの外（Vercel の環境変数）にあります。</p>
+          : <div className="msg error" role="alert">暗号化されていません。Vercel の環境変数に TOKEN_ENCRYPTION_KEY（base64 で32バイト）を追加し、デプロイし直してください。</div>}
+      </section>
     </main>
   );
 }
