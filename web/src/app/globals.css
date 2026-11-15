@@ -937,3 +937,29 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 .pv-storybar i { flex: 1; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .4); }
 .pv-storybar i.on { background: #fff; }
 .pv-story .pv-noimg { color: #ccc; }
+
+/* 操作ログ：広い画面は表、960px未満（スマートフォン・タブレット・狭いウィンドウ）は日付ごとのリスト */
+.audit-tabs { margin-bottom: var(--s3); }
+.audit-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s3); margin: var(--s4) 0 var(--s2); }
+.audit-filter label { margin-top: 0; }
+.audit-filter select { min-height: 44px; min-width: 16em; max-width: 100%; }
+.audit-list { display: none; }
+.audit-day { font-size: var(--fs-md); margin: var(--s4) 0 var(--s2); }
+.audit-day .small { margin-left: 6px; font-weight: 400; }
+.audit-list ul { list-style: none; margin: 0; padding: 0; }
+.audit-item { padding: var(--s3) var(--s4); }
+.audit-item + .audit-item { border-top: 1px solid var(--grid); }
+.audit-item p { margin: 0; }
+.audit-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+.audit-time { font-variant-numeric: tabular-nums; color: var(--text-2); flex: none; }
+.audit-who { display: flex; flex-wrap: wrap; gap: 0 var(--s2); margin-top: 2px !important; overflow-wrap: anywhere; }
+.audit-detail { margin-top: 4px !important; overflow-wrap: anywhere; line-height: 1.6; }
+.audit-table td.audit-nowrap { white-space: nowrap; }
+.audit-table td.audit-detail-cell { min-width: 16em; overflow-wrap: anywhere; }
+@media (max-width: 959px) {
+  .audit-table { display: none; }
+  .audit-list { display: block; }
+  .audit-filter > div { flex: 1 1 100%; }
+  .audit-filter select { width: 100%; min-width: 0; }
+  .audit-filter .btn { width: 100%; }
+}

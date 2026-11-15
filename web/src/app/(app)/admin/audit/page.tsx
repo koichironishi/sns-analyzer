@@ -22,37 +22,102 @@ const ACTIONS: Record<string, string> = {
   "account.nickname": "アカウントの呼び名を変更", "client.meo": "MEO との結び付けを変更", "monthly.sent": "月次レポートを送付", "alert.test": "知らせのメールをテスト送信",
   "alert.mail": "知らせのメールを送信", "alert.collect": "収集エラーを通知", "alert.token": "連携の期限を通知", "alert.monthly": "月次レポートの送付を通知",
   "alert.prep": "月初の準備が完了", "monthly.ai": "月初の準備（AI分析）",
+  "post.ai_draft": "AIで本文を作成", "post.ai_write": "AIでSNSごとに書き分け", "collect.after_connect": "連携直後の収集",
+  "import.key_issue": "外部ツールの鍵を発行", "import.key_revoke": "外部ツールの鍵を無効化",
 };
 
+const WD = ["日", "月", "火", "水", "木", "金", "土"];
+const jst = (iso: string) => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+}).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+/** 日本時間の「2026年11月13日（木）」と「20:06」 */
+function dayAndTime(iso: string): { day: string; time: string } {
+  const p = jst(iso);
+  const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(p.weekday);
+  return { day: `${p.year}年${p.month}月${p.day}日（${WD[wd]}）`, time: `${p.hour}:${p.minute}` };
+}
+
+/**
+ * 操作ログ。広い画面では表、960px未満では日付ごとに区切ったリストで出す（6列の表は狭い画面で1件が長くなるため）。
+ * クライアントで絞り込める
+ */
 export default async function AuditPage({ searchParams }: PageProps<"/admin/audit">) {
   await requireAdmin();
-  const all = (await searchParams).all === "1";
+  const sp = await searchParams;
+  const all = sp.all === "1";
   const db = await createClient();
-  const [rows, clients] = await Promise.all([listAudit(db, 500, { includeSystem: all }), listClients(db)]);
+  const clients = await listClients(db);
+  const clientId = typeof sp.client === "string" && clients.some((c) => c.id === sp.client) ? sp.client : "";
+  const rows = await listAudit(db, 500, { includeSystem: all, clientId: clientId || undefined });
   const name = new Map(clients.map((c) => [c.id, c.name]));
+  const href = (withAll: boolean) => `/admin/audit?${new URLSearchParams({ ...(withAll ? { all: "1" } : {}), ...(clientId ? { client: clientId } : {}) })}`.replace(/\?$/, "");
+  const label = (a: string) => ACTIONS[a] ?? a;
+  const clientName = (id: string | null) => (id ? name.get(id) ?? "（削除済み）" : null);
+  // スマートフォン用：日付ごとにまとめる（新しい順のまま）
+  const days: { day: string; items: (typeof rows[number] & { time: string })[] }[] = [];
+  for (const r of rows) {
+    const { day, time } = dayAndTime(r.at);
+    if (days.at(-1)?.day !== day) days.push({ day, items: [] });
+    days.at(-1)!.items.push({ ...r, time });
+  }
   return (
     <main id="main" className="app-main" tabIndex={-1}>
       <h1 className="page-title">操作ログ</h1>
       <p className="sub">直近500件。ログインは MEO と共通のため、ログインの記録は Supabase の認証ログで確認してください。</p>
-      <nav className="tabs" aria-label="表示する記録" style={{ marginBottom: 16 }}>
-        <Link className="tab" href="/admin/audit" aria-current={all ? undefined : "page"}>人の操作</Link>
-        <Link className="tab" href="/admin/audit?all=1" aria-current={all ? "page" : undefined}>自動の処理も含める</Link>
+      <nav className="tabs audit-tabs" aria-label="表示する記録">
+        <Link className="tab" href={href(false)} aria-current={all ? undefined : "page"}>人の操作</Link>
+        <Link className="tab" href={href(true)} aria-current={all ? "page" : undefined}>自動の処理も含める</Link>
       </nav>
       {!all && <p className="hint" style={{ marginTop: 0 }}>自動収集・予約投稿の処理・知らせのメール・月初の準備の記録は「自動の処理も含める」で表示します。</p>}
-      <div className="card flush scroll">
-        <table>
-          <thead><tr><th scope="col">日時</th><th scope="col">操作者</th><th scope="col">操作</th><th scope="col">クライアント</th><th scope="col">内容</th><th scope="col">IP</th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td className="nowrap">{fmtDateTime(r.at)}</td><td className="small">{r.actor_email ?? "（システム）"}</td>
-                <td className="nowrap">{ACTIONS[r.action] ?? r.action}</td><td className="small">{r.client_id ? name.get(r.client_id) ?? "（削除済み）" : "—"}</td>
-                <td className="small">{r.detail}</td><td className="small">{r.ip ?? "—"}</td>
-              </tr>
+      <form className="audit-filter" method="get" action="/admin/audit">
+        {all && <input type="hidden" name="all" value="1" />}
+        <div>
+          <label htmlFor="audit-client">クライアント</label>
+          <select id="audit-client" name="client" defaultValue={clientId}>
+            <option value="">すべてのクライアント</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <button type="submit" className="btn">絞り込む</button>
+      </form>
+      <p className="small muted" aria-live="polite">{clientId ? `${name.get(clientId)}の記録` : "すべての記録"}：{rows.length}件</p>
+      {rows.length === 0 ? <p className="muted">記録はありません。</p> : (
+        <>
+          <div className="card flush scroll audit-table">
+            <table>
+              <thead><tr><th scope="col">日時</th><th scope="col">操作者</th><th scope="col">操作</th><th scope="col">クライアント</th><th scope="col">内容</th><th scope="col">IP</th></tr></thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="nowrap">{fmtDateTime(r.at)}</td><td className="small audit-nowrap">{r.actor_email ?? "（システム）"}</td>
+                    <td className="nowrap">{label(r.action)}</td><td className="small audit-nowrap">{clientName(r.client_id) ?? "—"}</td>
+                    <td className="small audit-detail-cell">{r.detail}</td><td className="small audit-nowrap">{r.ip ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="audit-list">
+            {days.map((d) => (
+              <section key={d.day} aria-label={d.day}>
+                <h2 className="audit-day">{d.day}<span className="small muted">（{d.items.length}件）</span></h2>
+                <ul className="card flush">
+                  {d.items.map((r) => (
+                    <li key={r.id} className="audit-item">
+                      <p className="audit-head"><strong>{label(r.action)}</strong><span className="audit-time">{r.time}</span></p>
+                      <p className="small audit-who">
+                        {clientName(r.client_id) && <span>{clientName(r.client_id)}</span>}
+                        <span className="muted">{r.actor_email ?? "（システム）"}</span>
+                      </p>
+                      {r.detail && <p className="small muted audit-detail">{r.detail}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }

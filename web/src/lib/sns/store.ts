@@ -676,10 +676,11 @@ export async function audit(admin: Db, actor: { id: string; email: string } | nu
 export type AuditRow = { id: number; at: string; actor_email: string | null; ip: string | null; action: string; client_id: string | null; detail: string | null };
 
 /** 自動の処理が残す記録（定期処理・知らせのメール・月初の準備）。操作ログでは、人の操作が埋もれないよう既定で隠す */
-export const SYSTEM_AUDIT_PREFIXES = ["cron.", "alert.", "monthly.ai"];
+export const SYSTEM_AUDIT_PREFIXES = ["cron.", "alert.", "monthly.ai", "collect.after_connect"];
 
-export async function listAudit(db: Db, limit = 300, opts: { includeSystem?: boolean } = {}): Promise<AuditRow[]> {
+export async function listAudit(db: Db, limit = 300, opts: { includeSystem?: boolean; clientId?: string } = {}): Promise<AuditRow[]> {
   let q = db.from("sns_audit").select("id,at,actor_email,ip,action,client_id,detail");
+  if (opts.clientId) q = q.eq("client_id", opts.clientId);
   if (!opts.includeSystem) for (const p of SYSTEM_AUDIT_PREFIXES) q = q.not("action", "like", `${p}%`);
   return check(await q.order("at", { ascending: false }).limit(limit), "操作ログの読み込み") as AuditRow[];
 }
