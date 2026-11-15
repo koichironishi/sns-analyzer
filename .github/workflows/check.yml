@@ -1,0 +1,54 @@
+# 型・書式・テストの確認と、依存ライブラリの脆弱性の確認（MEO と同じ考え方。2026-11-16）。
+#
+# Vercel はビルドが通れば公開してしまうので、壊れた型や既知の脆弱性に気づく場所がなかった。
+# push のたびに回し、加えて毎週月曜にも回す（こちらが変えていなくても、脆弱性の公表は向こうから来るため）。
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 毎週月曜 09:00 JST（UTC 00:00）
+    - cron: "0 0 * * 1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # PageProps などは Next が生成する。生成前の tsc は必ず落ちる
+      - name: ルートの型を生成
+        run: npx next typegen
+      - name: 型の確認
+        run: npx tsc --noEmit
+      - name: 書式の確認
+        run: npm run lint
+      - name: 単体テスト
+        run: npm test
+
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # 落ちてよい。落ちたら見る、が目的（high 以上で止める。いまは開発用ツールの moderate だけが残っている）
+      - name: 依存ライブラリの脆弱性
+        run: npm audit --audit-level=high
