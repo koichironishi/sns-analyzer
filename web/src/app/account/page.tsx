@@ -3,6 +3,7 @@ import { requireViewer } from "@/lib/auth";
 import { ActionForm } from "@/components/action-form";
 import { AppChrome } from "@/components/app-chrome";
 import { SubmitButton } from "@/components/submit-button";
+import { CaptchaField } from "@/components/captcha-field";
 import { changeEmail, changePassword } from "./actions";
 
 export const metadata: Metadata = { title: "アカウント設定" };
@@ -47,6 +48,7 @@ export default async function AccountPage() {
               <label htmlFor="pw2">新しいパスワード（確認）</label>
               <input id="pw2" name="password_confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={72} />
               <p className="hint" id="pw-hint">12文字以上。ほかのサービスと同じパスワードは使わないでください。{v.kind === "staff" && "MEO のパスワードも変わります。"}</p>
+              <CaptchaField />
               <div className="form-actions"><SubmitButton pendingText="変更しています…">パスワードを変更</SubmitButton></div>
             </ActionForm>
           </div>

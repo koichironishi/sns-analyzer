@@ -1,6 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { CAPTCHA_MESSAGE, captchaToken, isCaptchaError } from "@/lib/captcha";
 
 /** SNS分析の利用権限がないアカウントへの案内（ログインが MEO と共通のため、MEO だけの契約でもログインは通る） */
 const NO_ACCESS_MESSAGE = "このアカウントでは SNS をご利用いただけません。ご利用をご希望の場合は、担当者にお問い合わせください。";
@@ -17,8 +18,9 @@ export async function login(_: LoginState, form: FormData): Promise<LoginState> 
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "メールアドレスとパスワードを入力してください。", email };
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: captchaToken(form) } });
   if (error) {
+    if (isCaptchaError(error)) return { error: CAPTCHA_MESSAGE, email };
     if (error.status === 429) return { error: "試行回数が多すぎます。しばらく待ってから、もう一度お試しください。", email };
     if (error.code === "invalid_credentials" || error.code === "email_not_confirmed") {
       return { error: "メールアドレスまたはパスワードが正しくありません。", email };

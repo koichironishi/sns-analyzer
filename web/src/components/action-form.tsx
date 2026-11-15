@@ -1,6 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Flash } from "./flash";
+import { FormSubmitCount } from "./captcha-field";
 import type { ActionState } from "@/app/(app)/clients/[id]/settings/actions";
 
 /**
@@ -23,7 +24,7 @@ export function ActionForm({ action, children, className, resetOnSuccess = false
       {state.error && <Flash key={`e${state.seq}`} kind="error">{state.error}</Flash>}
       {state.ok && <Flash key={`o${state.seq}`} kind="ok">{state.ok}</Flash>}
       {state.secret && <SecretBox key={`s${state.seq}`} value={state.secret} />}
-      {children}
+      <FormSubmitCount.Provider value={state.seq ?? 0}>{children}</FormSubmitCount.Provider>
     </form>
   );
 }

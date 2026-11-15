@@ -1,6 +1,7 @@
 "use client";
 import { useActionState } from "react";
 import { login, type LoginState } from "./actions";
+import { CaptchaField } from "@/components/captcha-field";
 
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
@@ -18,6 +19,8 @@ export function LoginForm({ next }: { next: string }) {
         <input className="rw-input" id="password" name="password" type="password" autoComplete="current-password" required aria-required="true"
           aria-invalid={Boolean(state.error)} aria-describedby={state.error ? "login-error" : undefined} />
       </div>
+      {/* 送信の結果（state）が変わるたびに確認を取り直す */}
+      <CaptchaField resetKey={state} />
       <button type="submit" className="rw-btn primary block" disabled={pending} aria-disabled={pending}>
         {pending ? "ログインしています…" : "ログイン"}
       </button>

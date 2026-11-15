@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/auth";
 import { clientIp } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { CAPTCHA_MESSAGE, captchaToken, isCaptchaError } from "@/lib/captcha";
 import { audit, updateViewerRow } from "@/lib/sns/store";
 import type { ActionState } from "../(app)/clients/[id]/settings/actions";
 
@@ -21,8 +22,9 @@ export async function changePassword(_: ActionState, form: FormData): Promise<Ac
   if (password !== confirm) return { error: "確認用のパスワードが一致しません" };
   if (password === current) return { error: "現在のパスワードと同じです" };
   const supabase = await createClient();
-  const { error: authError } = await supabase.auth.signInWithPassword({ email: v.email, password: current });
-  if (authError) return { error: "現在のパスワードが正しくありません" };
+  // 本人確認もサインインなので、人間確認のトークンが要る（Supabase の CAPTCHA を有効にしたとき）
+  const { error: authError } = await supabase.auth.signInWithPassword({ email: v.email, password: current, options: { captchaToken: captchaToken(form) } });
+  if (authError) return { error: isCaptchaError(authError) ? CAPTCHA_MESSAGE : "現在のパスワードが正しくありません" };
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
     return { error: /same|different/i.test(error.message) ? "今と同じパスワードは使えません" : `変更できませんでした：${error.message}` };
