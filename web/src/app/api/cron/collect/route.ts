@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { json, siteUrl } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runScheduledCollection } from "@/lib/sns/collect";
-import { audit, getConnectionSecrets, pruneLoginRecords } from "@/lib/sns/store";
+import { audit, getConnectionSecrets, pruneLoginRecords, sealPlaintextTokens } from "@/lib/sns/store";
 import { alertedKeys, markAlerted, sendAlert } from "@/lib/notify";
 import { daysLeft } from "@/lib/sns/connect";
 import { PLATFORM_LABELS, todayIn } from "@/lib/sns/models";
@@ -29,7 +29,9 @@ async function run(req: Request) {
   const r = await runScheduledCollection(admin, started + (maxDuration - 30) * 1000);
   const failed = r.logs.filter((l) => !l.ok).length;
   await pruneLoginRecords(admin);
-  await audit(admin, null, "cron.collect", null, `${r.logs.length}件の接続を処理（失敗 ${failed}件・残り ${r.remaining}件）${r.purge ? `・${r.purge}` : ""}`);
+  // 暗号化を入れる前に保存した平文のトークンを、アプリの鍵で包み直す（済んだものは飛ばすので、2回目以降は0件）
+  const sealed = await sealPlaintextTokens(admin).catch((e) => { console.error("トークンの暗号化に失敗", e instanceof Error ? e.message : e); return 0; });
+  await audit(admin, null, "cron.collect", null, `${r.logs.length}件の接続を処理（失敗 ${failed}件・残り ${r.remaining}件）${r.purge ? `・${r.purge}` : ""}${sealed ? `・トークン${sealed}件を暗号化` : ""}`);
   // 知らせの失敗で収集の結果を返せなくならないように
   try {
     const name = await clientNames(admin);

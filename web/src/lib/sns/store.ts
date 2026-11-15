@@ -11,7 +11,7 @@ import type { Target } from "./publish/targets.ts";
 import { DEFAULT_TZ, PLATFORMS, addDays, isPlatform, todayIn, type FollowerSeries, type MediaType, type Platform, type Post, type Series } from "./models.ts";
 import type { ConsentRow, DeletionService } from "./privacy.ts";
 import { DELETION_PLATFORMS } from "./privacy.ts";
-import { openSecret, sealSecret } from "../secret-box.ts";
+import { openSecret, sealSecret, secretsEncrypted } from "../secret-box.ts";
 import type { AiResult } from "./ai.ts";
 
 type Db = SupabaseClient;
@@ -461,6 +461,26 @@ export async function getConnectionSecrets(admin: Db, clientId?: string): Promis
   return (check(await q, "接続情報の読み込み") as ConnectionSecret[]).map((c) => ({
     ...c, access_token: openSecret(c.access_token) ?? "", refresh_token: openSecret(c.refresh_token),
   }));
+}
+
+/**
+ * 平文のまま残っているトークン（暗号化を入れる前に保存したもの）を、アプリの鍵で包み直す（2026-11-16）。
+ * 日次の収集から呼ぶ。鍵が未設定なら何もしない。包み直した件数を返す
+ */
+export async function sealPlaintextTokens(admin: Db): Promise<number> {
+  if (!secretsEncrypted()) return 0;
+  const rows = check(await admin.from("sns_connections").select("client_id,platform,external_id,access_token,refresh_token"),
+    "接続情報の読み込み") as { client_id: string; platform: Platform; external_id: string; access_token: string | null; refresh_token: string | null }[];
+  let n = 0;
+  for (const r of rows) {
+    const patch: Record<string, string> = {};
+    if (r.access_token && !r.access_token.startsWith("v1.")) patch.access_token = sealSecret(r.access_token);
+    if (r.refresh_token && !r.refresh_token.startsWith("v1.")) patch.refresh_token = sealSecret(r.refresh_token);
+    if (!Object.keys(patch).length) continue;
+    check(await admin.from("sns_connections").update(patch).eq("client_id", r.client_id).eq("platform", r.platform).eq("external_id", r.external_id), "トークンの暗号化");
+    n++;
+  }
+  return n;
 }
 
 export async function saveConnection(admin: Db, clientId: string, platform: Platform, c: {
