@@ -4,6 +4,8 @@ import { ActionForm } from "@/components/action-form";
 import { AppChrome } from "@/components/app-chrome";
 import { SubmitButton } from "@/components/submit-button";
 import { CaptchaField } from "@/components/captcha-field";
+import { MfaManager } from "@/components/mfa-manager";
+import { createClient } from "@/lib/supabase/server";
 import { changeEmail, changePassword } from "./actions";
 
 export const metadata: Metadata = { title: "アカウント設定" };
@@ -12,6 +14,10 @@ export const metadata: Metadata = { title: "アカウント設定" };
 export default async function AccountPage() {
   const v = await requireViewer();
   const first = v.kind === "client" && v.mustChangePassword;
+  // 多要素認証の要素（スタッフだけ設定できる。クライアントの方には出さない：端末をなくしたときの解除をこちらで引き受けることになるため）
+  const factor = v.kind === "staff"
+    ? ((await (await createClient()).auth.getUser()).data.user?.factors ?? []).find((f) => f.factor_type === "totp" && f.status === "verified") ?? null
+    : null;
   return (
     <AppChrome v={v}>
       <main id="main" className="app-main" tabIndex={-1}>
@@ -53,6 +59,14 @@ export default async function AccountPage() {
             </ActionForm>
           </div>
         </section>
+
+        {v.kind === "staff" && (
+          <section className="card account-card" aria-labelledby="h-mfa" style={{ marginTop: "var(--s4)" }}>
+            <h2 id="h-mfa" style={{ fontSize: "var(--fs-lg)", margin: "0 0 var(--s2)" }}>多要素認証（2段階のログイン）</h2>
+            <p className="hint" style={{ marginTop: 0 }}>パスワードのあとに、スマートフォンの認証アプリに出る6桁の数字を入れてログインします。アカウントは MEO と共通なので、ここでの設定は MEO にも効きます。</p>
+            <MfaManager factor={factor ? { id: factor.id, createdAt: factor.created_at } : null} />
+          </section>
+        )}
       </main>
     </AppChrome>
   );

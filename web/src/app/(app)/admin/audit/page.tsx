@@ -25,6 +25,7 @@ const ACTIONS: Record<string, string> = {
   "post.ai_draft": "AIで本文を作成", "post.ai_write": "AIでSNSごとに書き分け", "collect.after_connect": "連携直後の収集",
   "import.key_issue": "外部ツールの鍵を発行", "import.key_revoke": "外部ツールの鍵を無効化",
   "auth.login": "ログイン", "auth.login_failed": "ログイン失敗", "auth.no_access": "ログイン（SNSの権限なし）",
+  "auth.mfa_enrolled": "多要素認証を設定", "auth.mfa_removed": "多要素認証を解除", "auth.mfa_failed": "確認コードの失敗（パスワードは一致）",
 };
 
 /** 直近24時間のログイン失敗がこの件数以上なら、警告として目立たせる */
@@ -76,13 +77,20 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
         {fails.total >= FAIL_WARN && <>（{FAIL_WARN}件以上。総当たりや、流出したパスワードの使い回しを受けている可能性があります）</>}
         {fails.top.length > 0 && <span className="small">　多い宛先：{fails.top.map((t) => `${t.email}（${t.count}件）`).join("、")}</span>}
       </div>
+      {/* 2段階目の失敗は、正しいパスワードを持っている誰かがいるという意味。打ち間違いより重く、赤で出す */}
+      {fails.mfa.length > 0 && (
+        <div className="msg error" role="alert">
+          <strong>直近24時間に、パスワードは合っていたのに確認コードで止まったログインがあります：</strong>
+          {fails.mfa.map((t) => `${t.email}（${t.count}件）`).join("、")}。本人に心当たりを確かめ、なければパスワードを変えてください。
+        </div>
+      )}
       <nav className="tabs audit-tabs" aria-label="表示する記録">
         <Link className="tab" href={href("human")} aria-current={view === "human" ? "page" : undefined}>人の操作</Link>
         <Link className="tab" href={href("login")} aria-current={view === "login" ? "page" : undefined}>ログイン</Link>
         <Link className="tab" href={href("all")} aria-current={all ? "page" : undefined}>自動の処理も含める</Link>
       </nav>
       {view === "human" && <p className="hint" style={{ marginTop: 0 }}>自動収集・予約投稿の処理・知らせのメール・月初の準備の記録は「自動の処理も含める」で表示します。</p>}
-      {view === "login" && <p className="hint" style={{ marginTop: 0 }}>SNS のログイン画面での成功・失敗・権限なしの記録です。IP アドレスを含むため、{LOGIN_RETENTION_DAYS}日で消えます。</p>}
+      {view === "login" && <p className="hint" style={{ marginTop: 0 }}>SNS のログイン画面での成功・失敗・権限なしと、多要素認証の設定・解除・確認コードの失敗の記録です。ログインの成功・失敗は、IP アドレスを含むため{LOGIN_RETENTION_DAYS}日で消えます。</p>}
       {view !== "login" && <form className="audit-filter" method="get" action="/admin/audit">
         {all && <input type="hidden" name="view" value="all" />}
         <div>

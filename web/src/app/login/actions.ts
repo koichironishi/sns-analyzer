@@ -62,6 +62,12 @@ export async function login(_: LoginState, form: FormData): Promise<LoginState> 
     return { error: NO_ACCESS_MESSAGE, email };
   }
   await recordLogin(email, "ok", uid);
+  // 多要素認証を登録している人は、確認コードの画面へ（パスワードだけでは1段階目のセッションしか出ない）
+  const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (level?.nextLevel === "aal2" && level.currentLevel !== "aal2") {
+    const next = safeNext(form.get("next"));
+    redirect(next === "/" ? "/mfa" : `/mfa?next=${encodeURIComponent(next)}`);
+  }
   redirect(safeNext(form.get("next")));
 }
 

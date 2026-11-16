@@ -720,19 +720,26 @@ export async function listAudit(db: Db, limit = 300, opts: { kind?: "human" | "a
 }
 
 /** 直近 hours 時間のログイン失敗。件数と、狙われているメールアドレスの上位 */
-export async function loginFailures(db: Db, hours = 24): Promise<{ total: number; top: { email: string; count: number }[] }> {
+export async function loginFailures(db: Db, hours = 24): Promise<{ total: number; top: { email: string; count: number }[]; mfa: { email: string; count: number }[] }> {
   const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+  // 2段階目の失敗＝パスワードは合っていた。打ち間違いとは分けて数える
+  const mfaRows = check(await db.from("sns_audit").select("actor_email").eq("action", "auth.mfa_failed").gte("at", since).limit(1000),
+    "ログインの記録の読み込み") as { actor_email: string | null }[];
+  const m = new Map<string, number>();
+  for (const r of mfaRows) m.set(r.actor_email ?? "（不明）", (m.get(r.actor_email ?? "（不明）") ?? 0) + 1);
+  const mfa = [...m].map(([email, count]) => ({ email, count })).sort((a, b) => b.count - a.count);
   const rows = check(await db.from("sns_audit").select("actor_email").eq("action", "auth.login_failed").gte("at", since).limit(5000),
     "ログインの記録の読み込み") as { actor_email: string | null }[];
   const n = new Map<string, number>();
   for (const r of rows) n.set(r.actor_email ?? "（不明）", (n.get(r.actor_email ?? "（不明）") ?? 0) + 1);
-  return { total: rows.length, top: [...n].map(([email, count]) => ({ email, count })).sort((a, b) => b.count - a.count).slice(0, 5) };
+  return { total: rows.length, top: [...n].map(([email, count]) => ({ email, count })).sort((a, b) => b.count - a.count).slice(0, 5), mfa };
 }
 
 /** 90日より古いログインの記録を消す（IP を必要以上に持たない）。ほかの操作ログは消さない。データベース側もこれ以外の削除は止めている */
 export async function pruneLoginRecords(admin: Db): Promise<void> {
   const cutoff = new Date(Date.now() - LOGIN_RETENTION_DAYS * 86_400_000).toISOString();
-  const { error } = await admin.from("sns_audit").delete().like("action", `${LOGIN_AUDIT_PREFIX}%`).lt("at", cutoff);
+  // 多要素認証の設定・解除・失敗（auth.mfa_*）は残す（誰がいつ守りを外したかは、後から遡れることに意味がある）
+  const { error } = await admin.from("sns_audit").delete().in("action", ["auth.login", "auth.login_failed", "auth.no_access"]).lt("at", cutoff);
   if (error) console.error("ログインの記録の整理に失敗", error.message);
 }
 

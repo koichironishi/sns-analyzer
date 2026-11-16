@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { mfaState } from "../mfa";
 
 /** ログイン不要のパス（審査で公開URLの提出が必要なページ、外部からのコールバック、cron、外部ツール用の受け口） */
 export function isPublicPath(path: string): boolean {
@@ -33,6 +34,22 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const isLogin = path === "/login";
+  const isMfa = path === "/mfa";
+  /*
+    多要素認証を登録した人は、2段階目（確認コード）を通るまで中に入れない（lib/mfa.ts）。
+    Supabase はパスワードが合えば1段階目のセッションを出すので、ここで止めないと登録しても守りが増えない。
+  */
+  const enrolled = Boolean(user?.factors?.some((f) => f.status === "verified"));
+  const mfaPending = enrolled && !mfaState(user, (await supabase.auth.getSession()).data.session?.access_token).satisfied;
+  if (user && mfaPending && !isMfa) {
+    if (path.startsWith("/api/")) return NextResponse.json({ error: "確認コードの入力が必要です" }, { status: 401 });
+    const to = request.nextUrl.clone();
+    to.pathname = "/mfa";
+    to.search = isLogin || path === "/" ? "" : `?next=${encodeURIComponent(path)}`;
+    return NextResponse.redirect(to);
+  }
+  if (user && !mfaPending && isMfa) return NextResponse.redirect(new URL("/", request.url));
+  if (!user && isMfa) return NextResponse.redirect(new URL("/login", request.url));
   if (!user && !isLogin) {
     if (path.startsWith("/api/")) return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     const to = request.nextUrl.clone();

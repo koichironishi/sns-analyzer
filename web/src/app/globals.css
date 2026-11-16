@@ -966,3 +966,10 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 
 /* 人間確認（Turnstile）。読み込み中も高さを確保して、ボタンが動かないようにする */
 .captcha-field { min-height: 65px; margin: var(--s3) 0; }
+
+/* 多要素認証 */
+.mfa-steps { margin: 0; padding-left: 1.4em; line-height: 1.7; }
+.mfa-qr { display: block; width: 180px; height: 180px; background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px; }
+.mfa-secret { display: inline-block; padding: 6px 10px; background: var(--surface-2); border-radius: 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; user-select: all; }
+.mfa-code { font-size: 20px; letter-spacing: .2em; font-variant-numeric: tabular-nums; }
+.mfa-manager .row { justify-content: space-between; }
