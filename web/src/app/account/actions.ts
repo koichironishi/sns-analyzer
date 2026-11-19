@@ -47,7 +47,7 @@ export async function changeEmail(_: ActionState, form: FormData): Promise<Actio
   const email = String(form.get("email") ?? "").trim();
   if (!EMAIL_RE.test(email) || email.length > 254) return { error: "メールアドレスの形式を確認してください" };
   if (email.toLowerCase() === v.email.toLowerCase()) return { error: "現在のメールアドレスと同じです" };
-  const meo = process.env.NEXT_PUBLIC_MEO_URL || "https://meo.rhythmos-works.jp";
+  const meo = process.env.NEXT_PUBLIC_MEO_URL || "https://meo.goenos.jp";
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: `${meo}/auth/callback?next=/account` });
   if (error) return { error: "変更できませんでした。すでに使われているアドレスの可能性があります" };
