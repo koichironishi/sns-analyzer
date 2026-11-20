@@ -64,6 +64,20 @@
         "cd '/Users/koichiro/Documents/Claude Code/MEO/web' && NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev -- --port 3300"
       ],
       "port": 3300
+    },
+    {
+      "name": "goenos-lp-html",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3500",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/koichiro/Documents/Claude Code/GOENOS/sns"
+      ],
+      "port": 3500
     }
   ]
 }
