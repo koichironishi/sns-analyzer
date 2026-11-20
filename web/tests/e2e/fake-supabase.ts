@@ -29,6 +29,9 @@ create schema if not exists auth;
 create table auth.users (id uuid primary key, email text);
 create or replace function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
+create or replace function auth.jwt() returns jsonb language sql stable as
+  $$ select jsonb_build_object('aal', 'aal1') $$;
+create table auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid not null, status text not null);
 create or replace function set_updated_at() returns trigger language plpgsql as
   $$ begin new.updated_at = now(); return new; end $$;
 create type staff_role as enum ('admin', 'member');

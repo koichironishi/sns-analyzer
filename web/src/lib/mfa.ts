@@ -52,8 +52,16 @@ export function mfaState(user: User | null, accessToken: string | null | undefin
   return { enrolled: true, satisfied: aal === "aal2" };
 }
 
-/** ログイン後の戻り先として安全か（自サイトの中だけ） */
+/** ログイン後の戻り先として安全か（自サイトの中だけ）。
+ *  ブラウザは URL の中のタブ・改行を読み飛ばすため、"/\t/evil.com" は "//evil.com"（外部）になる。
+ *  制御文字とバックスラッシュを含むものは断り、さらに URL として解釈して自サイト内かを確かめる */
 export const safeNext = (v: unknown): string => {
   const s = typeof v === "string" ? v : "";
-  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") ? s : "/";
+  if (!s.startsWith("/") || /[\x00-\x1f\x7f\\]/.test(s)) return "/";
+  try {
+    const u = new URL(s, "http://self.invalid");
+    return u.origin === "http://self.invalid" ? u.pathname + u.search + u.hash : "/";
+  } catch {
+    return "/";
+  }
 };

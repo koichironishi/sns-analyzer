@@ -33,4 +33,10 @@ test("多要素認証：戻り先は自サイトの中だけ", () => {
   assert.equal(safeNext("//evil.example"), "/");
   assert.equal(safeNext("https://evil.example"), "/");
   assert.equal(safeNext(undefined), "/");
+  // タブ・改行・バックスラッシュを挟んで外部へ飛ばす手口
+  for (const bad of ["/\t/evil.example", "/\n/evil.example", "/\r/evil.example", "/\\evil.example", "/%09/evil.example".replace("%09", "\t")]) {
+    assert.equal(safeNext(bad), "/", JSON.stringify(bad));
+  }
+  assert.equal(safeNext("/clients/x?tab=a#b"), "/clients/x?tab=a#b", "クエリと # は残す");
+  assert.equal(safeNext("/a/../clients"), "/clients");
 });

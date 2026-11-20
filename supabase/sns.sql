@@ -476,6 +476,31 @@ begin
   end loop;
 end $$;
 
+-- ---------- 多要素認証を、データベースの読み取りでも求める（2026-11-20） ----------
+-- 2段階目（認証アプリ）はアプリの画面では求めていたが、公開されている anon キーとパスワードだけで
+-- Supabase に直接ログインすると、2段階目を通らないまま（aal1）この表を読めた。
+-- 認証アプリを登録した人は、2段階目を通ったセッション（aal2）でだけ読めるようにする。
+-- 登録していない人（クライアントの閲覧ユーザーなど）は、これまでどおり読める。
+create or replace function sns_mfa_ok() returns boolean language sql stable security definer set search_path = '' as $$
+  select coalesce(auth.jwt() ->> 'aal', '') = 'aal2'
+      or not exists (select 1 from auth.mfa_factors f where f.user_id = auth.uid() and f.status = 'verified');
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'sns_app_settings', 'sns_client_settings', 'sns_collect_state', 'sns_audit',
+    'sns_clients', 'sns_client_users',
+    'sns_competitors', 'sns_accounts', 'sns_snapshots', 'sns_posts',
+    'sns_post_metrics', 'sns_ai_consents', 'sns_ai_results', 'sns_scheduled_posts',
+    'sns_daily_insights', 'sns_audience'
+  ] loop
+    execute format('drop policy if exists %I_mfa on %I;', t, t);
+    execute format('create policy %I_mfa on %I as restrictive for all using (sns_mfa_ok());', t, t);
+  end loop;
+end $$;
+
 -- sns_connections / sns_deletion_requests / sns_import_keys はポリシーを作らない（service_role 専用）。
 -- 接続状態を画面に出すときは、サーバー側で service_role 経由で取得し、トークンは返さない。
 

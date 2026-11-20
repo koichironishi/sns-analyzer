@@ -5,6 +5,7 @@ import { CAPTCHA_MESSAGE, captchaToken, isCaptchaError } from "@/lib/captcha";
 import { clientIp } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/sns/store";
+import { safeNext } from "@/lib/mfa";
 
 /**
  * ログインの成否を操作ログに残す（2026-11-16）。**失敗のほうが本題。** 同じアカウントに失敗が並べば、
@@ -26,11 +27,6 @@ async function recordLogin(email: string, result: "ok" | "credentials" | "no_acc
 const NO_ACCESS_MESSAGE = "このアカウントでは SNS をご利用いただけません。ご利用をご希望の場合は、担当者にお問い合わせください。";
 
 export type LoginState = { error?: string; email?: string };
-
-const safeNext = (v: FormDataEntryValue | null) => {
-  const s = typeof v === "string" ? v : "";
-  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") ? s : "/";
-};
 
 export async function login(_: LoginState, form: FormData): Promise<LoginState> {
   const email = String(form.get("email") ?? "").trim();

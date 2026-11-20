@@ -15,6 +15,9 @@ create schema if not exists auth;
 create table auth.users (id uuid primary key);
 create or replace function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
+create or replace function auth.jwt() returns jsonb language sql stable as
+  $$ select jsonb_build_object('aal', coalesce(nullif(current_setting('app.aal', true), ''), 'aal1')) $$;
+create table auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid not null, status text not null);
 create or replace function set_updated_at() returns trigger language plpgsql as
   $$ begin new.updated_at = now(); return new; end $$;
 create type staff_role as enum ('admin', 'member');
@@ -175,4 +178,21 @@ test("操作ログ：書き換え・削除・全消しはできない。90日を
   await assert.rejects(db.query(`truncate sns_audit`), /全消しできません/);
   const del = await db.query(`delete from sns_audit where action like 'auth.%' and at < now() - interval '90 days'`);
   assert.equal(del.affectedRows, 1);
+});
+
+test("認証アプリを登録したスタッフは、2段階目を通るまで（aal1）表を読めない", async () => {
+  await db.query(`insert into auth.mfa_factors (user_id, status) values ($1, 'verified')`, [IDS.member]);
+  try {
+    await db.exec(`select set_config('app.aal', 'aal1', false)`);
+    for (const t of ["sns_posts", "sns_clients", "sns_accounts", "sns_scheduled_posts"]) {
+      assert.equal((await as(IDS.member, `select * from ${t}`)).length, 0, t);
+    }
+    await db.exec(`select set_config('app.aal', 'aal2', false)`);
+    assert.ok((await as(IDS.member, "select * from sns_posts")).length > 0, "aal2 なら読める");
+    // 登録していない人は aal1 のままでも読める
+    await db.exec(`select set_config('app.aal', 'aal1', false)`);
+    assert.ok((await as(IDS.viewerA, "select * from sns_posts")).length > 0);
+  } finally {
+    await db.exec(`delete from auth.mfa_factors; select set_config('app.aal', '', false)`);
+  }
 });
