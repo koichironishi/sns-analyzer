@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./login-form";
+import { GoenosBrand } from "@/components/goenos-logo";
 
 export const metadata: Metadata = { title: "ログイン" };
 
@@ -12,7 +13,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <main id="main" className="rw-auth" tabIndex={-1}>
       <div className="rw-auth-box">
         <div className="rw-auth-brand">
-          <span className="rw-auth-name">GOENOS SNS</span>
+          <span className="rw-auth-name"><GoenosBrand /></span>
         </div>
         <div className="rw-auth-card">
           <h1 className="rw-auth-title">ログイン</h1>

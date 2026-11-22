@@ -973,3 +973,8 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 .mfa-secret { display: inline-block; padding: 6px 10px; background: var(--surface-2); border-radius: 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; user-select: all; }
 .mfa-code { font-size: 20px; letter-spacing: .2em; font-variant-numeric: tabular-nums; }
 .mfa-manager .row { justify-content: space-between; }
+
+/* GOENOS のロゴ（components/goenos-logo.tsx）。高さは周りの文字に合わせ、色は文字色をそのまま使う */
+.goenos-brand { display: inline-flex; align-items: center; gap: .45em; line-height: 1; white-space: nowrap; }
+.goenos-logotype { display: block; flex: none; height: .78em; width: auto; }
+.goenos-brand-sub { font-weight: 800; }

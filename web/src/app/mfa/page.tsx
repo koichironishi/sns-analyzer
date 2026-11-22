@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { safeNext } from "@/lib/mfa";
 import { MfaForm } from "./mfa-form";
+import { GoenosBrand } from "@/components/goenos-logo";
 
 export const metadata: Metadata = { title: "確認コードの入力" };
 
@@ -11,7 +12,7 @@ export default async function MfaPage({ searchParams }: PageProps<"/mfa">) {
     <main id="main" className="rw-auth" tabIndex={-1}>
       <div className="rw-auth-box">
         <div className="rw-auth-brand">
-          <span className="rw-auth-name">GOENOS SNS</span>
+          <span className="rw-auth-name"><GoenosBrand /></span>
         </div>
         <div className="rw-auth-card">
           <h1 className="rw-auth-title">確認コードの入力</h1>

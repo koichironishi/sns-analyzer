@@ -4,6 +4,7 @@ import { PRODUCTS } from "@/lib/products";
 import { MenuBackdrop, MenuButton } from "./mobile-menu";
 import { DrawerHead, DrawerNav, DrawerUser } from "./drawer-parts";
 import { AppFooter } from "./app-footer";
+import { GoenosBrand } from "@/components/goenos-logo";
 
 /** 上バー・左メニュー（全体）・フッターの外枠。(app) のレイアウトとアカウント設定で共通 */
 export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNode }) {
@@ -12,7 +13,7 @@ export function AppChrome({ v, children }: { v: Viewer; children: React.ReactNod
       <header className="app-bar">
         <div className="app-bar-in">
           <MenuButton />
-          <Link className="app-brand" href="/"><span className="app-mark" aria-hidden="true">S</span>SNS</Link>
+          <Link className="app-brand" href="/"><GoenosBrand /></Link>
           <span className="spacer" />
           {/* 製品の切り替えはスタッフのみ（クライアントは SNS分析 だけを使う） */}
           {v.kind === "staff" && (

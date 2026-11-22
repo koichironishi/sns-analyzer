@@ -5,6 +5,7 @@ import { PRODUCTS } from "@/lib/products";
 import { logout } from "@/app/login/actions";
 import { MenuClose } from "./mobile-menu";
 import { AppNav } from "./app-nav";
+import { GoenosBrand } from "@/components/goenos-logo";
 
 /*
  * 左メニューの部品（MEO と同じ並び）
@@ -17,7 +18,7 @@ import { AppNav } from "./app-nav";
 export function DrawerHead() {
   return (
     <div className="drawer-head">
-      <span className="drawer-brand"><span className="app-mark" aria-hidden="true">S</span>SNS</span>
+      <span className="drawer-brand"><GoenosBrand /></span>
       <MenuClose />
     </div>
   );
