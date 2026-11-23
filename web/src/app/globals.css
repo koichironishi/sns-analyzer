@@ -976,5 +976,5 @@ body:has(.content > .footer) .frame-main > .footer { display: none; }
 
 /* GOENOS のロゴ（components/goenos-logo.tsx）。高さは周りの文字に合わせ、色は文字色をそのまま使う */
 .goenos-brand { display: inline-flex; align-items: center; gap: .45em; line-height: 1; white-space: nowrap; }
-.goenos-logotype { display: block; flex: none; height: .78em; width: auto; }
+.goenos-logotype { display: block; flex: none; height: 1.2em; width: auto; }
 .goenos-brand-sub { font-weight: 800; }
