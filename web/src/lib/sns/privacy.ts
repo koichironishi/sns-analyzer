@@ -5,12 +5,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 // 説明文を変えたら版を上げる。版が変わると再同意が必要になる。
-export const CONSENT_VERSION = "2026-09-28.2";
+export const CONSENT_VERSION = "2026-11-26.1";
 
 export function consentText(includePostText = true): string[] {
   const sent = includePostText ? "集計した指標と投稿本文" : "集計した指標（投稿本文は含まない）";
   return [
-    `AI分析では、${sent}を Anthropic, PBC（米国）が提供する Claude API に送信します。`,
+    `AI分析では、${sent}と、登録した事業内容を Anthropic, PBC（米国）が提供する Claude API に送信します。`,
+    "投稿文のAI作成では、お客様の名称、登録した事業内容、本文の下書き・メモを同じ Claude API に送信します（投稿本文の送信に同意しない場合も、この機能を使うときは送信します）。",
     "Anthropic の商用APIでは、送信データは既定でAIの学習に使われません。"
       + "送信データは原則30日以内に Anthropic 側で削除されます（利用ポリシー違反と判定された場合は最長2年保存されるなど、一部例外があります）。",
     "競合アカウントの公開投稿が含まれる場合があります。",
